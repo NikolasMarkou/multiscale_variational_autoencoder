@@ -2,7 +2,12 @@
   <dictionary name="arxwn">
     <words>
       <w>autoencoder</w>
+      <w>batchnorm</w>
+      <w>bilinear</w>
+      <w>conv</w>
       <w>multiscale</w>
+      <w>pred</w>
+      <w>upscaled</w>
     </words>
   </dictionary>
 </component>

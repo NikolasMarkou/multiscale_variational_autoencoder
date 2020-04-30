@@ -289,7 +289,7 @@ class MultiscaleVariationalAutoencoder():
             r_loss = keras.backend.mean(
                 keras.backend.square(y_true - y_pred),
                 axis=[1, 2, 3])
-            return r_loss_factor * r_loss
+            return r_loss * r_loss_factor
 
         # --------- Define KL parameters loss
         def vae_kl_loss(y_true, y_pred):
@@ -305,7 +305,7 @@ class MultiscaleVariationalAutoencoder():
                         1.0 +
                         z[1] - keras.backend.square(z[0]) - keras.backend.exp(z[1]),
                         axis=1)
-            return kl_loss_factor * kl_loss / len(self.z_domains)
+            return kl_loss * (kl_loss_factor / len(self.z_domains))
 
         # --------- Define combined loss
         def vae_loss(y_true, y_pred):
