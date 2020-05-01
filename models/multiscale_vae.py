@@ -129,10 +129,13 @@ class MultiscaleVariationalAutoencoder():
                         prefix="decoder_" + str(i) + "_")
 
                 self.decoders.append(decoder)
-                self.results.append(
-                    keras.layers.Add()([
+
+                result = keras.layers.Add()([
                         decoder,
-                        previous_scale_upscaled]))
+                        previous_scale_upscaled])
+                result = keras.layers.Activation("sigmoid")(result)
+
+                self.results.append(result)
 
             self.z_domains.append(z_domain)
             self.encoders.append(encoder)
@@ -367,7 +370,12 @@ class MultiscaleVariationalAutoencoder():
 
         target = target[::-1]
 
-        #custom_callback = CustomCallback(run_folder, print_every_n_batches, initial_epoch, self)
+        custom_callback = CustomCallback(
+            run_folder,
+            print_every_n_batches,
+            initial_epoch,
+            x_train[0:1, :, :, :],
+            self)
         lr_sched = step_decay_schedule(
             initial_lr=self.learning_rate,
             decay_factor=lr_decay,
@@ -386,6 +394,7 @@ class MultiscaleVariationalAutoencoder():
             callbacks=[
                 checkpoint1,
                 checkpoint2,
-                lr_sched
+                lr_sched,
+                custom_callback
             ]
         )
