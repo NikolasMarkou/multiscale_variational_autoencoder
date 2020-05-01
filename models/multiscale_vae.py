@@ -81,9 +81,16 @@ class MultiscaleVariationalAutoencoder():
         # --------- Create Encoder / Decoder
         self.encoders = []
         self.decoders = []
+        self.results = []
         self.z_domains = []
+        self.decoder_input = []
 
         for i in range(self.levels):
+
+            decoder_input = keras.Input(
+                shape=(self.z_dims[i],),
+                name="decoder_input" + str(i))
+
             if i == 0:
                 # --------- Base Encoder Decoder is special
                 encoder, z_domain, shape_before_flattening = \
@@ -96,12 +103,14 @@ class MultiscaleVariationalAutoencoder():
                     encoder,
                     shape=shape_before_flattening,
                     prefix="decoder_" + str(i) + "_")
+
+                self.decoders.append(decoder)
+                self.results.append(decoder)
             else:
                 # --------- Upper scale Encoder Decoders are the same
                 previous_scale_upscaled = \
                     self._upscale(
-                        self.decoders[i-1],
-                        shape=keras.backend.int_shape(self.scales[i]))
+                        self.results[i-1])
 
                 diff = keras.layers.Subtract()([
                     self.scales[i],
@@ -114,22 +123,40 @@ class MultiscaleVariationalAutoencoder():
                         z_dim=self.z_dims[i],
                         prefix="encoder_" + str(i) + "_")
 
-                decoder = keras.layers.Add()([
-                    self._decoder(
+                decoder = self._decoder(
                         encoder,
                         shape=shape_before_flattening,
-                        prefix="decoder_" + str(i) + "_"),
-                    previous_scale_upscaled])
+                        prefix="decoder_" + str(i) + "_")
+
+                self.decoders.append(decoder)
+                self.results.append(
+                    keras.layers.Add()([
+                        decoder,
+                        previous_scale_upscaled]))
 
             self.z_domains.append(z_domain)
             self.encoders.append(encoder)
-            self.decoders.append(decoder)
 
+        # --------- The end-to-end trainable model
         self.model = keras.Model(
             self.scales[-1],
-            self.decoders)
+            self.results)
 
-        return self.model
+        # --------- The encoder model [image] -> [z_domain]
+        self.model_encoder = keras.Model(
+            self.scales[-1],
+            keras.layers.Concatenate()(self.encoders)
+        )
+
+        # --------- The decoder model [z_domain] -> [image]
+        #  decoder_input = keras.Input(
+        #      shape=(np.prod(self.z_dims),),
+        #      name="decoder_input")
+        #  self.model_decoder = keras.Model(
+        #      decoder_input,
+        #     )
+
+        return self.model, self.model_encoder
 
     # --------------------------------------------------------------------------------
 
@@ -139,22 +166,16 @@ class MultiscaleVariationalAutoencoder():
     # --------------------------------------------------------------------------------
 
     @staticmethod
-    def _upscale(input_layer, shape):
+    def _upscale(input_layer, shape=None):
         """
         Upscales the input_layer to match the given shape
         :param input_layer:
         :param shape:
         :return:
         """
-        x = keras.layers.UpSampling2D(
+        return keras.layers.UpSampling2D(
             size=(2, 2),
             interpolation="bilinear")(input_layer)
-        #current_shape = keras.backend.int_shape(x)
-        #while current_shape != shape:
-        #    logger.info(">>>> {0}-{1}".format(current_shape, shape))
-        #    x = keras.layers.ZeroPadding2D(padding=(1, 1))(x)
-        #    current_shape = keras.backend.int_shape(x)
-        return x
 
     # --------------------------------------------------------------------------------
 
