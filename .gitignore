@@ -3,6 +3,9 @@ __pycache__/
 *.py[cod]
 *$py.class
 
+# models and weights
+models/
+
 # C extensions
 *.so
 

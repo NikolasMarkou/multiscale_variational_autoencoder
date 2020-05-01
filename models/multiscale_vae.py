@@ -138,9 +138,14 @@ class MultiscaleVariationalAutoencoder():
             self.encoders.append(encoder)
 
         # --------- The end-to-end trainable model
-        self.model = keras.Model(
+        self.model_trainable = keras.Model(
             self.scales[-1],
             self.results)
+
+        # --------- The end-to-end trainable model
+        self.model_predict = keras.Model(
+            self.scales[-1],
+            self.results[-1])
 
         # --------- The encoder model [image] -> [z_domain]
         self.model_encoder = keras.Model(
@@ -156,7 +161,7 @@ class MultiscaleVariationalAutoencoder():
         #      decoder_input,
         #     )
 
-        return self.model, self.model_encoder
+        return self.model_trainable, self.model_predict, self.model_encoder
 
     # --------------------------------------------------------------------------------
 
@@ -195,9 +200,9 @@ class MultiscaleVariationalAutoencoder():
         # --------- Transforming here
         x = self._basic_block(x,
                               block_type="encoder",
-                              filters=[16, 16, 16],
-                              kernel_size=[(3, 3), (3, 3), (3, 3)],
-                              strides=[(2, 2), (2, 2), (1, 1)],
+                              filters=[32, 32, 16, 16],
+                              kernel_size=[(3, 3), (3, 3), (3, 3), (1, 1)],
+                              strides=[(2, 2), (2, 2), (1, 1), (1, 1)],
                               prefix=prefix)
         # --------- Keep shape before flattening
         shape_before_flattening = keras.backend.int_shape(x)[1:]
@@ -232,9 +237,9 @@ class MultiscaleVariationalAutoencoder():
         # --------- Transforming here
         x = self._basic_block(x,
                               block_type="decoder",
-                              filters=[16, 16, 3],
-                              kernel_size=[(3, 3), (3, 3), (3, 3)],
-                              strides=[(2, 2), (2, 2), (1, 1)],
+                              filters=[16, 32, 32, 32, 3],
+                              kernel_size=[(3, 3), (3, 3), (3, 3), (1, 1), (1, 1)],
+                              strides=[(2, 2), (2, 2), (1, 1), (1, 1), (1, 1)],
                               prefix=prefix)
         return x
 
@@ -276,23 +281,16 @@ class MultiscaleVariationalAutoencoder():
                     padding="same",
                     name=prefix + "conv_0_" + str(i))(x)
 
-            if use_batchnorm:
-                x = keras.layers.BatchNormalization()(x)
-
-            x = keras.layers.LeakyReLU()(x)
-
-            if use_dropout:
-                x = keras.layers.Dropout(rate=0.25)(x)
-
-            if block_type == "encoder" or \
-                    i < len(filters) - 1:
+            if i == len(filters) - 1:
+                x = keras.layers.Activation("linear")(x)
+            else:
                 if use_batchnorm:
                     x = keras.layers.BatchNormalization()(x)
+
                 x = keras.layers.LeakyReLU()(x)
+
                 if use_dropout:
-                    x = keras.layers.Dropout(rate=0.25)(x)
-            else:
-                x = keras.layers.Activation("sigmoid")(x)
+                    x = keras.layers.Dropout(rate=0.2)(x)
 
         return x
 
@@ -308,7 +306,7 @@ class MultiscaleVariationalAutoencoder():
         # --------- Define VAE recreation loss
         def vae_r_loss(y_true, y_pred):
             r_loss = keras.backend.mean(
-                keras.backend.square(y_true - y_pred),
+                keras.backend.abs(y_true - y_pred),
                 axis=[1, 2, 3])
             return r_loss * r_loss_factor
 
@@ -336,7 +334,7 @@ class MultiscaleVariationalAutoencoder():
 
         optimizer = keras.optimizers.Adam(lr=self.learning_rate)
 
-        self.model.compile(
+        self.model_trainable.compile(
             optimizer=optimizer,
             loss=vae_loss,
             metrics=[vae_r_loss, vae_kl_loss])
@@ -351,6 +349,7 @@ class MultiscaleVariationalAutoencoder():
             run_folder,
             print_every_n_batches=100,
             initial_epoch=0,
+            step_size=1,
             lr_decay=1):
 
         target = []
@@ -369,12 +368,15 @@ class MultiscaleVariationalAutoencoder():
         target = target[::-1]
 
         #custom_callback = CustomCallback(run_folder, print_every_n_batches, initial_epoch, self)
-        lr_sched = step_decay_schedule(initial_lr=self.learning_rate, decay_factor=lr_decay, step_size=1)
+        lr_sched = step_decay_schedule(
+            initial_lr=self.learning_rate,
+            decay_factor=lr_decay,
+            step_size=step_size)
         checkpoint_filepath = os.path.join(run_folder, "weights/weights-{epoch:03d}-{loss:.2f}.h5")
         checkpoint1 = keras.callbacks.ModelCheckpoint(checkpoint_filepath, save_weights_only=True, verbose=1)
         checkpoint2 = keras.callbacks.ModelCheckpoint(os.path.join(run_folder, "weights/weights.h5"), save_weights_only=True, verbose=1)
 
-        self.model.fit(
+        self.model_trainable.fit(
             x_train,
             target,
             batch_size=batch_size,
