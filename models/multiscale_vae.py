@@ -7,6 +7,7 @@ import numpy as np
 
 import utils
 import utils.transform
+import utils.layer_blocks
 from utils.callbacks import CustomCallback, step_decay_schedule
 
 # --------------------------------------------------------------------------------
@@ -27,7 +28,8 @@ class MultiscaleVariationalAutoencoder():
             self,
             input_dims,
             levels,
-            z_dims):
+            z_dims,
+            channels_index=2):
         """
 
         :param input_dims:
@@ -48,6 +50,7 @@ class MultiscaleVariationalAutoencoder():
 
         self.levels = levels
         self.z_dims = z_dims
+        self.output_channels = input_dims[channels_index]
 
         self._build()
 
@@ -55,7 +58,7 @@ class MultiscaleVariationalAutoencoder():
 
     def _build(self):
         """
-
+        Creates then multiscale VAE networks
         :return:
         """
         # --------- Build multiscale input
@@ -86,11 +89,6 @@ class MultiscaleVariationalAutoencoder():
         self.decoder_input = []
 
         for i in range(self.levels):
-
-            decoder_input = keras.Input(
-                shape=(self.z_dims[i],),
-                name="decoder_input" + str(i))
-
             if i == 0:
                 # --------- Base Encoder Decoder is special
                 encoder, z_domain, shape_before_flattening = \
@@ -105,12 +103,15 @@ class MultiscaleVariationalAutoencoder():
                     prefix="decoder_" + str(i) + "_")
 
                 self.decoders.append(decoder)
-                self.results.append(decoder)
+                result = decoder
             else:
                 # --------- Upper scale Encoder Decoders are the same
+                previous_results_no_grad = keras.layers.Lambda(
+                    lambda x: keras.backend.stop_gradient(x))(self.results[i-1])
+
                 previous_scale_upscaled = \
                     self._upscale(
-                        self.results[i-1])
+                        previous_results_no_grad)
 
                 diff = keras.layers.Subtract()([
                     self.scales[i],
@@ -123,6 +124,12 @@ class MultiscaleVariationalAutoencoder():
                         z_dim=self.z_dims[i],
                         prefix="encoder_" + str(i) + "_")
 
+                # -------- Combine previous encodings
+                #encoder = keras.layers.Concatenate()([
+                #    self.encoders[i-1],
+                #    encoder
+                #])
+
                 decoder = self._decoder(
                         encoder,
                         shape=shape_before_flattening,
@@ -130,13 +137,20 @@ class MultiscaleVariationalAutoencoder():
 
                 self.decoders.append(decoder)
 
+                # -------- Combine previous with current
                 result = keras.layers.Add()([
                         decoder,
                         previous_scale_upscaled])
-                result = keras.layers.Activation("sigmoid")(result)
 
-                self.results.append(result)
+            # -------- Match target output channels
+            result = keras.layers.Conv2D(
+                filters=self.output_channels,
+                strides=(1, 1),
+                kernel_size=(1, 1),
+                kernel_initializer="glorot_normal",
+                activation="sigmoid")(result)
 
+            self.results.append(result)
             self.z_domains.append(z_domain)
             self.encoders.append(encoder)
 
@@ -151,10 +165,10 @@ class MultiscaleVariationalAutoencoder():
             self.results[-1])
 
         # --------- The encoder model [image] -> [z_domain]
-        self.model_encoder = keras.Model(
-            self.scales[-1],
-            keras.layers.Concatenate()(self.encoders)
-        )
+        #self.model_encoder = keras.Model(
+        #    self.scales[-1],
+        #    keras.layers.Concatenate()(self.encoders)
+        #)
 
         # --------- The decoder model [z_domain] -> [image]
         #  decoder_input = keras.Input(
@@ -164,7 +178,7 @@ class MultiscaleVariationalAutoencoder():
         #      decoder_input,
         #     )
 
-        return self.model_trainable, self.model_predict, self.model_encoder
+        return self.model_trainable, self.model_predict
 
     # --------------------------------------------------------------------------------
 
@@ -201,19 +215,25 @@ class MultiscaleVariationalAutoencoder():
         x = encoder_input
 
         # --------- Transforming here
-        x = self._basic_block(x,
-                              block_type="encoder",
-                              filters=[32, 32, 16, 16],
-                              kernel_size=[(3, 3), (3, 3), (3, 3), (1, 1)],
-                              strides=[(2, 2), (2, 2), (1, 1), (1, 1)],
-                              prefix=prefix)
+        x = utils.layer_blocks.basic_block(x,
+                                           block_type="encoder",
+                                           filters=[32, 32],
+                                           kernel_size=[(3, 3), (3, 3)],
+                                           strides=[(1, 1), (1, 1)],
+                                           prefix=prefix)
         # --------- Keep shape before flattening
         shape_before_flattening = keras.backend.int_shape(x)[1:]
 
         # --------- Flatten and convert to z_dim dimensions
         x = keras.layers.Flatten()(x)
-        mu = keras.layers.Dense(z_dim, name=prefix + "mu")(x)
-        log_var = keras.layers.Dense(z_dim, name=prefix + "log_var")(x)
+        mu = keras.layers.Dense(
+            z_dim,
+            kernel_initializer="glorot_uniform",
+            name=prefix + "mu")(x)
+        log_var = keras.layers.Dense(
+            z_dim,
+            kernel_initializer="glorot_uniform",
+            name=prefix + "log_var")(x)
 
         def sampling(args):
             tmp_mu, tmp_log_var = args
@@ -238,62 +258,18 @@ class MultiscaleVariationalAutoencoder():
         x = keras.layers.Dense(np.prod(shape))(x)
         x = keras.layers.Reshape(shape)(x)
         # --------- Transforming here
-        x = self._basic_block(x,
-                              block_type="decoder",
-                              filters=[16, 32, 32, 32, 3],
-                              kernel_size=[(3, 3), (3, 3), (3, 3), (1, 1), (1, 1)],
-                              strides=[(2, 2), (2, 2), (1, 1), (1, 1), (1, 1)],
-                              prefix=prefix)
-        return x
-
-    # --------------------------------------------------------------------------------
-
-    @staticmethod
-    def _basic_block(input_layer,
-                     block_type="encoder",
-                     filters=[64],
-                     kernel_size=[(3, 3)],
-                     strides=[(1, 1)],
-                     use_batchnorm=True,
-                     use_dropout=True,
-                     prefix="block_", ):
-
-        if len(filters) != len(kernel_size) or \
-                len(filters) != len(strides) or \
-                len(filters) <= 0:
-            raise ValueError("len(filters) should be equal to len(kernel_size) and len(strides)")
-
-        if block_type != "encoder" and block_type != "decoder":
-            raise ValueError("block_type should be encoder or decoder")
-
-        x = input_layer
-
-        for i in range(len(filters)):
-            if block_type == "encoder":
-                x = keras.layers.Conv2D(
-                    filters=filters[i],
-                    kernel_size=kernel_size[i],
-                    strides=strides[i],
-                    padding="same",
-                    name=prefix + "conv_0_" + str(i))(x)
-            if block_type == "decoder":
-                x = keras.layers.Conv2DTranspose(
-                    filters=filters[i],
-                    kernel_size=kernel_size[i],
-                    strides=strides[i],
-                    padding="same",
-                    name=prefix + "conv_0_" + str(i))(x)
-
-            if i == len(filters) - 1:
-                x = keras.layers.Activation("linear")(x)
-            else:
-                if use_batchnorm:
-                    x = keras.layers.BatchNormalization()(x)
-
-                x = keras.layers.LeakyReLU()(x)
-
-                if use_dropout:
-                    x = keras.layers.Dropout(rate=0.2)(x)
+        x = utils.layer_blocks.basic_block(x,
+                                           block_type="decoder",
+                                           filters=[32, 32],
+                                           kernel_size=[(3, 3), (3, 3)],
+                                           strides=[(1, 1), (1, 1)],
+                                           prefix=prefix)
+        # -------- Match target output channels
+        x = keras.layers.Conv2D(
+            filters=self.output_channels,
+            strides=(1, 1),
+            kernel_size=(1, 1),
+            activation="relu")(x)
 
         return x
 
@@ -332,15 +308,19 @@ class MultiscaleVariationalAutoencoder():
         # --------- Define combined loss
         def vae_loss(y_true, y_pred):
             r_loss = vae_r_loss(y_true, y_pred)
-            kl_loss = vae_kl_loss(y_true, y_pred)
-            return r_loss + kl_loss
+            #kl_loss = vae_kl_loss(y_true, y_pred)
+            #return r_loss + kl_loss
+            return r_loss
 
-        optimizer = keras.optimizers.Adam(lr=self.learning_rate)
+        optimizer = keras.optimizers.Adagrad(
+            lr=self.learning_rate,
+            clipnorm=0.99
+        )
 
         self.model_trainable.compile(
             optimizer=optimizer,
             loss=vae_loss,
-            metrics=[vae_r_loss, vae_kl_loss])
+            metrics=[vae_r_loss])
 
     # --------------------------------------------------------------------------------
 

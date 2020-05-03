@@ -5,8 +5,10 @@
       <w>batchnorm</w>
       <w>bilinear</w>
       <w>conv</w>
+      <w>downsample</w>
       <w>multiscale</w>
       <w>pred</w>
+      <w>resnet</w>
       <w>upscaled</w>
     </words>
   </dictionary>

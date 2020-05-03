@@ -1,7 +1,10 @@
 import os
 import numpy as np
 import matplotlib.pyplot as plt
+from skimage.transform import resize
 from keras.callbacks import Callback, LearningRateScheduler
+
+# --------------------------------------------------------------------------------
 
 
 class CustomCallback(Callback):
@@ -17,6 +20,7 @@ class CustomCallback(Callback):
         if batch % self.print_every_n_batches == 0:
             reconstruction = self.vae.model_predict.predict(
                 self.image)[0].squeeze()
+            reconstruction = resize(reconstruction, (256, 256))
             filepath = os.path.join(
                 self.run_folder, "images", "img_" + str(self.epoch).zfill(3) + '_' + str(batch) + '.jpg')
             if len(reconstruction.shape) == 2:
@@ -28,6 +32,9 @@ class CustomCallback(Callback):
         self.epoch += 1
 
 
+# --------------------------------------------------------------------------------
+
+
 def step_decay_schedule(initial_lr, decay_factor=0.5, step_size=1):
     """
     Wrapper function to create a LearningRateScheduler with step decay schedule.
@@ -37,3 +44,5 @@ def step_decay_schedule(initial_lr, decay_factor=0.5, step_size=1):
         return new_lr
 
     return LearningRateScheduler(schedule)
+
+# --------------------------------------------------------------------------------
