@@ -20,7 +20,7 @@ class CustomCallback(Callback):
         if batch % self.print_every_n_batches == 0:
             reconstruction = self.vae.model_predict.predict(
                 self.image)[0].squeeze()
-            reconstruction = resize(reconstruction, (256, 256))
+            reconstruction = resize(reconstruction, (128, 128))
             filepath = os.path.join(
                 self.run_folder, "images", "img_" + str(self.epoch).zfill(3) + '_' + str(batch) + '.jpg')
             if len(reconstruction.shape) == 2:

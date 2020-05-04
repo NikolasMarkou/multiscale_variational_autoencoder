@@ -6,6 +6,7 @@
       <w>bilinear</w>
       <w>conv</w>
       <w>downsample</w>
+      <w>filepath</w>
       <w>multiscale</w>
       <w>pred</w>
       <w>resnet</w>

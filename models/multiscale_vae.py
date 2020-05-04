@@ -106,12 +106,12 @@ class MultiscaleVariationalAutoencoder():
                 result = decoder
             else:
                 # --------- Upper scale Encoder Decoders are the same
-                previous_results_no_grad = keras.layers.Lambda(
-                    lambda x: keras.backend.stop_gradient(x))(self.results[i-1])
+                # previous_results_no_grad = keras.layers.Lambda(
+                #     lambda x: keras.backend.stop_gradient(x))(self.results[i-1])
 
                 previous_scale_upscaled = \
                     self._upscale(
-                        previous_results_no_grad)
+                        self.results[i-1])
 
                 diff = keras.layers.Subtract()([
                     self.scales[i],
@@ -147,7 +147,7 @@ class MultiscaleVariationalAutoencoder():
                 filters=self.output_channels,
                 strides=(1, 1),
                 kernel_size=(1, 1),
-                kernel_initializer="glorot_normal",
+                kernel_initializer="glorot_uniform",
                 activation="sigmoid")(result)
 
             self.results.append(result)
@@ -217,9 +217,9 @@ class MultiscaleVariationalAutoencoder():
         # --------- Transforming here
         x = utils.layer_blocks.basic_block(x,
                                            block_type="encoder",
-                                           filters=[32, 32],
-                                           kernel_size=[(3, 3), (3, 3)],
-                                           strides=[(1, 1), (1, 1)],
+                                           filters=[32, 32, 32, 32],
+                                           kernel_size=[(3, 3), (1, 1), (3, 3), (1, 1)],
+                                           strides=[(1, 1), (1, 1), (1, 1), (1, 1)],
                                            prefix=prefix)
         # --------- Keep shape before flattening
         shape_before_flattening = keras.backend.int_shape(x)[1:]
@@ -260,15 +260,16 @@ class MultiscaleVariationalAutoencoder():
         # --------- Transforming here
         x = utils.layer_blocks.basic_block(x,
                                            block_type="decoder",
-                                           filters=[32, 32],
-                                           kernel_size=[(3, 3), (3, 3)],
-                                           strides=[(1, 1), (1, 1)],
+                                           filters=[32, 32, 32, 32],
+                                           kernel_size=[(3, 3), (1, 1), (3, 3), (1, 1)],
+                                           strides=[(1, 1), (1, 1), (1, 1), (1, 1)],
                                            prefix=prefix)
         # -------- Match target output channels
         x = keras.layers.Conv2D(
             filters=self.output_channels,
             strides=(1, 1),
             kernel_size=(1, 1),
+            kernel_initializer="glorot_uniform",
             activation="relu")(x)
 
         return x

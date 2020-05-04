@@ -1,7 +1,17 @@
 import os
 import keras
+import logging
 import numpy as np
 
+# --------------------------------------------------------------------------------
+# setup logger
+# --------------------------------------------------------------------------------
+
+
+logging.basicConfig(level=logging.INFO,
+                    format="%(asctime)s %(name)-12s %(levelname)-4s %(message)s")
+logging.getLogger("layer-blocks").setLevel(logging.INFO)
+logger = logging.getLogger("layer-blocks")
 
 # --------------------------------------------------------------------------------
 
@@ -21,13 +31,28 @@ def resnet_block(input_layer,
     :param skip_connection:
     :return:
     """
+
     x = input_layer
+    skip_layer = input_layer
+    previous_no_filters = keras.backend.int_shape(input_layer)[3]
 
     if downsample:
         x = keras.layers.Conv2D(
             filters=filters,
             kernel_size=(3, 3),
             strides=(2, 2),
+            padding="same",
+            activation="linear",
+            kernel_initializer="glorot_uniform")(x)
+        skip_layer = keras.layers.MaxPool2D(
+            pool_size=(2, 2),
+            strides=None,
+            padding="valid")(skip_layer)
+    else:
+        x = keras.layers.Conv2D(
+            filters=filters,
+            kernel_size=(3, 3),
+            strides=(1, 1),
             padding="same",
             activation="linear",
             kernel_initializer="glorot_uniform")(x)
@@ -47,6 +72,20 @@ def resnet_block(input_layer,
 
     if use_batchnorm:
         x = keras.layers.BatchNormalization()(x)
+
+    if previous_no_filters != filters:
+        skip_layer = keras.layers.Conv2D(
+            filters=filters,
+            kernel_size=(1, 1),
+            strides=(1, 1),
+            padding="same",
+            activation="linear",
+            kernel_initializer="glorot_uniform")(skip_layer)
+
+    x = keras.layers.Add()([
+        x,
+        skip_layer
+    ])
 
     if use_dropout:
         x = keras.layers.Dropout(0.25)(x)
@@ -110,6 +149,7 @@ def basic_block(input_layer,
                 kernel_initializer="glorot_uniform")(x)
 
         x = keras.layers.LeakyReLU()(x)
+
         x = keras.layers.Conv2D(
             filters=filters[i],
             kernel_size=kernel_size[i],
