@@ -106,12 +106,12 @@ class MultiscaleVariationalAutoencoder():
                 result = decoder
             else:
                 # --------- Upper scale Encoder Decoders are the same
-                # previous_results_no_grad = keras.layers.Lambda(
-                #     lambda x: keras.backend.stop_gradient(x))(self.results[i-1])
+                previous_results_no_grad = keras.layers.Lambda(
+                    lambda x: keras.backend.stop_gradient(x))(self.results[i-1])
 
                 previous_scale_upscaled = \
                     self._upscale(
-                        self.results[i-1])
+                        previous_results_no_grad)
 
                 diff = keras.layers.Subtract()([
                     self.scales[i],
@@ -125,10 +125,10 @@ class MultiscaleVariationalAutoencoder():
                         prefix="encoder_" + str(i) + "_")
 
                 # -------- Combine previous encodings
-                #encoder = keras.layers.Concatenate()([
-                #    self.encoders[i-1],
-                #    encoder
-                #])
+                encoder = keras.layers.Concatenate()([
+                   self.encoders[i-1],
+                   encoder
+                ])
 
                 decoder = self._decoder(
                         encoder,
@@ -163,20 +163,6 @@ class MultiscaleVariationalAutoencoder():
         self.model_predict = keras.Model(
             self.scales[-1],
             self.results[-1])
-
-        # --------- The encoder model [image] -> [z_domain]
-        #self.model_encoder = keras.Model(
-        #    self.scales[-1],
-        #    keras.layers.Concatenate()(self.encoders)
-        #)
-
-        # --------- The decoder model [z_domain] -> [image]
-        #  decoder_input = keras.Input(
-        #      shape=(np.prod(self.z_dims),),
-        #      name="decoder_input")
-        #  self.model_decoder = keras.Model(
-        #      decoder_input,
-        #     )
 
         return self.model_trainable, self.model_predict
 
@@ -217,9 +203,9 @@ class MultiscaleVariationalAutoencoder():
         # --------- Transforming here
         x = utils.layer_blocks.basic_block(x,
                                            block_type="encoder",
-                                           filters=[32, 32, 32, 32],
-                                           kernel_size=[(3, 3), (1, 1), (3, 3), (1, 1)],
-                                           strides=[(1, 1), (1, 1), (1, 1), (1, 1)],
+                                           filters=[32, 64, 32],
+                                           kernel_size=[(3, 3), (3, 3), (1, 1)],
+                                           strides=[(1, 1), (2, 2), (1, 1)],
                                            prefix=prefix)
         # --------- Keep shape before flattening
         shape_before_flattening = keras.backend.int_shape(x)[1:]
@@ -260,9 +246,9 @@ class MultiscaleVariationalAutoencoder():
         # --------- Transforming here
         x = utils.layer_blocks.basic_block(x,
                                            block_type="decoder",
-                                           filters=[32, 32, 32, 32],
-                                           kernel_size=[(3, 3), (1, 1), (3, 3), (1, 1)],
-                                           strides=[(1, 1), (1, 1), (1, 1), (1, 1)],
+                                           filters=[32, 64, 32],
+                                           kernel_size=[(3, 3), (3, 3), (1, 1)],
+                                           strides=[(1, 1), (2, 2), (1, 1)],
                                            prefix=prefix)
         # -------- Match target output channels
         x = keras.layers.Conv2D(
@@ -288,29 +274,12 @@ class MultiscaleVariationalAutoencoder():
             r_loss = keras.backend.mean(
                 keras.backend.abs(y_true - y_pred),
                 axis=[1, 2, 3])
+            logger.info(">> HERE {0}")
             return r_loss * r_loss_factor
-
-        # --------- Define KL parameters loss
-        def vae_kl_loss(y_true, y_pred):
-            for i in range(len(self.z_domains)):
-                z = self.z_domains[i]
-                if i == 0:
-                    kl_loss = -0.5 * keras.backend.sum(
-                        1.0 +
-                        z[1] - keras.backend.square(z[0]) - keras.backend.exp(z[1]),
-                        axis=1)
-                else:
-                    kl_loss += -0.5 * keras.backend.sum(
-                        1.0 +
-                        z[1] - keras.backend.square(z[0]) - keras.backend.exp(z[1]),
-                        axis=1)
-            return kl_loss * (kl_loss_factor / len(self.z_domains))
 
         # --------- Define combined loss
         def vae_loss(y_true, y_pred):
             r_loss = vae_r_loss(y_true, y_pred)
-            #kl_loss = vae_kl_loss(y_true, y_pred)
-            #return r_loss + kl_loss
             return r_loss
 
         optimizer = keras.optimizers.Adagrad(
