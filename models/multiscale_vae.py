@@ -89,11 +89,14 @@ class MultiscaleVariationalAutoencoder():
         self.decoder_input = []
 
         for i in range(self.levels):
+
+            noisy_scale = keras.layers.GaussianNoise(0.01)(self.scales[i])
+
             if i == 0:
                 # --------- Base Encoder Decoder is special
                 encoder, z_domain, shape_before_flattening = \
                     self._encoder(
-                        self.scales[i],
+                        noisy_scale,
                         z_dim=self.z_dims[i],
                         prefix="encoder_" + str(i) + "_")
 
@@ -114,7 +117,7 @@ class MultiscaleVariationalAutoencoder():
                         previous_results_no_grad)
 
                 diff = keras.layers.Subtract()([
-                    self.scales[i],
+                    noisy_scale,
                     previous_scale_upscaled
                 ])
 
@@ -141,14 +144,8 @@ class MultiscaleVariationalAutoencoder():
                 result = keras.layers.Add()([
                         decoder,
                         previous_scale_upscaled])
-
-            # -------- Match target output channels
-            result = keras.layers.Conv2D(
-                filters=self.output_channels,
-                strides=(1, 1),
-                kernel_size=(1, 1),
-                kernel_initializer="glorot_uniform",
-                activation="sigmoid")(result)
+            # -------- Cap output to [0, 1]
+            result = keras.layers.Activation("hard_sigmoid")(result);
 
             self.results.append(result)
             self.z_domains.append(z_domain)
@@ -203,9 +200,9 @@ class MultiscaleVariationalAutoencoder():
         # --------- Transforming here
         x = utils.layer_blocks.basic_block(x,
                                            block_type="encoder",
-                                           filters=[32, 64, 32],
+                                           filters=[32, 32, 32],
                                            kernel_size=[(3, 3), (3, 3), (1, 1)],
-                                           strides=[(1, 1), (2, 2), (1, 1)],
+                                           strides=[(1, 1), (1, 1), (1, 1)],
                                            prefix=prefix)
         # --------- Keep shape before flattening
         shape_before_flattening = keras.backend.int_shape(x)[1:]
@@ -246,9 +243,9 @@ class MultiscaleVariationalAutoencoder():
         # --------- Transforming here
         x = utils.layer_blocks.basic_block(x,
                                            block_type="decoder",
-                                           filters=[32, 64, 32],
+                                           filters=[32, 32, 32],
                                            kernel_size=[(3, 3), (3, 3), (1, 1)],
-                                           strides=[(1, 1), (2, 2), (1, 1)],
+                                           strides=[(1, 1), (1, 1), (1, 1)],
                                            prefix=prefix)
         # -------- Match target output channels
         x = keras.layers.Conv2D(
@@ -256,7 +253,7 @@ class MultiscaleVariationalAutoencoder():
             strides=(1, 1),
             kernel_size=(1, 1),
             kernel_initializer="glorot_uniform",
-            activation="relu")(x)
+            activation="linear")(x)
 
         return x
 
@@ -274,8 +271,9 @@ class MultiscaleVariationalAutoencoder():
             r_loss = keras.backend.mean(
                 keras.backend.abs(y_true - y_pred),
                 axis=[1, 2, 3])
-            logger.info(">> HERE {0}")
-            return r_loss * r_loss_factor
+
+            loss_ratio = np.prod(keras.backend.int_shape(y_pred)[1:]) / np.prod(self.inputs_dims)
+            return r_loss * r_loss_factor * loss_ratio
 
         # --------- Define combined loss
         def vae_loss(y_true, y_pred):
@@ -330,9 +328,19 @@ class MultiscaleVariationalAutoencoder():
             initial_lr=self.learning_rate,
             decay_factor=lr_decay,
             step_size=step_size)
-        checkpoint_filepath = os.path.join(run_folder, "weights/weights-{epoch:03d}-{loss:.2f}.h5")
-        checkpoint1 = keras.callbacks.ModelCheckpoint(checkpoint_filepath, save_weights_only=True, verbose=1)
-        checkpoint2 = keras.callbacks.ModelCheckpoint(os.path.join(run_folder, "weights/weights.h5"), save_weights_only=True, verbose=1)
+        checkpoint_filepath = os.path.join(
+            run_folder,
+            "weights/weights-{epoch:03d}-{loss:.2f}.h5")
+        checkpoint1 = keras.callbacks.ModelCheckpoint(
+            checkpoint_filepath,
+            save_weights_only=True,
+            verbose=1)
+        checkpoint2 = keras.callbacks.ModelCheckpoint(
+            os.path.join(
+                run_folder,
+                "weights/weights.h5"),
+            save_weights_only=True,
+            verbose=1)
 
         self.model_trainable.fit(
             x_train,
