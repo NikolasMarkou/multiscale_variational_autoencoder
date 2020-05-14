@@ -19,7 +19,13 @@ I intend to use this m-vae as a building block for Classifiers, Fuzzers, Anomaly
 
 ## CIFAR10 Autoencoder
 
-Trained on the ```CIFAR10``` dataset to recreate images
+Trained on the ```CIFAR10``` dataset to recreate images for 10 epochs.
+
+### Animation 
+
+### Original / Recreation comparison
+
+![GitHub Logo](graphics/cifar10_mvae.gif)
 
 ![GitHub Logo](graphics/cifar10_0.png)
 
@@ -27,6 +33,3 @@ Trained on the ```CIFAR10``` dataset to recreate images
 
 ![GitHub Logo](graphics/cifar10_2.png)
 
-### Animation 
-
-![GitHub Logo](graphics/cifar10_mvae.gif)
