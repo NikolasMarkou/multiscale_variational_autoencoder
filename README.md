@@ -16,3 +16,17 @@ I intend to use this m-vae as a building block for Classifiers, Fuzzers, Anomaly
 - [ ] Generator model
 - [ ] Classifier model
 - [ ] Anomaly detection
+
+## CIFAR10 Autoencoder
+
+Trained on the ```CIFAR10``` dataset to recreate images
+
+![GitHub Logo](graphics/cifar10_0.png)
+
+![GitHub Logo](graphics/cifar10_1.png)
+
+![GitHub Logo](graphics/cifar10_2.png)
+
+### Animation 
+
+![GitHub Logo](graphics/cifar10_mvae.gif)
