@@ -16,6 +16,14 @@ logger = logging.getLogger("layer-blocks")
 # --------------------------------------------------------------------------------
 
 
+def absence_block(t):
+    x_greater = keras.backend.greater(t, 0.0)
+    x_greater_float = keras.backend.cast(x_greater, t.dtype)
+    return 1.0 - x_greater_float
+
+# --------------------------------------------------------------------------------
+
+
 def resnet_block(input_layer,
                  filters=64,
                  downsample=False,
@@ -105,6 +113,7 @@ def basic_block(input_layer,
                 strides=[(1, 1)],
                 use_batchnorm=True,
                 use_dropout=True,
+                use_absense_block=False,
                 prefix="block_", ):
     """
 
@@ -115,6 +124,7 @@ def basic_block(input_layer,
     :param strides:
     :param use_batchnorm:
     :param use_dropout:
+    :param use_absense_block:
     :param prefix:
     :return:
     """
@@ -129,6 +139,16 @@ def basic_block(input_layer,
     x = input_layer
 
     for i in range(len(filters)):
+
+        if i > 0:
+            if use_absense_block:
+                absence_x = keras.layers.Lambda(
+                    lambda y: absence_block(y))(x)
+                x = keras.layers.Concatenate()([
+                    absence_x,
+                    x
+                ])
+
         tmp_layer = x
 
         if block_type == "encoder":
@@ -160,7 +180,6 @@ def basic_block(input_layer,
 
         if use_batchnorm:
             x = keras.layers.BatchNormalization()(x)
-        x = keras.layers.LeakyReLU()(x)
         # --------- Add bottleneck layer
         if strides[i][0] == 1 and \
                 strides[i][0] == strides[i][1]:
@@ -171,10 +190,12 @@ def basic_block(input_layer,
                 activation="linear",
                 kernel_initializer="glorot_uniform",
                 padding="same")(tmp_layer)
+
             x = keras.layers.Add()([
                 x,
                 tmp_layer
             ])
+        # --------- Relu combined result
         x = keras.layers.LeakyReLU()(x)
 
         if use_dropout:

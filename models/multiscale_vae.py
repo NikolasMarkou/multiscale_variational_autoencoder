@@ -89,14 +89,11 @@ class MultiscaleVariationalAutoencoder():
         self.decoder_input = []
 
         for i in range(self.levels):
-
-            noisy_scale = keras.layers.GaussianNoise(0.01)(self.scales[i])
-
             if i == 0:
                 # --------- Base Encoder Decoder is special
                 encoder, z_domain, shape_before_flattening = \
                     self._encoder(
-                        noisy_scale,
+                        self.scales[i],
                         z_dim=self.z_dims[i],
                         prefix="encoder_" + str(i) + "_")
 
@@ -109,15 +106,12 @@ class MultiscaleVariationalAutoencoder():
                 result = decoder
             else:
                 # --------- Upper scale Encoder Decoders are the same
-                previous_results_no_grad = keras.layers.Lambda(
-                    lambda x: keras.backend.stop_gradient(x))(self.results[i-1])
-
                 previous_scale_upscaled = \
                     self._upscale(
-                        previous_results_no_grad)
+                        self.results[i-1])
 
                 diff = keras.layers.Subtract()([
-                    noisy_scale,
+                    self.scales[i],
                     previous_scale_upscaled
                 ])
 
@@ -126,12 +120,6 @@ class MultiscaleVariationalAutoencoder():
                         diff,
                         z_dim=self.z_dims[i],
                         prefix="encoder_" + str(i) + "_")
-
-                # -------- Combine previous encodings
-                encoder = keras.layers.Concatenate()([
-                   self.encoders[i-1],
-                   encoder
-                ])
 
                 decoder = self._decoder(
                         encoder,
@@ -144,6 +132,7 @@ class MultiscaleVariationalAutoencoder():
                 result = keras.layers.Add()([
                         decoder,
                         previous_scale_upscaled])
+
             # -------- Cap output to [0, 1]
             result = keras.layers.Activation("hard_sigmoid")(result);
 
@@ -271,7 +260,6 @@ class MultiscaleVariationalAutoencoder():
             r_loss = keras.backend.mean(
                 keras.backend.abs(y_true - y_pred),
                 axis=[1, 2, 3])
-
             loss_ratio = np.prod(keras.backend.int_shape(y_pred)[1:]) / np.prod(self.inputs_dims)
             return r_loss * r_loss_factor * loss_ratio
 
