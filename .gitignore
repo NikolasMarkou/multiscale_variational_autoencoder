@@ -6,6 +6,8 @@ __pycache__/
 # models and weights
 run/
 model*json
+notebooks/run
+notebooks/.ipynb_checkpoints
 
 # C extensions
 *.so
