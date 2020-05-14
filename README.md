@@ -11,7 +11,7 @@ I intend to use this m-vae as a building block for Classifiers, Fuzzers, Anomaly
 ## Tasks
 - [x] Build basic model
 - [x] Abstract Encoding and Decoding
-- [x] CIFAR10 notebook
+- [x] CIFAR10 [notebook](notebooks/cifar10_notebook.ipynb)
 - [ ] MNIST notebook
 - [ ] Generator model
 - [ ] Classifier model
