@@ -4,6 +4,8 @@ Building a multiscale variational autoencoder (m-vae).
 
 It is similar to a wavelet decomposition with a learnable encoding in the middle.
 
+It creates different scale representation of an image and then encodes it into z-domain. The downscaled versions are used to learn high level features and the higher level versions encode minute details.
+
 ![GitHub Logo](graphics/mvae.jpg)
 
 I intend to use this m-vae as a building block for Classifiers, Fuzzers, Anomaly Detection and more.
