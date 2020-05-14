@@ -21,11 +21,9 @@ I intend to use this m-vae as a building block for Classifiers, Fuzzers, Anomaly
 
 Trained on the ```CIFAR10``` dataset to recreate images for 10 epochs.
 
-### Animation 
+![GitHub Logo](graphics/cifar10_mvae.gif)
 
 ### Original / Recreation comparison
-
-![GitHub Logo](graphics/cifar10_mvae.gif)
 
 ![GitHub Logo](graphics/cifar10_0.png)
 
