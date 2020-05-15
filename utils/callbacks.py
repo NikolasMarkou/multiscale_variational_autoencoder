@@ -18,15 +18,18 @@ class CustomCallback(Callback):
 
     def on_batch_end(self, batch, logs={}):  
         if batch % self.print_every_n_batches == 0:
-            reconstruction = self.vae.model_predict.predict(
-                self.image)[0].squeeze()
-            reconstruction = resize(reconstruction, (128, 128))
-            filepath = os.path.join(
-                self.run_folder, "images", "img_" + str(self.epoch).zfill(3) + '_' + str(batch) + '.jpg')
-            if len(reconstruction.shape) == 2:
-                plt.imsave(filepath, reconstruction, cmap='gray_r')
-            else:
-                plt.imsave(filepath, reconstruction)
+            reconstruction = self.vae.model_trainable.predict(self.image)
+            for i in range(self.vae.levels):
+                x = reconstruction[i].squeeze()
+                x = resize(x, (128, 128), order=0)
+                filepath = os.path.join(
+                    self.run_folder,
+                    "images",
+                    "img_" + str(self.epoch).zfill(3) + "_" + str(batch) + "_" + str(i)  + ".jpg")
+                if len(x.shape) == 2:
+                    plt.imsave(filepath, x, cmap="gray_r")
+                else:
+                    plt.imsave(filepath, x)
 
     def on_epoch_begin(self, epoch, logs={}):
         self.epoch += 1

@@ -1,7 +1,8 @@
 import os
+import sys
 import keras
 import logging
-import numpy as np
+import utils.coord
 
 # --------------------------------------------------------------------------------
 # setup logger
@@ -68,7 +69,7 @@ def resnet_block(input_layer,
     if use_batchnorm:
         x = keras.layers.BatchNormalization()(x)
 
-    x = keras.layers.ReLU(x)
+    x = keras.layers.LeakyReLU(x)
 
     x = keras.layers.Conv2D(
         filters=filters,
@@ -98,7 +99,7 @@ def resnet_block(input_layer,
     if use_dropout:
         x = keras.layers.Dropout(0.25)(x)
 
-    x = keras.layers.ReLU(x)
+    x = keras.layers.LeakyReLU(x)
 
     return x
 
@@ -114,6 +115,7 @@ def basic_block(input_layer,
                 use_batchnorm=True,
                 use_dropout=True,
                 use_absense_block=False,
+                use_coordconv=True,
                 prefix="block_", ):
     """
 
@@ -137,6 +139,9 @@ def basic_block(input_layer,
         raise ValueError("block_type should be encoder or decoder")
 
     x = input_layer
+
+    if use_coordconv:
+        x = utils.coord.CoordinateChannel2D()(x)
 
     for i in range(len(filters)):
 
@@ -180,9 +185,11 @@ def basic_block(input_layer,
 
         if use_batchnorm:
             x = keras.layers.BatchNormalization()(x)
+
         # --------- Add bottleneck layer
         if strides[i][0] == 1 and \
                 strides[i][0] == strides[i][1]:
+
             tmp_layer = keras.layers.Conv2D(
                 filters=filters[i],
                 kernel_size=(1, 1),

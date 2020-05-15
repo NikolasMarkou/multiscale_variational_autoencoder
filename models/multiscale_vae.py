@@ -6,6 +6,7 @@ import logging
 import numpy as np
 
 import utils
+import utils.coord
 import utils.transform
 import utils.layer_blocks
 from utils.callbacks import CustomCallback, step_decay_schedule
@@ -23,13 +24,23 @@ logger = logging.getLogger("multiscale-vae")
 # --------------------------------------------------------------------------------
 
 
-class MultiscaleVariationalAutoencoder():
+class MultiscaleVariationalAutoencoder:
     def __init__(
             self,
             input_dims,
             levels,
             z_dims,
-            channels_index=2):
+            channels_index=2,
+            encoder={
+                "filters": [64, 64, 64, 64, 32],
+                "kernel_size": [(3, 3), (3, 3), (3, 3,), (1, 1), (1, 1)],
+                "strides": [(1, 1), (2, 2), (1, 1), (1, 1), (1, 1)]
+            },
+            decoder={
+                "filters":[64, 64, 64, 64, 32],
+                "kernel_size": [(3, 3), (3, 3), (3, 3,), (1, 1), (1, 1)],
+                "strides": [(1, 1), (2, 2), (1, 1), (1, 1), (1, 1)]
+            }):
         """
 
         :param input_dims:
@@ -52,6 +63,9 @@ class MultiscaleVariationalAutoencoder():
         self.z_dims = z_dims
         self.output_channels = input_dims[channels_index]
 
+        self._encoder_config = encoder
+        self._decoder_config = decoder
+
         self._build()
 
     # --------------------------------------------------------------------------------
@@ -66,6 +80,7 @@ class MultiscaleVariationalAutoencoder():
 
         for i in range(self.levels):
             if i == 0:
+                coord = utils.coord
                 self.scales.append(
                     keras.Input(
                         shape=self.inputs_dims,
@@ -134,7 +149,7 @@ class MultiscaleVariationalAutoencoder():
                         previous_scale_upscaled])
 
             # -------- Cap output to [0, 1]
-            result = keras.layers.Activation("hard_sigmoid")(result);
+            result = keras.layers.Activation("hard_sigmoid")(result)
 
             self.results.append(result)
             self.z_domains.append(z_domain)
@@ -189,14 +204,15 @@ class MultiscaleVariationalAutoencoder():
         # --------- Transforming here
         x = utils.layer_blocks.basic_block(x,
                                            block_type="encoder",
-                                           filters=[32, 32, 32],
-                                           kernel_size=[(3, 3), (3, 3), (1, 1)],
-                                           strides=[(1, 1), (1, 1), (1, 1)],
+                                           filters=self._encoder_config["filters"],
+                                           kernel_size=self._encoder_config["kernel_size"],
+                                           strides=self._encoder_config["strides"],
                                            prefix=prefix)
         # --------- Keep shape before flattening
         shape_before_flattening = keras.backend.int_shape(x)[1:]
 
-        # --------- Flatten and convert to z_dim dimensions
+        # --------- Global pool, flatten and convert to z_dim dimensions
+        x = keras.layers.GlobalAveragePooling2D()(x)
         x = keras.layers.Flatten()(x)
         mu = keras.layers.Dense(
             z_dim,
@@ -232,9 +248,9 @@ class MultiscaleVariationalAutoencoder():
         # --------- Transforming here
         x = utils.layer_blocks.basic_block(x,
                                            block_type="decoder",
-                                           filters=[32, 32, 32],
-                                           kernel_size=[(3, 3), (3, 3), (1, 1)],
-                                           strides=[(1, 1), (1, 1), (1, 1)],
+                                           filters=self._decoder_config["filters"],
+                                           kernel_size=self._decoder_config["kernel_size"],
+                                           strides=self._decoder_config["strides"],
                                            prefix=prefix)
         # -------- Match target output channels
         x = keras.layers.Conv2D(
@@ -260,7 +276,8 @@ class MultiscaleVariationalAutoencoder():
             r_loss = keras.backend.mean(
                 keras.backend.abs(y_true - y_pred),
                 axis=[1, 2, 3])
-            loss_ratio = np.prod(keras.backend.int_shape(y_pred)[1:]) / np.prod(self.inputs_dims)
+            #loss_ratio = float(np.prod(keras.backend.int_shape(y_pred)[1:])) / float(np.prod(self.inputs_dims))
+            loss_ratio = 1.0
             return r_loss * r_loss_factor * loss_ratio
 
         # --------- Define combined loss
@@ -270,7 +287,7 @@ class MultiscaleVariationalAutoencoder():
 
         optimizer = keras.optimizers.Adagrad(
             lr=self.learning_rate,
-            clipnorm=0.99
+            clipnorm=1.0
         )
 
         self.model_trainable.compile(
@@ -289,7 +306,8 @@ class MultiscaleVariationalAutoencoder():
             print_every_n_batches=100,
             initial_epoch=0,
             step_size=1,
-            lr_decay=1):
+            lr_decay=1,
+            save_checkpoint_weights=False):
 
         target = []
 
@@ -338,8 +356,8 @@ class MultiscaleVariationalAutoencoder():
             epochs=epochs,
             initial_epoch=initial_epoch,
             callbacks=[
-                checkpoint1,
-                checkpoint2,
+                #checkpoint1,
+                #checkpoint2,
                 lr_sched,
                 custom_callback
             ]
