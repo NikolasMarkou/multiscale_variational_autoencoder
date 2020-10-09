@@ -76,8 +76,11 @@ class MultiscaleVariationalAutoencoder:
         layer = self._input_layer
 
         for i in range(self._levels):
-            layer, up = self._downsample_upsample(layer, prefix="du_" + str(i) + "_")
-            self._scales.append(up)
+            if i == self._levels -1:
+                self._scales.append(layer)
+            else:
+                layer, up = self._downsample_upsample(layer, prefix="du_" + str(i) + "_")
+                self._scales.append(up)
 
         # --------- Create Encoder / Decoder
         self._mu_log = []
@@ -138,14 +141,14 @@ class MultiscaleVariationalAutoencoder:
         # TODO: Run a gaussian filter
 
         # --------- downsample
-        d0 = keras.layers.MaxPooling2D(pool_size=(2, 2),
-                                       strides=None,
-                                       padding="valid",
-                                       name=prefix + "down")(i0)
+        d0 = keras.layers.AveragePooling2D(pool_size=(2, 2),
+                                           strides=None,
+                                           padding="valid",
+                                           name=prefix + "down")(i0)
 
         # --------- upsample
         u0 = keras.layers.UpSampling2D(size=(2, 2),
-                                       interpolation="nearest",
+                                       interpolation="bilinear",
                                        name=prefix + "up")(d0)
         # --------- diff
         diff = keras.layers.Subtract()([i0, u0])
@@ -165,6 +168,14 @@ class MultiscaleVariationalAutoencoder:
         :return:
         """
         x = encoder_input
+        # --------- Transforming here
+        x = keras.layers.Conv2D(
+            filters=32,
+            kernel_size=(3, 3),
+            strides=(1, 1),
+            padding="same",
+            activation="relu",
+            kernel_initializer="glorot_uniform")(x)
 
         # --------- Transforming here
         x = layer_blocks.basic_block(x,
@@ -327,7 +338,7 @@ class MultiscaleVariationalAutoencoder:
             shuffle=True,
             epochs=epochs,
             initial_epoch=initial_epoch,
-            callbacks=callbacks_fns
+            callbacks=[]
         )
 
     # ===============================================================================

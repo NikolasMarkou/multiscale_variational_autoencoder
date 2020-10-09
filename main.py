@@ -76,24 +76,24 @@ with open("model_trainable.json", "w") as json_file:
     json_file.write(model_json)
 
 # -----------------------------------------
-#
-# EPOCHS = 50
-# BATCH_SIZE = 32
-# PRINT_EVERY_N_BATCHES = 1000
-# INITIAL_EPOCH = 0
-#
-# # -----------------------------------------
-#
-# multiscale_vae.train(
-#     x_train,
-#     batch_size=BATCH_SIZE,
-#     epochs=EPOCHS,
-#     run_folder=RUN_FOLDER,
-#     print_every_n_batches=PRINT_EVERY_N_BATCHES,
-#     initial_epoch=INITIAL_EPOCH,
-#     step_size=10,
-#     lr_decay=0.5
-# )
+
+EPOCHS = 50
+BATCH_SIZE = 32
+PRINT_EVERY_N_BATCHES = 1000
+INITIAL_EPOCH = 0
+
+# -----------------------------------------
+
+multiscale_vae.train(
+    x_train,
+    batch_size=BATCH_SIZE,
+    epochs=EPOCHS,
+    run_folder=RUN_FOLDER,
+    print_every_n_batches=PRINT_EVERY_N_BATCHES,
+    initial_epoch=INITIAL_EPOCH,
+    step_size=10,
+    lr_decay=0.5
+)
 
 
 
