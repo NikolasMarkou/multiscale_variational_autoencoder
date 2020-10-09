@@ -113,7 +113,7 @@ def basic_block(input_layer,
                 use_batchnorm=True,
                 use_dropout=True,
                 use_absense_block=False,
-                use_coordconv=True,
+                use_coordconv=False,
                 prefix="block_", ):
     """
 

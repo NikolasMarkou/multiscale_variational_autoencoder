@@ -73,14 +73,11 @@ class MultiscaleVariationalAutoencoder:
         # --------- Build multiscale input
         self._scales = []
         self._input_layer = keras.Input(shape=self._inputs_dims, name="input_layer")
+        layer = self._input_layer
 
         for i in range(self._levels):
-            if i == 0:
-                layer = self._input_layer
-                self._scales.append(layer)
-            else:
-                layer, up = self._downsample_upsample(layer, prefix="du_" + str(i) + "_")
-                self._scales.append(up)
+            layer, up = self._downsample_upsample(layer, prefix="du_" + str(i) + "_")
+            self._scales.append(up)
 
         # --------- Create Encoder / Decoder
         self._mu_log = []
