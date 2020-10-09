@@ -8,9 +8,9 @@ from ..utils import callbacks
 from ..utils import transform
 from ..utils import layer_blocks
 
-# --------------------------------------------------------------------------------
+# ===============================================================================
 # setup logger
-# --------------------------------------------------------------------------------
+# ===============================================================================
 
 
 logging.basicConfig(level=logging.INFO,
@@ -19,7 +19,7 @@ logging.getLogger("multiscale-vae").setLevel(logging.INFO)
 logger = logging.getLogger("multiscale-vae")
 
 
-# --------------------------------------------------------------------------------
+# ===============================================================================
 
 
 class MultiscaleVariationalAutoencoder:
@@ -58,16 +58,16 @@ class MultiscaleVariationalAutoencoder:
             raise ValueError("z_dims elements should be > 0")
         # --------- Variable initialization
         self._name = "mvae"
-        self._inputs_dims = input_dims
-        self._initialization_scheme = "glorot_uniform"
         self._levels = levels
         self._z_latent_dims = z_dims
-        self._output_channels = input_dims[channels_index]
+        self._inputs_dims = input_dims
         self._encoder_config = encoder
         self._decoder_config = decoder
+        self._initialization_scheme = "glorot_uniform"
+        self._output_channels = input_dims[channels_index]
         self._build()
 
-    # --------------------------------------------------------------------------------
+    # ===============================================================================
 
     def _build(self):
         """
@@ -76,120 +76,91 @@ class MultiscaleVariationalAutoencoder:
         """
         # --------- Build multiscale input
         self._scales = []
-
+        self._input_layer = keras.Input(shape=self._inputs_dims,
+                                        name="input_layer")
+        layer = self._input_layer
         for i in range(self._levels):
-            if i == 0:
-                self._scales.append(
-                    keras.Input(
-                        shape=self._inputs_dims,
-                        name="scale_" + str(i)))
-            else:
-                self._scales.append(
-                    keras.layers.MaxPool2D(
-                        pool_size=(2, 2),
-                        strides=None,
-                        padding="valid",
-                        name="scale_" + str(i))(self._scales[i - 1]))
-
-        # --------- Reverse scales
-        self._scales = self._scales[::-1]
+            layer, up = self._downsample_upsample(layer, prefix="du_" + str(i) + "_")
+            self._scales.append(up)
+        self._scales.append(layer)
 
         # --------- Create Encoder / Decoder
-        self._encoders = []
-        self._decoders = []
+        self._decoder = []
         self._results = []
+        self._encoders = []
         self._z_latent = []
         self._decoder_input = []
+        self._z_latent_concat = None
 
+        # --------- all encoders are the same
+        shapes_before = []
         for i in range(self._levels):
-            if i == 0:
-                # --------- Base Encoder Decoder is special
-                encoder, z_domain, shape_before_flattening = \
-                    self._encoder(
-                        self._scales[i],
-                        z_dim=self._z_latent_dims[i],
-                        prefix="encoder_" + str(i) + "_")
-
-                decoder = self._decoder(
-                    encoder,
-                    shape=shape_before_flattening,
-                    prefix="decoder_" + str(i) + "_")
-
-                self._decoders.append(decoder)
-                result = decoder
-            else:
-                # --------- Upper scale Encoder Decoders are the same
-                previous_scale_upscaled = \
-                    self._upsample(
-                        self._results[i - 1])
-
-                diff = keras.layers.Subtract()([
-                    self._scales[i],
-                    previous_scale_upscaled
-                ])
-
-                encoder, z_domain, shape_before_flattening = \
-                    self._encoder(
-                        diff,
-                        z_dim=self._z_latent_dims[i],
-                        prefix="encoder_" + str(i) + "_")
-
-                decoder = self._decoder(
-                    encoder,
-                    shape=shape_before_flattening,
-                    prefix="decoder_" + str(i) + "_")
-
-                self._decoders.append(decoder)
-
-                # -------- Combine previous with current
-                result = keras.layers.Add()([
-                    decoder,
-                    previous_scale_upscaled])
-
-            # -------- Cap output to [0, 1]
-            result = keras.layers.Activation("hard_sigmoid")(result)
-
-            self._results.append(result)
+            encoder, z_domain, shape_before_flattening = \
+                self._build_encoder(self._scales[i],
+                                    z_dim=self._z_latent_dims[i],
+                                    prefix="encoder_" + str(i) + "_")
             self._z_latent.append(z_domain)
-            self._encoders.append(encoder)
+            shapes_before.append(shape_before_flattening)
+
+        # --------- concat all z-latent layers
+        self._z_latent_concat = keras.layers.Concatenate(self._z_latent)
+
+        # --------- build decoder that uses all the combined latent variables
+        self._decoder = \
+            self._build_decoder(
+                self._z_latent_concat,
+                shape=shapes_before[0],
+                prefix="decoder_")
+        self._result = self._decoder
+
+        # -------- Cap output to [0, 1]
+        self._result = keras.layers.Activation("sigmoid")(self._result)
 
         # --------- The end-to-end trainable model
-        self._model_trainable = keras.Model(
-            self._scales[-1],
-            self._results)
+        self._model_trainable = keras.Model(self._input_layer,
+                                            self._result)
 
-        # --------- The end-to-end trainable model
-        self._model_predict = keras.Model(
-            self._scales[-1],
-            self._results[-1])
+        # --------- The encoding model
+        self._model_encode = keras.Model(self._input_layer,
+                                         self._z_latent_concat)
 
-        return self._model_trainable, self._model_predict
+        # --------- The sample model
+        self._model_sample = keras.Model(self._z_latent_concat,
+                                         self._result)
 
-    # --------------------------------------------------------------------------------
+        return self._model_trainable, self._model_encode, self._model_sample
 
-    def load_weights(self, filename):
-        return
-
-    # --------------------------------------------------------------------------------
+    # ===============================================================================
 
     @staticmethod
-    def _upsample(input_layer,
-                  upsample_scheme="bilinear"):
+    def _downsample_upsample(i0, prefix="downsample_upsample"):
         """
-        Upsamples the input_layer to match the given shape
-        :param input_layer:
+        Downsample and upsample the input
+        :param i0: input
         :return:
         """
-        return keras.layers.UpSampling2D(
-            size=(2, 2),
-            interpolation=upsample_scheme)(input_layer)
+        # --------- filter
+        # TODO: Run a gaussian filter
 
-    # --------------------------------------------------------------------------------
+        # --------- downsample
+        d0 = keras.layers.MaxPooling2D(pool_size=(2, 2),
+                                       strides=None,
+                                       padding="valid",
+                                       name=prefix + "_down")(i0)
 
-    def _encoder(self,
-                 encoder_input,
-                 z_dim,
-                 prefix="encoder_"):
+        # --------- upsample
+        u0 = keras.layers.UpSampling2D(size=(2, 2),
+                                       interpolation="nearest",
+                                       name=prefix + "_up")(d0)
+
+        return d0, i0 - u0
+
+    # ===============================================================================
+
+    def _build_encoder(self,
+                       encoder_input,
+                       z_dim,
+                       prefix="encoder_"):
         """
         Creates an encoder block
         :param encoder_input:
@@ -232,18 +203,25 @@ class MultiscaleVariationalAutoencoder:
         return keras.layers.Lambda(sample, name=prefix + "output")([mu, log_var]), \
                [mu, log_var], shape_before_flattening
 
-    # --------------------------------------------------------------------------------
+    # ===============================================================================
 
-    def _decoder(self,
-                 decoder_input,
-                 shape,
-                 prefix="decoder_"):
+    def _build_decoder(self,
+                       decoder_input,
+                       shape,
+                       prefix="decoder_"):
+        """
+        Creates a decoder block
+        :param decoder_input:
+        :param shape:
+        :param prefix:
+        :return:
+        """
         x = decoder_input
         # --------- Decoding here
         x = keras.layers.Dense(np.prod(shape))(x)
         x = keras.layers.Reshape(shape)(x)
         # --------- Transforming here
-        x = layer_blocks.basic_block(x,
+        x = layer_blocks.basic_block(input_layer=x,
                                      block_type="decoder",
                                      filters=self._decoder_config["filters"],
                                      kernel_size=self._decoder_config["kernel_size"],
@@ -257,7 +235,7 @@ class MultiscaleVariationalAutoencoder:
                                 activation="linear")(x)
         return x
 
-    # --------------------------------------------------------------------------------
+    # ===============================================================================
 
     def compile(
             self,
@@ -270,6 +248,7 @@ class MultiscaleVariationalAutoencoder:
         :param learning_rate:
         :param r_loss_factor:
         :param kl_loss_factor:
+        :param clipnorm:
         :return:
         """
         # --------- Define VAE recreation loss
@@ -302,7 +281,7 @@ class MultiscaleVariationalAutoencoder:
             loss=vae_loss,
             metrics=[vae_r_loss])
 
-    # --------------------------------------------------------------------------------
+    # ===============================================================================
 
     def train(
             self,
@@ -315,21 +294,9 @@ class MultiscaleVariationalAutoencoder:
             step_size=1,
             lr_decay=1,
             save_checkpoint_weights=False):
+        """
 
-        target = []
-
-        for i in range(self._levels):
-            if i == 0:
-                target.append(x_train)
-            else:
-                target.append(
-                    transform.pool4d(
-                        target[i - 1],
-                        kernel_size=2,
-                        stride=2,
-                        padding=0))
-
-        target = target[::-1]
+        """
 
         custom_callback = callbacks.CustomCallback(
             run_folder,
@@ -362,10 +329,15 @@ class MultiscaleVariationalAutoencoder:
 
         self._model_trainable.fit(
             x_train,
-            target,
+            x_train,
             batch_size=batch_size,
             shuffle=True,
             epochs=epochs,
             initial_epoch=initial_epoch,
             callbacks=callbacks_fns
         )
+
+    # ===============================================================================
+
+    def load_weights(self, filename):
+        return

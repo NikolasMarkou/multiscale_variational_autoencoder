@@ -2,7 +2,7 @@
 <project version="4">
   <component name="ProjectModuleManager">
     <modules>
-      <module fileurl="file://$PROJECT_DIR$/.idea/multiscale_variational_autoencoder.iml" filepath="$PROJECT_DIR$/.idea/multiscale_variational_autoencoder.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/mvae.iml" filepath="$PROJECT_DIR$/.idea/mvae.iml" />
     </modules>
   </component>
 </project>
