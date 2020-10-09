@@ -41,35 +41,28 @@ x_test = x_test.astype("float32") / 255.0
 
 # -----------------------------------------
 
-# Display original
-plt.figure()
-plt.imshow(x_train[0, :, :, :])
-plt.show()
-
-# -----------------------------------------
-
 multiscale_vae = MultiscaleVariationalAutoencoder(
     input_dims=(32, 32, 3),
     levels=3,
     z_dims=[16, 64, 256],
     encoder={
-        "filters": [64, 64, 64, 64, 32],
-        "kernel_size": [(5, 5), (3, 3), (3, 3,), (1, 1), (1, 1)],
-        "strides": [(2, 2), (1, 1), (1, 1), (1, 1), (1, 1)]
+        "filters": [32, 32, 32],
+        "kernel_size": [(3, 3), (3, 3), (1, 1)],
+        "strides": [(1, 1), (1, 1), (1, 1)]
     },
     decoder={
-        "filters": [64, 64, 64, 64, 32],
-        "kernel_size": [(5, 5), (3, 3), (3, 3,), (1, 1), (1, 1)],
-        "strides": [(2, 2), (1, 1), (1, 1), (1, 1), (1, 1)]
+        "filters": [32, 32, 32],
+        "kernel_size": [(3, 3), (3, 3), (1, 1)],
+        "strides": [(1, 1), (1, 1), (1, 1)]
     })
 
-# %%
+# -----------------------------------------
 
 LEARNING_RATE = 0.001
 R_LOSS_FACTOR = 1000
 KL_LOSS_FACTOR = 10
 
-# %%
+# -----------------------------------------
 
 multiscale_vae.compile(
     learning_rate=LEARNING_RATE,
@@ -77,37 +70,30 @@ multiscale_vae.compile(
     kl_loss_factor=KL_LOSS_FACTOR
 )
 
-# -----------------------------------------
-
-EPOCHS = 50
-BATCH_SIZE = 32
-PRINT_EVERY_N_BATCHES = 1000
-INITIAL_EPOCH = 0
-
-# -----------------------------------------
-
 # serialize model to JSON
-model_json = multiscale_vae.model_predict.to_json()
-with open("model_predict.json", "w") as json_file:
+model_json = multiscale_vae._model_trainable.to_json()
+with open("model_trainable.json", "w") as json_file:
     json_file.write(model_json)
 
 # -----------------------------------------
+#
+# EPOCHS = 50
+# BATCH_SIZE = 32
+# PRINT_EVERY_N_BATCHES = 1000
+# INITIAL_EPOCH = 0
+#
+# # -----------------------------------------
+#
+# multiscale_vae.train(
+#     x_train,
+#     batch_size=BATCH_SIZE,
+#     epochs=EPOCHS,
+#     run_folder=RUN_FOLDER,
+#     print_every_n_batches=PRINT_EVERY_N_BATCHES,
+#     initial_epoch=INITIAL_EPOCH,
+#     step_size=10,
+#     lr_decay=0.5
+# )
 
-multiscale_vae.train(
-    x_train,
-    batch_size=BATCH_SIZE,
-    epochs=EPOCHS,
-    run_folder=RUN_FOLDER,
-    print_every_n_batches=PRINT_EVERY_N_BATCHES,
-    initial_epoch=INITIAL_EPOCH,
-    step_size=10,
-    lr_decay=0.5
-)
-
-# %%
-
-results = multiscale_vae.model_predict.predict(x_train[0:10, :, :, :])
-
-# %%
 
 

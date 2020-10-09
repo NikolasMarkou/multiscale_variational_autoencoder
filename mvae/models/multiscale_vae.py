@@ -2,10 +2,7 @@ import os
 import keras
 import logging
 import numpy as np
-
-from ..utils import coord
 from ..utils import callbacks
-from ..utils import transform
 from ..utils import layer_blocks
 
 # ===============================================================================
@@ -23,16 +20,13 @@ logger = logging.getLogger("multiscale-vae")
 
 
 class MultiscaleVariationalAutoencoder:
-    """
-    Encoder that compresses a signal
-    into a latent space of normally distributed variables
-    """
     def __init__(
             self,
             input_dims,
             levels,
             z_dims,
             channels_index=2,
+            compress_output=True,
             encoder={
                 "filters": [64, 64, 64, 64, 32],
                 "kernel_size": [(3, 3), (3, 3), (3, 3,), (1, 1), (1, 1)],
@@ -44,7 +38,8 @@ class MultiscaleVariationalAutoencoder:
                 "strides": [(1, 1), (2, 2), (1, 1), (1, 1), (1, 1)]
             }):
         """
-
+        Encoder that compresses a signal
+        into a latent space of normally distributed variables
         :param input_dims:
         :param levels:
         :param z_dims:
@@ -63,6 +58,7 @@ class MultiscaleVariationalAutoencoder:
         self._inputs_dims = input_dims
         self._encoder_config = encoder
         self._decoder_config = decoder
+        self._compress_output = compress_output
         self._initialization_scheme = "glorot_uniform"
         self._output_channels = input_dims[channels_index]
         self._build()
@@ -76,34 +72,36 @@ class MultiscaleVariationalAutoencoder:
         """
         # --------- Build multiscale input
         self._scales = []
-        self._input_layer = keras.Input(shape=self._inputs_dims,
-                                        name="input_layer")
-        layer = self._input_layer
+        self._input_layer = keras.Input(shape=self._inputs_dims, name="input_layer")
+
         for i in range(self._levels):
-            layer, up = self._downsample_upsample(layer, prefix="du_" + str(i) + "_")
-            self._scales.append(up)
-        self._scales.append(layer)
+            if i == 0:
+                layer = self._input_layer
+                self._scales.append(layer)
+            else:
+                layer, up = self._downsample_upsample(layer, prefix="du_" + str(i) + "_")
+                self._scales.append(up)
 
         # --------- Create Encoder / Decoder
-        self._decoder = []
-        self._results = []
+        self._mu_log = []
         self._encoders = []
-        self._z_latent = []
         self._decoder_input = []
-        self._z_latent_concat = None
 
         # --------- all encoders are the same
         shapes_before = []
         for i in range(self._levels):
-            encoder, z_domain, shape_before_flattening = \
+            encoder, mu_log, shape_before_flattening = \
                 self._build_encoder(self._scales[i],
                                     z_dim=self._z_latent_dims[i],
                                     prefix="encoder_" + str(i) + "_")
-            self._z_latent.append(z_domain)
+            self._mu_log.append(mu_log)
+            self._encoders.append(encoder)
             shapes_before.append(shape_before_flattening)
 
         # --------- concat all z-latent layers
-        self._z_latent_concat = keras.layers.Concatenate(self._z_latent)
+        logger.info("self._scales={0}".format(self._scales))
+        logger.info("self._encoders={0}".format(self._encoders))
+        self._z_latent_concat = keras.layers.Concatenate(axis=-1)(self._encoders)
 
         # --------- build decoder that uses all the combined latent variables
         self._decoder = \
@@ -111,24 +109,24 @@ class MultiscaleVariationalAutoencoder:
                 self._z_latent_concat,
                 shape=shapes_before[0],
                 prefix="decoder_")
-        self._result = self._decoder
 
-        # -------- Cap output to [0, 1]
-        self._result = keras.layers.Activation("sigmoid")(self._result)
+        if self._compress_output:
+            # -------- Cap output to [0, 1]
+            self._result = keras.layers.Activation("sigmoid", name="output")(self._decoder)
+        else:
+            self._result = keras.layers.Layer(name="output")(self._decoder)
 
         # --------- The end-to-end trainable model
         self._model_trainable = keras.Model(self._input_layer,
                                             self._result)
 
-        # --------- The encoding model
-        self._model_encode = keras.Model(self._input_layer,
-                                         self._z_latent_concat)
-
-        # --------- The sample model
-        self._model_sample = keras.Model(self._z_latent_concat,
-                                         self._result)
-
-        return self._model_trainable, self._model_encode, self._model_sample
+        # # --------- The encoding model
+        # self._model_encode = keras.Model(self._input_layer,
+        #                                  self._z_latent_concat)
+        #
+        # # --------- The sample model
+        # self._model_sample = keras.Model(self._z_latent_concat,
+        #                                  self._result)
 
     # ===============================================================================
 
@@ -146,14 +144,15 @@ class MultiscaleVariationalAutoencoder:
         d0 = keras.layers.MaxPooling2D(pool_size=(2, 2),
                                        strides=None,
                                        padding="valid",
-                                       name=prefix + "_down")(i0)
+                                       name=prefix + "down")(i0)
 
         # --------- upsample
         u0 = keras.layers.UpSampling2D(size=(2, 2),
                                        interpolation="nearest",
-                                       name=prefix + "_up")(d0)
-
-        return d0, i0 - u0
+                                       name=prefix + "up")(d0)
+        # --------- diff
+        diff = keras.layers.Subtract()([i0, u0])
+        return d0, diff
 
     # ===============================================================================
 
@@ -251,6 +250,7 @@ class MultiscaleVariationalAutoencoder:
         :param clipnorm:
         :return:
         """
+        self._learning_rate = learning_rate
         # --------- Define VAE recreation loss
         def vae_r_loss(y_true, y_pred):
             r_loss = keras.backend.mean(
@@ -272,7 +272,7 @@ class MultiscaleVariationalAutoencoder:
             return r_loss + kl_loss
 
         optimizer = keras.optimizers.Adagrad(
-            lr=learning_rate,
+            lr=self._learning_rate,
             clipnorm=clipnorm
         )
 
@@ -294,10 +294,6 @@ class MultiscaleVariationalAutoencoder:
             step_size=1,
             lr_decay=1,
             save_checkpoint_weights=False):
-        """
-
-        """
-
         custom_callback = callbacks.CustomCallback(
             run_folder,
             print_every_n_batches,
@@ -305,7 +301,7 @@ class MultiscaleVariationalAutoencoder:
             x_train[0:1, :, :, :],
             self)
         lr_schedule = callbacks.step_decay_schedule(
-            initial_lr=self.learning_rate,
+            initial_lr=self._learning_rate,
             decay_factor=lr_decay,
             step_size=step_size)
         checkpoint_filepath = os.path.join(
