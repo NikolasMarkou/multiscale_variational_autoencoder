@@ -1,8 +1,6 @@
-import os
-import sys
 import keras
 import logging
-import utils.coord
+import mvae.utils.coord
 
 # --------------------------------------------------------------------------------
 # setup logger
@@ -141,7 +139,7 @@ def basic_block(input_layer,
     x = input_layer
 
     if use_coordconv:
-        x = utils.coord.CoordinateChannel2D()(x)
+        x = mvae.utils.coord.CoordinateChannel2D()(x)
 
     for i in range(len(filters)):
 

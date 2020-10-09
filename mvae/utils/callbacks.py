@@ -18,8 +18,8 @@ class CustomCallback(Callback):
 
     def on_batch_end(self, batch, logs={}):  
         if batch % self.print_every_n_batches == 0:
-            reconstruction = self.vae.model_trainable.predict(self.image)
-            for i in range(self.vae.levels):
+            reconstruction = self.vae._model_trainable.predict(self.image)
+            for i in range(self.vae._levels):
                 x = reconstruction[i].squeeze()
                 x = resize(x, (128, 128), order=0)
                 filepath = os.path.join(
