@@ -170,13 +170,17 @@ class MultiscaleVariationalAutoencoder:
         :return:
         """
         # --------- filter
-        f0 = MultiscaleVariationalAutoencoder._gaussian_filter([5, 5])(i0)
+        # TODO : fix for different tensor schemes
+        shape = keras.backend.int_shape(i0)[1:3]
+        logger.info("shape={0}".format(shape))
+        shape = (int(shape[0] / 4), int(shape[1] / 4))
+        f0 = MultiscaleVariationalAutoencoder._gaussian_filter(shape)(i0)
 
         # --------- downsample
-        d0 = keras.layers.AveragePooling2D(pool_size=(2, 2),
-                                           strides=None,
-                                           padding="valid",
-                                           name=prefix + "down")(f0)
+        d0 = keras.layers.MaxPool2D(pool_size=(1, 1),
+                                    strides=(2, 2),
+                                    padding="valid",
+                                    name=prefix + "down")(f0)
 
         # --------- upsample
         u0 = keras.layers.UpSampling2D(size=(2, 2),
@@ -223,17 +227,18 @@ class MultiscaleVariationalAutoencoder:
         shape_before_flattening = keras.backend.int_shape(x)[1:]
 
         # --------- flatten and convert to z_dim dimensions
+        initializer = keras.initializers.Orthogonal()
         x = keras.layers.BatchNormalization()(x)
         x = keras.layers.Flatten()(x)
         mu = keras.layers.Dense(
             z_dim,
             kernel_regularizer=None,
-            kernel_initializer=self._initialization_scheme,
+            kernel_initializer=initializer,
             name=prefix + "mu")(x)
         log_var = keras.layers.Dense(
             z_dim,
             kernel_regularizer=None,
-            kernel_initializer=self._initialization_scheme,
+            kernel_initializer=initializer,
             name=prefix + "log_var")(x)
 
         def sample(args):
@@ -411,7 +416,7 @@ class MultiscaleVariationalAutoencoder:
     @staticmethod
     def _gaussian_filter(kernel_size):
         # Initialise to set kernel to required value
-        def kernel_init(shape):
+        def kernel_init(shape, dtype):
             kernel = np.zeros(shape)
             kernel[:, :, 0, 0] = \
                 MultiscaleVariationalAutoencoder._gaussian_kernel(
@@ -427,6 +432,7 @@ class MultiscaleVariationalAutoencoder:
             activation=None,
             use_bias=False,
             trainable=False,
+            depthwise_initializer=kernel_init,
             kernel_initializer=kernel_init)
 
     # ===============================================================================

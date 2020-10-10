@@ -45,7 +45,7 @@ x_test = x_test.astype("float32") / 255.0
 multiscale_vae = MultiscaleVariationalAutoencoder(
     input_dims=(32, 32, 3),
     levels=3,
-    z_dims=[128, 128, 128],
+    z_dims=[64, 32, 16],
     encoder={
         "filters": [32, 32, 32],
         "kernel_size": [(3, 3), (3, 3), (3, 3)],
