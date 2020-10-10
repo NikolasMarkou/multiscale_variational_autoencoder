@@ -7,6 +7,7 @@ from keras.datasets import cifar10
 from mvae.models.multiscale_vae import MultiscaleVariationalAutoencoder
 
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
+tf.compat.v1.disable_eager_execution()
 tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)
 
 # %%
@@ -44,23 +45,23 @@ x_test = x_test.astype("float32") / 255.0
 multiscale_vae = MultiscaleVariationalAutoencoder(
     input_dims=(32, 32, 3),
     levels=3,
-    z_dims=[16, 64, 256],
+    z_dims=[128, 128, 128],
     encoder={
         "filters": [32, 32, 32],
-        "kernel_size": [(3, 3), (3, 3), (1, 1)],
+        "kernel_size": [(3, 3), (3, 3), (3, 3)],
         "strides": [(1, 1), (1, 1), (1, 1)]
     },
     decoder={
         "filters": [32, 32, 32],
-        "kernel_size": [(3, 3), (3, 3), (1, 1)],
+        "kernel_size": [(3, 3), (3, 3), (3, 3)],
         "strides": [(1, 1), (1, 1), (1, 1)]
     })
 
 # -----------------------------------------
 
-LEARNING_RATE = 0.001
-R_LOSS_FACTOR = 1000
-KL_LOSS_FACTOR = 10
+LEARNING_RATE = 0.1
+R_LOSS_FACTOR = 100
+KL_LOSS_FACTOR = 1
 
 # -----------------------------------------
 
@@ -71,16 +72,17 @@ multiscale_vae.compile(
 )
 
 # serialize model to JSON
-model_json = multiscale_vae._model_trainable.to_json()
 with open("model_trainable.json", "w") as json_file:
-    json_file.write(model_json)
+    json_file.write(multiscale_vae._model_trainable.to_json())
 
 # -----------------------------------------
 
-EPOCHS = 50
+EPOCHS = 100
+STEP_SIZE = 10
+LR_DECAY = 0.5
 BATCH_SIZE = 32
-PRINT_EVERY_N_BATCHES = 1000
 INITIAL_EPOCH = 0
+PRINT_EVERY_N_BATCHES = 500
 
 # -----------------------------------------
 
@@ -91,9 +93,8 @@ multiscale_vae.train(
     run_folder=RUN_FOLDER,
     print_every_n_batches=PRINT_EVERY_N_BATCHES,
     initial_epoch=INITIAL_EPOCH,
-    step_size=10,
-    lr_decay=0.5
-)
+    step_size=STEP_SIZE,
+    lr_decay=LR_DECAY)
 
 
 

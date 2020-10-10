@@ -28,9 +28,9 @@ def basic_block(input_layer,
                 filters=[64],
                 kernel_size=[(3, 3)],
                 strides=[(1, 1)],
-                use_batchnorm=True,
-                use_dropout=True,
-                prefix="block_", ):
+                use_batchnorm=False,
+                use_dropout=False,
+                prefix="block_"):
     """
 
     :param input_layer:
@@ -73,7 +73,7 @@ def basic_block(input_layer,
                 activation="linear",
                 kernel_initializer="glorot_uniform")(x)
 
-        x = keras.layers.LeakyReLU()(x)
+        x = keras.layers.ReLU()(x)
 
         x = keras.layers.Conv2D(
             filters=filters[i],
@@ -87,8 +87,6 @@ def basic_block(input_layer,
             x = keras.layers.BatchNormalization()(x)
 
         # --------- Add bottleneck layer
-        #logger.info("previous_no_filters={0}, filters[i]={1}".format(previous_no_filters,filters[i]))
-
         if (strides[i][0] == 1 and strides[i][0] == strides[i][1]) and \
                 previous_no_filters != filters[i]:
 
@@ -105,7 +103,7 @@ def basic_block(input_layer,
             tmp_layer
         ])
         # --------- Relu combined result
-        x = keras.layers.LeakyReLU()(x)
+        x = keras.layers.ReLU()(x)
 
         if use_dropout:
             x = keras.layers.Dropout(rate=0.1)(x)
