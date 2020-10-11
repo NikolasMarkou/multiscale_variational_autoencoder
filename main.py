@@ -45,7 +45,7 @@ x_test = x_test.astype("float32") / 255.0
 multiscale_vae = MultiscaleVariationalAutoencoder(
     input_dims=(32, 32, 3),
     levels=3,
-    z_dims=[64, 32, 16],
+    z_dims=[128, 128, 128],
     encoder={
         "filters": [32, 32, 32],
         "kernel_size": [(3, 3), (3, 3), (3, 3)],
@@ -59,9 +59,15 @@ multiscale_vae = MultiscaleVariationalAutoencoder(
 
 # -----------------------------------------
 
-LEARNING_RATE = 0.1
-R_LOSS_FACTOR = 100
+EPOCHS = 100
+STEP_SIZE = 10
+LR_DECAY = 0.5
+BATCH_SIZE = 32
+INITIAL_EPOCH = 0
 KL_LOSS_FACTOR = 1
+LEARNING_RATE = 0.01
+R_LOSS_FACTOR = 100
+PRINT_EVERY_N_BATCHES = 1000
 
 # -----------------------------------------
 
@@ -74,15 +80,6 @@ multiscale_vae.compile(
 # serialize model to JSON
 with open("model_trainable.json", "w") as json_file:
     json_file.write(multiscale_vae._model_trainable.to_json())
-
-# -----------------------------------------
-
-EPOCHS = 100
-STEP_SIZE = 10
-LR_DECAY = 0.5
-BATCH_SIZE = 32
-INITIAL_EPOCH = 0
-PRINT_EVERY_N_BATCHES = 500
 
 # -----------------------------------------
 

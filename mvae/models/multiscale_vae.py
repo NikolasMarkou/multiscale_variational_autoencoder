@@ -65,7 +65,7 @@ class MultiscaleVariationalAutoencoder:
         self._output_channels = input_dims[channels_index]
         self._build()
 
-    # ===============================================================================
+    # ==========================================================================
 
     def _build(self):
         """
@@ -74,14 +74,16 @@ class MultiscaleVariationalAutoencoder:
         """
         # --------- Build multiscale input
         self._scales = []
-        self._input_layer = keras.Input(shape=self._inputs_dims, name="input_layer")
+        self._input_layer = keras.Input(shape=self._inputs_dims,
+                                        name="input_layer")
         layer = self._input_layer
 
         for i in range(self._levels):
             if i == self._levels - 1:
                 self._scales.append(layer)
             else:
-                layer, up = self._downsample_upsample(layer, prefix="du_" + str(i) + "_")
+                layer, up = self._downsample_upsample(layer,
+                                                      prefix="du_" + str(i) + "_")
                 self._scales.append(up)
 
         # --------- Create Encoder / Decoder
@@ -116,22 +118,11 @@ class MultiscaleVariationalAutoencoder:
         results = []
         for i in range(self._levels):
             layer = self._decoders[i]
-            if i != 0:
-                size = (2 ** i, 2 ** i)
-                layer = keras.layers.UpSampling2D(
-                    size=size, interpolation="bilinear")(layer)
+            size = (2 ** i, 2 ** i)
+            layer = keras.layers.UpSampling2D(size=size,
+                                              interpolation="bilinear")(layer)
             results.append(layer)
-        merged = keras.layers.Add()(results)
-        results.append(merged)
-        x = keras.layers.Concatenate()(results)
-        x = keras.layers.Conv2D(
-                filters=self._output_channels,
-                kernel_size=(1, 1),
-                strides=(1, 1),
-                padding="same",
-                activation="linear",
-                kernel_regularizer=None,
-                kernel_initializer="glorot_uniform")(x)
+        x = keras.layers.Add()(results)
 
         # --------- concat all z-latent layers
         self._z_latent_concat = \
@@ -143,10 +134,9 @@ class MultiscaleVariationalAutoencoder:
 
         if self._compress_output:
             # -------- Cap output to [0, 1]
-            self._result = \
-                keras.layers.Activation("sigmoid", name="output")(x)
-        else:
-            self._result = keras.layers.Layer(name="output")(x)
+            x = keras.layers.Activation("sigmoid")(x)
+
+        self._result = keras.layers.Layer(name="output")(x)
 
         # --------- The end-to-end trainable model
         self._model_trainable = keras.Model(self._input_layer,
@@ -212,7 +202,7 @@ class MultiscaleVariationalAutoencoder:
             padding="same",
             activation="relu",
             kernel_regularizer=None,
-            kernel_initializer="glorot_uniform")(x)
+            kernel_initializer="glorot_normal")(x)
 
         # --------- Transforming here
         x = layer_blocks.basic_block(x,
@@ -227,7 +217,7 @@ class MultiscaleVariationalAutoencoder:
         shape_before_flattening = keras.backend.int_shape(x)[1:]
 
         # --------- flatten and convert to z_dim dimensions
-        initializer = keras.initializers.Orthogonal()
+        initializer = keras.initializers.orthogonal()
         x = keras.layers.BatchNormalization()(x)
         x = keras.layers.Flatten()(x)
         mu = keras.layers.Dense(
@@ -247,7 +237,7 @@ class MultiscaleVariationalAutoencoder:
                 shape=keras.backend.shape(tmp_mu),
                 mean=0.,
                 stddev=0.01)
-            return tmp_mu + keras.backend.exp(tmp_log_var / 2.0) * epsilon
+            return tmp_mu + keras.backend.exp(tmp_log_var) * epsilon
 
         return keras.layers.Lambda(sample, name=prefix + "output")([mu, log_var]), \
                [mu, log_var], shape_before_flattening
@@ -283,18 +273,17 @@ class MultiscaleVariationalAutoencoder:
         x = keras.layers.Conv2D(filters=self._output_channels,
                                 strides=(1, 1),
                                 kernel_size=(1, 1),
-                                kernel_initializer=self._initialization_scheme,
+                                kernel_initializer="glorot_normal",
                                 activation="linear")(x)
         return x
 
     # ===============================================================================
 
-    def compile(
-            self,
-            learning_rate,
-            r_loss_factor=1.0,
-            kl_loss_factor=1.0,
-            clipnorm=1.0):
+    def compile(self,
+                learning_rate,
+                r_loss_factor=1.0,
+                kl_loss_factor=1.0,
+                clipnorm=1.0):
         """
 
         :param learning_rate:
@@ -328,8 +317,7 @@ class MultiscaleVariationalAutoencoder:
 
         optimizer = keras.optimizers.Adagrad(
             lr=self._learning_rate,
-            clipnorm=clipnorm
-        )
+            clipnorm=clipnorm)
 
         self._model_trainable.compile(
             optimizer=optimizer,
@@ -338,17 +326,19 @@ class MultiscaleVariationalAutoencoder:
 
     # ===============================================================================
 
-    def train(
-            self,
-            x_train,
-            batch_size,
-            epochs,
-            run_folder,
-            print_every_n_batches=100,
-            initial_epoch=0,
-            step_size=1,
-            lr_decay=1,
-            save_checkpoint_weights=False):
+    def train(self,
+              x_train,
+              batch_size,
+              epochs,
+              run_folder,
+              print_every_n_batches=100,
+              initial_epoch=0,
+              step_size=1,
+              lr_decay=1,
+              save_checkpoint_weights=False):
+        """
+
+        """
         custom_callback = callbacks.CustomCallback(
             run_folder,
             print_every_n_batches,
