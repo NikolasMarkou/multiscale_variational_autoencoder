@@ -1,8 +1,8 @@
 import os
 import keras
 import numpy as np
+from .custom_logger import logger
 from . import schedule, layer_blocks, callbacks
-from mvae.custom_logger import logger
 
 # ===============================================================================
 
@@ -148,7 +148,7 @@ class MultiscaleVAE:
         """
         # --------- filter
         # TODO : fix for different tensor schemes
-        shape = keras.backend.int_shape(i0)[1:3]
+        shape = K.int_shape(i0)[1:3]
         logger.info("shape={0}".format(shape))
         shape = (int(shape[0] / 4), int(shape[1] / 4))
         f0 = layer_blocks.gaussian_filter_block(i0, shape)
@@ -201,7 +201,7 @@ class MultiscaleVAE:
                                      use_dropout=False,
                                      use_batchnorm=False)
         # --------- Keep shape before flattening
-        shape_before_flattening = keras.backend.int_shape(x)[1:]
+        shape_before_flattening = K.int_shape(x)[1:]
 
         # --------- flatten and convert to z_dim dimensions
         initializer = keras.initializers.orthogonal()
@@ -220,11 +220,11 @@ class MultiscaleVAE:
 
         def sample(args):
             tmp_mu, tmp_log_var = args
-            epsilon = keras.backend.random_normal(
-                shape=keras.backend.shape(tmp_mu),
+            epsilon = K.random_normal(
+                shape=K.shape(tmp_mu),
                 mean=0.,
                 stddev=0.01)
-            return tmp_mu + keras.backend.exp(tmp_log_var) * epsilon
+            return tmp_mu + K.exp(tmp_log_var) * epsilon
 
         return keras.layers.Lambda(sample, name=prefix + "output")([mu, log_var]), \
                [mu, log_var], shape_before_flattening
@@ -283,18 +283,18 @@ class MultiscaleVAE:
 
         # --------- Define VAE reconstruction loss
         def vae_r_loss(y_true, y_pred):
-            tmp0 = keras.backend.abs(y_true - y_pred)
-            return keras.backend.mean(tmp0, axis=[1, 2, 3])
+            tmp0 = K.abs(y_true - y_pred)
+            return K.mean(tmp0, axis=[1, 2, 3])
 
         # --------- Define KL loss for the latent space
         # (difference from normally distributed m=0, var=1)
         def vae_kl_loss(y_true, y_pred):
             tmp = 1 + self._log_var[1] - \
-                  keras.backend.square(self._mu[0]) - \
-                  keras.backend.exp(self._log_var[1])
-            tmp = keras.backend.sum(tmp, axis=-1)
+                  K.square(self._mu[0]) - \
+                  K.exp(self._log_var[1])
+            tmp = K.sum(tmp, axis=-1)
             tmp *= -0.5
-            return keras.backend.mean(tmp)
+            return K.mean(tmp)
 
         # --------- Define combined loss
         def vae_loss(y_true, y_pred):
