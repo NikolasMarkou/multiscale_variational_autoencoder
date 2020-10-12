@@ -1,11 +1,8 @@
 import os
 import keras
 import numpy as np
-import scipy.stats as st
-from ..utils import schedule
-from ..utils import callbacks
-from ..utils import layer_blocks
-from ..utils.custom_logger import logger
+from . import schedule, layer_blocks, callbacks
+from mvae.custom_logger import logger
 
 # ===============================================================================
 

@@ -9,7 +9,17 @@ os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
 tf.compat.v1.disable_eager_execution()
 tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)
 
-# %%
+# -----------------------------------------
+
+EPOCHS = 100
+STEP_SIZE = 10
+LR_DECAY = 0.5
+BATCH_SIZE = 32
+INITIAL_EPOCH = 0
+KL_LOSS_FACTOR = 1
+LEARNING_RATE = 0.01
+R_LOSS_FACTOR = 100
+PRINT_EVERY_N_BATCHES = 1000
 
 # run params
 SECTION = "vae"
@@ -55,18 +65,6 @@ multiscale_vae = mvae.MultiscaleVAE(
         "kernel_size": [(3, 3), (3, 3), (3, 3)],
         "strides": [(1, 1), (1, 1), (1, 1)]
     })
-
-# -----------------------------------------
-
-EPOCHS = 100
-STEP_SIZE = 10
-LR_DECAY = 0.5
-BATCH_SIZE = 32
-INITIAL_EPOCH = 0
-KL_LOSS_FACTOR = 1
-LEARNING_RATE = 0.01
-R_LOSS_FACTOR = 100
-PRINT_EVERY_N_BATCHES = 1000
 
 # -----------------------------------------
 

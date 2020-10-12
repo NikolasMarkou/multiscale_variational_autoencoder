@@ -1,8 +1,7 @@
 import keras
 import numpy as np
 import scipy.stats as st
-import mvae.utils.coord
-from .custom_logger import logger
+
 
 # ==============================================================================
 
