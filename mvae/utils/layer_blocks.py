@@ -1,18 +1,10 @@
 import keras
-import logging
+import numpy as np
+import scipy.stats as st
 import mvae.utils.coord
+from .custom_logger import logger
 
-# ------------------------------------------------------------------------------
-# setup logger
-# ------------------------------------------------------------------------------
-
-
-logging.basicConfig(level=logging.INFO,
-                    format="%(asctime)s %(name)-12s %(levelname)-4s %(message)s")
-logging.getLogger("layer-blocks").setLevel(logging.INFO)
-logger = logging.getLogger("layer-blocks")
-
-# ------------------------------------------------------------------------------
+# ==============================================================================
 
 
 def absence_block(t):
@@ -20,7 +12,90 @@ def absence_block(t):
     x_greater_float = keras.backend.cast(x_greater, t.dtype)
     return 1.0 - x_greater_float
 
-# ------------------------------------------------------------------------------
+
+# ==============================================================================
+
+
+def attention_block(input_layer,
+                    filters=32,
+                    kernel_size=[1, 1],
+                    strides=(1, 1),
+                    activation="relu",
+                    initializer="glorot_normal",
+                    prefix="attention_",
+                    padding="same",
+                    channels_index=3):
+    """
+    Builds an attention block
+    :param input_layer:
+    :param filters:
+    :param kernel_size:
+    :param strides:
+    :param activation:
+    :param initializer:
+    :param prefix:
+    :param padding:
+    :param channels_index:
+    :return:
+    """
+    # -------- argument checking
+    shape = keras.backend.int_shape(input_layer)
+    if len(shape) != 4:
+        raise ValueError("only supports 4d tensors")
+    if filters <= 0:
+        raise ValueError("Filters should be > 0")
+    # -------- build block
+    theta = keras.layers.Conv2D(
+        filters=filters,
+        kernel_size=kernel_size,
+        strides=strides,
+        padding=padding,
+        activation=activation,
+        name=prefix + "theta",
+        kernel_initializer=initializer)(input_layer)
+    phi = keras.layers.Conv2D(
+        filters=filters,
+        kernel_size=kernel_size,
+        strides=strides,
+        padding=padding,
+        activation=activation,
+        name=prefix + "phi",
+        kernel_initializer=initializer)(input_layer)
+    g = keras.layers.Conv2D(
+        filters=filters,
+        kernel_size=kernel_size,
+        strides=strides,
+        padding=padding,
+        activation=activation,
+        name=prefix + "g",
+        kernel_initializer=initializer)(input_layer)
+    # -------- build block
+    previous_no_filters = shape[channels_index]
+    h_x_w = np.prod(shape_before[1:3])
+    new_shape = (h_x_w, filters)
+    theta_flat = keras.layers.Reshape(new_shape)(theta)
+    phi_flat = keras.layers.Reshape(new_shape)(phi)
+    g_flat = keras.layers.Reshape(new_shape)(g)
+    theta_x_phi = keras.layers.Dot(axes=(1, 2))([theta_flat, phi_flat])
+    theta_x_phi = keras.layers.Softmax()(theta_x_phi)
+    theta_x_phi_xg = keras.layers.Dot(axes=(1, 2))([theta_x_phi, g_flat])
+    new_shape = shape_before[1:2] + (filters,)
+    theta_x_phi_xg = keras.layers.Reshape(new_shape)(theta_x_phi_xg)
+
+    theta_x_phi_xg = keras.layers.Conv2D(
+        filters=previous_no_filters,
+        kernel_size=kernel_size,
+        strides=strides,
+        padding=padding,
+        activation=activation,
+        name=prefix + "result",
+        kernel_initializer=initializer)(theta_x_phi_xg)
+
+    return keras.layers.Multiply()(
+        [theta_x_phi_xg, input_layer])
+
+
+# ==============================================================================
 
 
 def resnet_block(input_layer,
@@ -31,9 +106,8 @@ def resnet_block(input_layer,
                  initializer="glorot_normal",
                  prefix="resnet_",
                  channels_index=3,
-                 use_dropout=False,
-                 use_batchnorm=False,
-                 dropout_ratio=0.5):
+                 dropout_ratio=None,
+                 use_batchnorm=False):
     """
     Build a resnet block
     :param input_layer:
@@ -50,11 +124,14 @@ def resnet_block(input_layer,
     :return: Resnet block
     """
     # -------- argument checking
-    if filter <= 0:
+    if filters <= 0:
         raise ValueError("Filters should be > 0")
-    previous_no_filters = keras.backend.int_shape(input_layer)[channels_index]
+    if dropout_ratio and dropout_ratio > 1.0 or dropout_ratio < 0.0:
+        raise ValueError("Dropout ration must be [0, 1]")
 
     # -------- build block
+    previous_no_filters = keras.backend.int_shape(input_layer)[channels_index]
+
     x = keras.layers.Conv2D(
         filters=filters,
         kernel_size=kernel_size,
@@ -95,7 +172,7 @@ def resnet_block(input_layer,
         activation,
         name=prefix + "activation")(x)
 
-    if use_dropout and dropout_ratio > 0.0:
+    if dropout_ratio and dropout_ratio > 0.0:
         x = keras.layers.Dropout(
             name=prefix + "dropout",
             rate=dropout_ratio)(x)
@@ -106,7 +183,8 @@ def resnet_block(input_layer,
 
     return x
 
-# ==========================================================================
+
+# ==============================================================================
 
 
 def basic_block(input_layer,
@@ -176,7 +254,6 @@ def basic_block(input_layer,
         # --------- Add bottleneck layer
         if (strides[i][0] == 1 and strides[i][0] == strides[i][1]) and \
                 previous_no_filters != filters[i]:
-
             tmp_layer = keras.layers.Conv2D(
                 filters=filters[i],
                 kernel_size=(1, 1),
@@ -199,4 +276,64 @@ def basic_block(input_layer,
 
     return x
 
-# ------------------------------------------------------------------------------
+
+# ==============================================================================
+
+
+def gaussian_filter_block(input_layer,
+                          kernel_size=3,
+                          strides=(1, 1),
+                          dilation_rate=(1, 1),
+                          padding="same",
+                          activation=None,
+                          trainable=False,
+                          use_bias=False):
+    """
+    Build a gaussian filter block
+    :param input_layer:
+    :param kernel_size:
+    :param activation:
+    :param trainable:
+    :param use_bias:
+    :param strides:
+    :param padding:
+    :param dilation_rate:
+    :return:
+    """
+
+    def _gaussian_kernel(kernlen=[21, 21], nsig=[3, 3]):
+        """
+        Returns a 2D Gaussian kernel array
+        """
+        assert len(nsig) == 2
+        assert len(kernlen) == 2
+        kern1d = []
+        for i in range(2):
+            interval = (2 * nsig[i] + 1.) / (kernlen[i])
+            x = np.linspace(-nsig[i] - interval / 2., nsig[i] + interval / 2.,
+                            kernlen[i] + 1)
+            kern1d.append(np.diff(st.norm.cdf(x)))
+
+        kernel_raw = np.sqrt(np.outer(kern1d[0], kern1d[1]))
+        kernel = kernel_raw / kernel_raw.sum()
+        return kernel
+
+    # Initialise to set kernel to required value
+    def kernel_init(shape, dtype):
+        kernel = np.zeros(shape)
+        kernel[:, :, 0, 0] = _gaussian_kernel([shape[0], shape[1]])
+        return kernel
+
+    return keras.layers.DepthwiseConv2D(
+        kernel_size=kernel_size,
+        strides=strides,
+        padding=padding,
+        depth_multiplier=1,
+        dilation_rate=dilation_rate,
+        activation=activation,
+        use_bias=use_bias,
+        trainable=trainable,
+        depthwise_initializer=kernel_init,
+        kernel_initializer=kernel_init)(input_layer)
+
+# ==============================================================================

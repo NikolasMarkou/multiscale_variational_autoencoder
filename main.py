@@ -1,10 +1,9 @@
 import os
 import sys
+import mvae
 import numpy as np
 import tensorflow as tf
-import matplotlib.pyplot as plt
 from keras.datasets import cifar10
-from mvae.models.multiscale_vae import MultiscaleVariationalAutoencoder
 
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
 tf.compat.v1.disable_eager_execution()
@@ -42,7 +41,7 @@ x_test = x_test.astype("float32") / 255.0
 
 # -----------------------------------------
 
-multiscale_vae = MultiscaleVariationalAutoencoder(
+multiscale_vae = mvae.MultiscaleVAE(
     input_dims=(32, 32, 3),
     levels=3,
     z_dims=[128, 128, 128],

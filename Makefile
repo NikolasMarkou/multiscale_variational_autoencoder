@@ -13,4 +13,4 @@ test:
 clean:
 	rm -rf build dist
 	rm -rf .pytest_cache
-	rm -rf crystal.egg-info
+	rm -rf mvae.egg-info

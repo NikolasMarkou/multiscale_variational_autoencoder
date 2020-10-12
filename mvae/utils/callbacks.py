@@ -2,18 +2,34 @@ import os
 import numpy as np
 import matplotlib.pyplot as plt
 from skimage.transform import resize
-from keras.callbacks import Callback, LearningRateScheduler
+from keras.callbacks import Callback
 
-# --------------------------------------------------------------------------------
+# ==============================================================================
 
 
-class CustomCallback(Callback):
-
-    def __init__(self, run_folder, print_every_n_batches, initial_epoch, image, vae):
+class SaveIntermediateResultsCallback(Callback):
+    
+    def __init__(self,
+                 run_folder,
+                 print_every_n_batches,
+                 initial_epoch,
+                 image,
+                 vae,
+                 resize_shape=(128, 128)):
+        """
+        Callback for saving the intermediate result image
+        :param run_folder:
+        :param print_every_n_batches:
+        :param initial_epoch:
+        :param image:
+        :param vae:
+        :param resize_shape:
+        """
         self.vae = vae
         self.image = image
         self.epoch = initial_epoch
         self.run_folder = run_folder
+        self._resize_shape = resize_shape
         self.print_every_n_batches = print_every_n_batches
         images_path = os.path.join(self.run_folder, "images")
         if not os.path.exists(images_path):
@@ -23,7 +39,7 @@ class CustomCallback(Callback):
         if batch % self.print_every_n_batches == 0:
             reconstruction = self.vae._model_trainable.predict(self.image)
             x = reconstruction.squeeze()
-            x = resize(x, (128, 128), order=0)
+            x = resize(x, self._resize_shape, order=0)
             filepath_x = os.path.join(
                 self.run_folder,
                 "images",
@@ -38,17 +54,4 @@ class CustomCallback(Callback):
         self.epoch += 1
 
 
-# --------------------------------------------------------------------------------
-
-
-def step_decay_schedule(initial_lr, decay_factor=0.5, step_size=1):
-    """
-    Wrapper function to create a LearningRateScheduler with step decay schedule.
-    """
-    def schedule(epoch):
-        new_lr = initial_lr * (decay_factor ** np.floor(epoch/step_size))
-        return new_lr
-
-    return LearningRateScheduler(schedule)
-
-# --------------------------------------------------------------------------------
+# ==============================================================================

@@ -1,26 +1,16 @@
 import os
 import keras
-import logging
 import numpy as np
 import scipy.stats as st
+from ..utils import schedule
 from ..utils import callbacks
 from ..utils import layer_blocks
-
-# ===============================================================================
-# setup logger
-# ===============================================================================
-
-
-logging.basicConfig(level=logging.INFO,
-                    format="%(asctime)s %(name)-12s %(levelname)-4s %(message)s")
-logging.getLogger("multiscale-vae").setLevel(logging.INFO)
-logger = logging.getLogger("multiscale-vae")
-
+from ..utils.custom_logger import logger
 
 # ===============================================================================
 
 
-class MultiscaleVariationalAutoencoder:
+class MultiscaleVAE:
     def __init__(
             self,
             input_dims,
@@ -150,7 +140,7 @@ class MultiscaleVariationalAutoencoder:
         # self._model_sample = keras.Model(self._z_latent_concat,
         #                                  self._result)
 
-    # ===============================================================================
+    # ==========================================================================
 
     @staticmethod
     def _downsample_upsample(i0, prefix="downsample_upsample"):
@@ -164,7 +154,7 @@ class MultiscaleVariationalAutoencoder:
         shape = keras.backend.int_shape(i0)[1:3]
         logger.info("shape={0}".format(shape))
         shape = (int(shape[0] / 4), int(shape[1] / 4))
-        f0 = MultiscaleVariationalAutoencoder._gaussian_filter(shape)(i0)
+        f0 = layer_blocks.gaussian_filter_block(i0, shape)
 
         # --------- downsample
         d0 = keras.layers.MaxPool2D(pool_size=(1, 1),
@@ -339,13 +329,13 @@ class MultiscaleVariationalAutoencoder:
         """
 
         """
-        custom_callback = callbacks.CustomCallback(
+        custom_callback = callbacks.SaveIntermediateResultsCallback(
             run_folder,
             print_every_n_batches,
             initial_epoch,
             x_train[0:1, :, :, :],
             self)
-        lr_schedule = callbacks.step_decay_schedule(
+        lr_schedule = schedule.step_decay_schedule(
             initial_lr=self._learning_rate,
             decay_factor=lr_decay,
             step_size=step_size)
@@ -384,46 +374,6 @@ class MultiscaleVariationalAutoencoder:
 
     def load_weights(self, filename):
         return
-
-    @staticmethod
-    def _gaussian_kernel(kernlen=[21, 21], nsig=[3, 3]):
-        """
-        Returns a 2D Gaussian kernel array
-        """
-        assert len(nsig) == 2
-        assert len(kernlen) == 2
-        kern1d = []
-        for i in range(2):
-            interval = (2 * nsig[i] + 1.) / (kernlen[i])
-            x = np.linspace(-nsig[i] - interval / 2., nsig[i] + interval / 2.,
-                            kernlen[i] + 1)
-            kern1d.append(np.diff(st.norm.cdf(x)))
-
-        kernel_raw = np.sqrt(np.outer(kern1d[0], kern1d[1]))
-        kernel = kernel_raw / kernel_raw.sum()
-        return kernel
-
-    @staticmethod
-    def _gaussian_filter(kernel_size):
-        # Initialise to set kernel to required value
-        def kernel_init(shape, dtype):
-            kernel = np.zeros(shape)
-            kernel[:, :, 0, 0] = \
-                MultiscaleVariationalAutoencoder._gaussian_kernel(
-                    [shape[0], shape[1]])
-            return kernel
-
-        return keras.layers.DepthwiseConv2D(
-            kernel_size=kernel_size,
-            strides=(1, 1),
-            padding="same",
-            depth_multiplier=1,
-            dilation_rate=(1, 1),
-            activation=None,
-            use_bias=False,
-            trainable=False,
-            depthwise_initializer=kernel_init,
-            kernel_initializer=kernel_init)
 
     # ===============================================================================
 
