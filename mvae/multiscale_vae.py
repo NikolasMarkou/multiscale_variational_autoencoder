@@ -40,9 +40,10 @@ class MultiscaleVAE:
             raise ValueError("z_dims elements should be > 0")
         # --------- Variable initialization
         self._name = "mvae"
-
         self._levels = levels
+        self._share_z_space = False
         self._conv_base_filters = 32
+        self._conv_activation = "relu"
         self._z_latent_dims = z_dims
         self._inputs_dims = input_dims
         self._encoder_config = encoder
@@ -52,7 +53,6 @@ class MultiscaleVAE:
         self._compress_output = compress_output
         self._initialization_scheme = "glorot_uniform"
         self._output_channels = input_dims[channels_index]
-        self._share_z_space = False
         self._build()
 
     # ==========================================================================
@@ -77,10 +77,8 @@ class MultiscaleVAE:
                 self._scales.append(up)
 
         # --------- Create Encoder / Decoder
-        self._mu_log = []
         self._decoders = []
         self._encoders = []
-        self._decoder_input = []
         self._mu = None
         self._log_var = None
         # --------- encoders
@@ -95,7 +93,6 @@ class MultiscaleVAE:
             mu.append(mu_log[0])
             log_var.append(mu_log[1])
             shapes_before_flattening.append(shape_before_flattening)
-            self._mu_log.append(mu_log)
             self._encoders.append(encoder)
         # --------- concat all z-latent layers
         self._z_latent_concat = \
@@ -106,7 +103,7 @@ class MultiscaleVAE:
             keras.layers.Concatenate(axis=-1, name="concat_log_var")(log_var)
         # --------- decoders
         if self._share_z_space:
-            z_no_gradients = [keras.backend.stop_gradient(z)
+            z_no_gradients = [K.stop_gradient(z)
                               for z in self._encoders]
             for i in range(self._levels):
                 # --------- get encodings of all
@@ -117,7 +114,7 @@ class MultiscaleVAE:
                 decoder = \
                     self._build_decoder(
                         keras.layers.Concatenate()(z_tmp),
-                        shape=shapes_before_flattening[i],
+                        target_shape=shapes_before_flattening[i],
                         prefix="decoder_" + str(i) + "_")
                 self._decoders.append(decoder)
         else:
@@ -125,7 +122,7 @@ class MultiscaleVAE:
                 decoder = \
                     self._build_decoder(
                         self._encoders[i],
-                        shape=shapes_before_flattening[i],
+                        target_shape=shapes_before_flattening[i],
                         prefix="decoder_" + str(i) + "_")
                 self._decoders.append(decoder)
         # --------- upsample and merge decoders
@@ -139,7 +136,7 @@ class MultiscaleVAE:
                     kernel_size=[3, 3],
                     strides=(2, 2),
                     padding="same",
-                    activation="relu",
+                    activation=self._conv_activation,
                     kernel_regularizer=self._kernel_regularizer,
                     kernel_initializer=self._initialization_scheme)(layer)
                 x = keras.layers.Add()([x, self._decoders[i]])
@@ -148,7 +145,7 @@ class MultiscaleVAE:
                     kernel_size=[1, 1],
                     strides=(1, 1),
                     padding="same",
-                    activation="relu",
+                    activation=self._conv_activation,
                     kernel_regularizer=self._kernel_regularizer,
                     kernel_initializer=self._initialization_scheme)(x)
                 layer = x
@@ -222,7 +219,7 @@ class MultiscaleVAE:
             kernel_size=(3, 3),
             strides=(1, 1),
             padding="same",
-            activation="relu",
+            activation=self._conv_activation,
             kernel_regularizer=self._kernel_regularizer,
             kernel_initializer=self._initialization_scheme)(x)
 
@@ -239,7 +236,6 @@ class MultiscaleVAE:
         shape_before_flattening = K.int_shape(x)[1:]
 
         # --------- flatten and convert to z_dim dimensions
-        #x = keras.layers.GlobalMaxPool2D()(x)
         x = keras.layers.BatchNormalization()(x)
         x = keras.layers.Flatten()(x)
         mu = keras.layers.Dense(
@@ -249,6 +245,7 @@ class MultiscaleVAE:
             name=prefix + "mu")(x)
         log_var = keras.layers.Dense(
             z_dim,
+            activation="relu",
             kernel_regularizer=None,
             kernel_initializer=self._initialization_scheme,
             name=prefix + "log_var")(x)
@@ -267,22 +264,23 @@ class MultiscaleVAE:
     # ===============================================================================
 
     def _build_decoder(self,
-                       decoder_input,
-                       shape,
+                       input_layer,
+                       target_shape,
                        prefix="decoder_"):
         """
         Creates a decoder block
-        :param decoder_input:
-        :param shape:
+        :param input_layer:
+        :param target_shape: HxWxC
         :param prefix:
         :return:
         """
-        x = decoder_input
         # --------- Decoding here
-        x = keras.layers.Dense(units=np.prod(shape),
+        x = keras.layers.Dense(units=np.prod(target_shape),
+                               activation=self._conv_activation,
                                kernel_initializer=self._initialization_scheme,
-                               kernel_regularizer=self._kernel_regularizer)(x)
-        x = keras.layers.Reshape(shape)(x)
+                               kernel_regularizer=None)(input_layer)
+        x = keras.layers.Reshape(target_shape)(x)
+
         # --------- Transforming here
         x = layer_blocks.basic_block(input_layer=x,
                                      block_type="decoder",
@@ -298,7 +296,7 @@ class MultiscaleVAE:
                                 strides=(1, 1),
                                 kernel_size=(1, 1),
                                 padding="same",
-                                activation="relu",
+                                activation=self._conv_activation,
                                 kernel_regularizer=self._kernel_regularizer,
                                 kernel_initializer=self._initialization_scheme)(x)
         return x
@@ -325,6 +323,10 @@ class MultiscaleVAE:
             tmp0 = K.relu(K.abs(y_true - y_pred) - self._train_error_margin)
             return K.mean(tmp0, axis=[1, 2, 3])
 
+        def vae_r_experimental_loss(y_true, y_pred):
+            x = K.abs(y_true - y_pred)
+            return K.mean((K.tanh(x) * 10 + x) / 6, axis=[1, 2, 3])
+
         # --------- Define KL loss for the latent space
         # (difference from normally distributed m=0, var=1)
         def vae_kl_loss(y_true, y_pred):
@@ -338,7 +340,7 @@ class MultiscaleVAE:
         # --------- Define combined loss
         def vae_loss(y_true, y_pred):
             kl_loss = vae_kl_loss(y_true, y_pred)
-            r_loss = vae_r_loss(y_true, y_pred)
+            r_loss = vae_r_experimental_loss(y_true, y_pred)
             return (r_loss * r_loss_factor) + (kl_loss * kl_loss_factor)
 
         optimizer = keras.optimizers.Adagrad(

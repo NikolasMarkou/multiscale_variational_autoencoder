@@ -364,7 +364,7 @@ def resnet_block(input_layer,
         name=prefix + "conv1",
         kernel_initializer=initializer)(x)
 
-    if previous_no_filters == filter:
+    if previous_no_filters == filters:
         tmp_layer = keras.layers.Layer(name=prefix + "skip")(input_layer)
     else:
         tmp_layer = keras.layers.Conv2D(
@@ -516,17 +516,17 @@ def gaussian_filter_block(input_layer,
     :return:
     """
 
-    def _gaussian_kernel(kernlen=[21, 21], nsig=[3, 3]):
+    def _gaussian_kernel(size, nsig=[1.5, 1.5]):
         """
         Returns a 2D Gaussian kernel array
         """
         assert len(nsig) == 2
-        assert len(kernlen) == 2
+        assert len(size) == 2
         kern1d = []
         for i in range(2):
-            interval = (2 * nsig[i] + 1.) / (kernlen[i])
+            interval = (2 * nsig[i] + 1.) / (size[i])
             x = np.linspace(-nsig[i] - interval / 2., nsig[i] + interval / 2.,
-                            kernlen[i] + 1)
+                            size[i] + 1)
             kern1d.append(np.diff(st.norm.cdf(x)))
 
         kernel_raw = np.sqrt(np.outer(kern1d[0], kern1d[1]))
