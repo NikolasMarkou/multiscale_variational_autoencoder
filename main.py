@@ -53,17 +53,17 @@ x_test = x_test.astype("float32") / 255.0
 
 multiscale_vae = mvae.MultiscaleVAE(
     input_dims=(32, 32, 3),
-    levels=3,
-    z_dims=[128, 128, 128],
+    levels=4,
+    z_dims=[128, 128, 128, 32],
     encoder={
-        "filters": [32, 32, 32],
-        "kernel_size": [(3, 3), (3, 3), (3, 3)],
-        "strides": [(1, 1), (1, 1), (1, 1)]
+        "filters": [32],
+        "kernel_size": [(3, 3)],
+        "strides": [(1, 1)]
     },
     decoder={
-        "filters": [32, 32, 32],
-        "kernel_size": [(3, 3), (3, 3), (3, 3)],
-        "strides": [(1, 1), (1, 1), (1, 1)]
+        "filters": [32],
+        "kernel_size": [(3, 3)],
+        "strides": [(1, 1)]
     })
 
 # -----------------------------------------
