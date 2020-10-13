@@ -1,6 +1,7 @@
 import os
 import sys
 import mvae
+import keras
 import numpy as np
 import tensorflow as tf
 from keras.datasets import cifar10
@@ -11,8 +12,8 @@ tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)
 
 # -----------------------------------------
 
-EPOCHS = 100
-STEP_SIZE = 10
+EPOCHS = 150
+STEP_SIZE = 15
 LR_DECAY = 0.5
 BATCH_SIZE = 32
 INITIAL_EPOCH = 0

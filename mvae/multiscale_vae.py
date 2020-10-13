@@ -27,7 +27,7 @@ class MultiscaleVAE:
         """
         Encoder that compresses a signal
         into a latent space of normally distributed variables
-        :param input_dims:
+        :param input_dims: HxWxC
         :param levels:
         :param z_dims:
         """
@@ -50,6 +50,7 @@ class MultiscaleVAE:
         self._decoder_config = decoder
         self._kernel_regularizer = "l1"
         self._train_error_margin = 0.0
+        self._training_noise_std = 0.01
         self._compress_output = compress_output
         self._initialization_scheme = "glorot_uniform"
         self._output_channels = input_dims[channels_index]
@@ -67,6 +68,10 @@ class MultiscaleVAE:
         self._input_layer = keras.Input(shape=self._inputs_dims,
                                         name="input_layer")
         layer = self._input_layer
+        if self._training_noise_std is not None:
+            if self._training_noise_std > 0.0:
+                layer = keras.layers.GaussianNoise(
+                    self._training_noise_std)(layer)
 
         for i in range(self._levels):
             if i == self._levels - 1:
