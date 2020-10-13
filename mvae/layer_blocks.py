@@ -11,9 +11,6 @@ def squeeze_excite_block(input_layer,
                          squeeze_units=32,
                          prefix="squeeze_excite_",
                          channels_index=3):
-    """
-
-    """
     # -------- argument checking
     if input_layer is None:
         raise ValueError("input_layer cannot be empty")

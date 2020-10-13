@@ -40,6 +40,7 @@ class MultiscaleVAE:
             raise ValueError("z_dims elements should be > 0")
         # --------- Variable initialization
         self._name = "mvae"
+
         self._levels = levels
         self._conv_base_filters = 32
         self._z_latent_dims = z_dims
@@ -47,6 +48,7 @@ class MultiscaleVAE:
         self._encoder_config = encoder
         self._decoder_config = decoder
         self._kernel_regularizer = "l1"
+        self._train_error_margin = 0.0
         self._compress_output = compress_output
         self._initialization_scheme = "glorot_uniform"
         self._output_channels = input_dims[channels_index]
@@ -277,7 +279,9 @@ class MultiscaleVAE:
         """
         x = decoder_input
         # --------- Decoding here
-        x = keras.layers.Dense(np.prod(shape))(x)
+        x = keras.layers.Dense(units=np.prod(shape),
+                               kernel_initializer=self._initialization_scheme,
+                               kernel_regularizer=self._kernel_regularizer)(x)
         x = keras.layers.Reshape(shape)(x)
         # --------- Transforming here
         x = layer_blocks.basic_block(input_layer=x,
@@ -318,7 +322,7 @@ class MultiscaleVAE:
 
         # --------- Define VAE reconstruction loss
         def vae_r_loss(y_true, y_pred):
-            tmp0 = K.abs(y_true - y_pred)
+            tmp0 = K.relu(K.abs(y_true - y_pred) - self._train_error_margin)
             return K.mean(tmp0, axis=[1, 2, 3])
 
         # --------- Define KL loss for the latent space
