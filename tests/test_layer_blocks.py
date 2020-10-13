@@ -53,3 +53,39 @@ def test_self_attention_block():
 
 # ==============================================================================
 
+
+def test_squeeze_excite_block():
+    x = np.zeros((3, 256, 256, 3), dtype=np.float)
+    x = mvae.layer_blocks.squeeze_excite_block(x, 32)
+    shape = np.shape(x)
+    assert shape[0] == 3
+    assert shape[1] == 256
+    assert shape[2] == 256
+    assert shape[3] == 3
+
+# ==============================================================================
+
+
+def test_mobilenetV2_block():
+    x = np.zeros((3, 256, 256, 3), dtype=np.float)
+    x = mvae.layer_blocks.mobilenetV2_block(x, 32)
+    shape = np.shape(x)
+    assert shape[0] == 3
+    assert shape[1] == 256
+    assert shape[2] == 256
+    assert shape[3] == 3
+
+# ==============================================================================
+
+
+def test_mobilenetV3_block():
+    x = np.zeros((3, 256, 256, 3), dtype=np.float)
+    x = mvae.layer_blocks.mobilenetV3_block(x, 32)
+    shape = np.shape(x)
+    assert shape[0] == 3
+    assert shape[1] == 256
+    assert shape[2] == 256
+    assert shape[3] == 3
+
+# ==============================================================================
+
