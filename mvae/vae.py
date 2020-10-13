@@ -64,11 +64,21 @@ class VAE(abc.ABC):
     @property
     @abc.abstractmethod
     def model_predict(self) -> keras.models.Model:
+        """
+        Returns the model that can take an input
+        and project it into the latent z space
+        :return:
+        """
         raise NotImplemented()
 
     @property
     @abc.abstractmethod
     def model_trainable(self) -> keras.models.Model:
+        """
+        Returns the model that can be trained end to end
+        :return:
+        """
         raise NotImplemented()
+
 
 # ==============================================================================
