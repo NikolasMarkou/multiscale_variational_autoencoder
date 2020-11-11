@@ -4,8 +4,13 @@ import logging
 # setup logger
 # ==============================================================================
 
+LOGGER_FORMAT = \
+    "%(asctime)s %(levelname)-4s %(filename)s:%(funcName)s:%(lineno)s] " \
+    "%(message)s"
 
 logging.basicConfig(level=logging.INFO,
-                    format="%(asctime)s %(name)-12s %(levelname)-4s %(message)s")
+                    format=LOGGER_FORMAT)
 logging.getLogger("mvae").setLevel(logging.INFO)
 logger = logging.getLogger("mvae")
+
+# ==============================================================================

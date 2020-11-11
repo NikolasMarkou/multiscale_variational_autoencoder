@@ -1,7 +1,6 @@
 import os
 import sys
 import mvae
-import keras
 import numpy as np
 import tensorflow as tf
 from keras.datasets import cifar10
@@ -10,7 +9,7 @@ os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
 tf.compat.v1.disable_eager_execution()
 tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)
 
-# -----------------------------------------
+# ==============================================================================
 
 EPOCHS = 150
 STEP_SIZE = 15
@@ -18,15 +17,15 @@ LR_DECAY = 0.5
 BATCH_SIZE = 32
 INITIAL_EPOCH = 0
 KL_LOSS_FACTOR = 1
-LEARNING_RATE = 0.01
 R_LOSS_FACTOR = 100
+LEARNING_RATE = 0.01
 PRINT_EVERY_N_BATCHES = 1000
 
 # run params
 SECTION = "vae"
 RUN_ID = "0001"
-DATA_NAME = "cifar10"
 BASE_DIR = "./run"
+DATA_NAME = "cifar10"
 BASE_DIR_SECTION = "{0}/{1}/".format(BASE_DIR, SECTION)
 RUN_FOLDER = BASE_DIR_SECTION + "_".join([RUN_ID, DATA_NAME])
 
@@ -44,13 +43,13 @@ if not os.path.exists(RUN_FOLDER):
 
 mode = "build"
 
-# -----------------------------------------
+# ==============================================================================
 
 (x_train, y_train), (x_test, y_test) = cifar10.load_data()
 x_train = x_train.astype("float32") / 255.0
 x_test = x_test.astype("float32") / 255.0
 
-# -----------------------------------------
+# ==============================================================================
 
 multiscale_vae = mvae.MultiscaleVAE(
     input_dims=(32, 32, 3),
@@ -67,7 +66,7 @@ multiscale_vae = mvae.MultiscaleVAE(
         "strides": [(1, 1)]
     })
 
-# -----------------------------------------
+# ==============================================================================
 
 multiscale_vae.compile(
     learning_rate=LEARNING_RATE,
@@ -77,9 +76,9 @@ multiscale_vae.compile(
 
 # serialize model to JSON
 with open("model_trainable.json", "w") as json_file:
-    json_file.write(multiscale_vae._model_trainable.to_json())
+    json_file.write(multiscale_vae.model_trainable.to_json())
 
-# -----------------------------------------
+# ==============================================================================
 
 multiscale_vae.train(
     x_train,
@@ -91,5 +90,4 @@ multiscale_vae.train(
     step_size=STEP_SIZE,
     lr_decay=LR_DECAY)
 
-
-
+# ==============================================================================

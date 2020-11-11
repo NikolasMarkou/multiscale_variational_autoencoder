@@ -294,7 +294,7 @@ def self_attention_block(input_layer,
                                 activation=activation,
                                 initializer=initializer,
                                 prefix=prefix)
-    # -------- convolve to match output channelsv
+    # -------- convolve to match output channels
     shape = K.int_shape(input_layer)
     previous_no_filters = shape[channels_index]
     attention = keras.layers.Conv2D(

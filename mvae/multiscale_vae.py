@@ -5,7 +5,7 @@ from keras import backend as K
 from .custom_logger import logger
 from . import schedule, layer_blocks, callbacks
 
-# ===============================================================================
+# ==============================================================================
 
 
 class MultiscaleVAE:
@@ -49,8 +49,9 @@ class MultiscaleVAE:
         self._encoder_config = encoder
         self._decoder_config = decoder
         self._kernel_regularizer = "l1"
-        self._train_error_margin = 0.0
-        self._training_noise_std = 0.01
+        self._clip_min_value = 1.0 / 255.0
+        self._clip_max_value = 255.0
+        self._training_noise_std = 0.001
         self._compress_output = compress_output
         self._initialization_scheme = "glorot_uniform"
         self._output_channels = input_dims[channels_index]
@@ -145,14 +146,6 @@ class MultiscaleVAE:
                     kernel_regularizer=self._kernel_regularizer,
                     kernel_initializer=self._initialization_scheme)(layer)
                 x = keras.layers.Add()([x, self._decoders[i]])
-                x = keras.layers.Conv2D(
-                    filters=self._conv_base_filters,
-                    kernel_size=[1, 1],
-                    strides=(1, 1),
-                    padding="same",
-                    activation=self._conv_activation,
-                    kernel_regularizer=self._kernel_regularizer,
-                    kernel_initializer=self._initialization_scheme)(x)
                 layer = x
         x = keras.layers.BatchNormalization()(x)
         x = keras.layers.Conv2D(
@@ -263,10 +256,11 @@ class MultiscaleVAE:
                 stddev=0.01)
             return tmp_mu + K.exp(tmp_log_var) * epsilon
 
-        return keras.layers.Lambda(sample, name=prefix + "output")([mu, log_var]), \
+        return keras.layers.Lambda(
+            sample, name=prefix + "output")([mu, log_var]), \
                [mu, log_var], shape_before_flattening
 
-    # ===============================================================================
+    # ==========================================================================
 
     def _build_decoder(self,
                        input_layer,
@@ -306,26 +300,28 @@ class MultiscaleVAE:
                                 kernel_initializer=self._initialization_scheme)(x)
         return x
 
-    # ===============================================================================
+    # ==========================================================================
 
     def compile(self,
                 learning_rate,
                 r_loss_factor=1.0,
                 kl_loss_factor=1.0,
-                clipnorm=1.0):
+                clip_norm=1.0):
         """
 
         :param learning_rate:
         :param r_loss_factor:
         :param kl_loss_factor:
-        :param clipnorm:
+        :param clip_norm:
         :return:
         """
-        self._learning_rate = learning_rate
+        self.learning_rate = learning_rate
 
         # --------- Define VAE reconstruction loss
         def vae_r_loss(y_true, y_pred):
-            tmp0 = K.relu(K.abs(y_true - y_pred) - self._train_error_margin)
+            tmp0 = K.clip(x=K.abs(y_true - y_pred),
+                          min_value=self._clip_min_value,
+                          max_value=self._clip_max_value)
             return K.mean(tmp0, axis=[1, 2, 3])
 
         def vae_r_experimental_loss(y_true, y_pred):
@@ -350,14 +346,14 @@ class MultiscaleVAE:
 
         optimizer = keras.optimizers.Adagrad(
             lr=self._learning_rate,
-            clipnorm=clipnorm)
+            clipnorm=clip_norm)
 
         self._model_trainable.compile(
             optimizer=optimizer,
             loss=vae_loss,
             metrics=[vae_r_loss, vae_kl_loss])
 
-    # ===============================================================================
+    # ==========================================================================
 
     def train(self,
               x_train,
@@ -369,14 +365,11 @@ class MultiscaleVAE:
               step_size=1,
               lr_decay=1,
               save_checkpoint_weights=False):
-        """
-
-        """
         custom_callback = callbacks.SaveIntermediateResultsCallback(
             run_folder,
             print_every_n_batches,
             initial_epoch,
-            x_train[0:1, :, :, :],
+            x_train[0:16, :, :, :],
             self)
         lr_schedule = schedule.step_decay_schedule(
             initial_lr=self._learning_rate,
@@ -413,10 +406,24 @@ class MultiscaleVAE:
             initial_epoch=initial_epoch,
             callbacks=callbacks_fns)
 
-    # ===============================================================================
+    # ==========================================================================
 
     def load_weights(self, filename):
         return
 
-    # ===============================================================================
+    # ==========================================================================
+
+    @property
+    def model_trainable(self):
+        return self._model_trainable
+
+    @property
+    def learning_rate(self):
+        return self._learning_rate
+
+    @learning_rate.setter
+    def learning_rate(self, value):
+        self._learning_rate = value
+
+    # ==========================================================================
 
