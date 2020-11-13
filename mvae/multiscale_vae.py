@@ -51,7 +51,7 @@ class MultiscaleVAE:
         self._gaussian_kernel = [5, 5]
         self._clip_min_value = (1.0 / 255.0)
         self._clip_max_value = 255.0
-        self._training_noise_std = (1.0 / 255.0) / 2.0
+        self._training_noise_std = None
         self._compress_output = compress_output
         self._initialization_scheme = "glorot_normal"
         self._output_channels = input_dims[channels_index]
@@ -143,9 +143,14 @@ class MultiscaleVAE:
             if i == self._levels - 1:
                 layer = self._decoders[i]
             else:
-                x = keras.layers.UpSampling2D(
-                    size=(2, 2),
-                    interpolation="bilinear")(layer)
+                x = keras.layers.Conv2DTranspose(
+                    filters=self._conv_base_filters,
+                    kernel_size=[3, 3],
+                    strides=(2, 2),
+                    padding="same",
+                    activation="linear",
+                    kernel_regularizer=self._kernel_regularizer,
+                    kernel_initializer=self._initialization_scheme)(layer)
                 x = keras.layers.Add()(
                     [x, self._decoders[i]])
                 x = keras.layers.ReLU()(x)
@@ -171,7 +176,7 @@ class MultiscaleVAE:
 
         if self._compress_output:
             # -------- Cap output to [0, 1]
-            x = keras.layers.Activation("sigmoid")(x)
+            x = keras.layers.Activation("hard_sigmoid")(x)
 
         self._result = keras.layers.Layer(name="output")(x)
 
@@ -225,6 +230,7 @@ class MultiscaleVAE:
         :return:
         """
         x = encoder_input
+
         # --------- Transforming here
         x = keras.layers.Conv2D(
             filters=self._conv_base_filters,
@@ -249,16 +255,16 @@ class MultiscaleVAE:
         shape_before_flattening = K.int_shape(x)[1:]
 
         # --------- flatten and convert to z_dim dimensions
-        x = keras.layers.BatchNormalization()(x)
         x = keras.layers.Flatten()(x)
         mu = keras.layers.Dense(
             z_dim,
+            activation="linear",
             kernel_regularizer=self._dense_regularizer,
             kernel_initializer=self._initialization_scheme,
             name=prefix + "mu")(x)
         log_var = keras.layers.Dense(
             z_dim,
-            activation="relu",
+            activation="linear",
             kernel_regularizer=self._dense_regularizer,
             kernel_initializer=self._initialization_scheme,
             name=prefix + "log_var")(x)

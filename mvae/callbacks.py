@@ -67,7 +67,7 @@ class SaveIntermediateResultsCallback(Callback):
                 self.run_folder,
                 "images",
                 "img_" + str(self.epoch).zfill(3) +
-                "_" + str(batch) + ".jpg")
+                "_" + str(batch) + ".png")
             if len(x.shape) == 2:
                 plt.imsave(filepath_x, x, cmap="gray_r")
             else:
