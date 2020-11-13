@@ -10,6 +10,8 @@ from .custom_logger import logger
 def squeeze_excite_block(input_layer,
                          squeeze_units=32,
                          prefix="squeeze_excite_",
+                         initializer="glorot_normal",
+                         regularizer=None,
                          channels_index=3):
     # -------- argument checking
     if input_layer is None:
@@ -24,10 +26,14 @@ def squeeze_excite_block(input_layer,
     x = keras.layers.GlobalMaxPool2D(name=prefix + "max_pool")(input_layer)
     x = keras.layers.Dense(units=squeeze_units,
                            name=prefix + "dense0",
-                           activation="relu")(x)
+                           activation="relu",
+                           kernel_regularizer=regularizer,
+                           kernel_initializer=initializer)(x)
     x = keras.layers.Dense(units=channels,
                            name=prefix + "dense1",
-                           activation="hard_sigmoid")(x)
+                           activation="hard_sigmoid",
+                           kernel_regularizer=regularizer,
+                           kernel_initializer=initializer)(x)
     # -------- scale input
     x = keras.layers.Multiply(name=prefix + "multiply",)([x, input_layer])
     return x
@@ -38,6 +44,7 @@ def squeeze_excite_block(input_layer,
 def mobilenetV2_block(input_layer,
                       filters=32,
                       initializer="glorot_normal",
+                      regularizer=None,
                       prefix="mobilenetV2_",
                       channels_index=3,
                       dropout_ratio=None,
@@ -47,6 +54,7 @@ def mobilenetV2_block(input_layer,
     :param input_layer:
     :param filters:
     :param initializer:
+    :param regularizer:
     :param prefix:
     :param channels_index:
     :param use_batchnorm:
@@ -71,6 +79,7 @@ def mobilenetV2_block(input_layer,
         padding="same",
         activation="linear",
         name=prefix + "conv0",
+        kernel_regularizer=regularizer,
         kernel_initializer=initializer)(input_layer)
 
     x = keras.layers.DepthwiseConv2D(
@@ -80,6 +89,7 @@ def mobilenetV2_block(input_layer,
         padding="same",
         activation="relu",
         name=prefix + "conv1",
+        kernel_regularizer=regularizer,
         kernel_initializer=initializer)(x)
 
     if use_batchnorm:
@@ -93,6 +103,7 @@ def mobilenetV2_block(input_layer,
         padding="same",
         activation="relu",
         name=prefix + "conv2",
+        kernel_regularizer=regularizer,
         kernel_initializer=initializer)(x)
 
     if use_batchnorm:
@@ -120,6 +131,7 @@ def mobilenetV3_block(input_layer,
                       filters=32,
                       squeeze_dim=4,
                       initializer="glorot_normal",
+                      regularizer=None,
                       prefix="mobilenetV3_",
                       activation="relu",
                       channels_index=3,
@@ -156,6 +168,7 @@ def mobilenetV3_block(input_layer,
         padding="same",
         activation=activation,
         name=prefix + "conv0",
+        kernel_regularizer=regularizer,
         kernel_initializer=initializer)(input_layer)
 
     x = keras.layers.DepthwiseConv2D(
@@ -165,6 +178,7 @@ def mobilenetV3_block(input_layer,
         padding="same",
         activation=activation,
         name=prefix + "conv1",
+        kernel_regularizer=regularizer,
         kernel_initializer=initializer)(x)
 
     if use_batchnorm:
@@ -173,6 +187,8 @@ def mobilenetV3_block(input_layer,
 
     x = squeeze_excite_block(x,
                              squeeze_units=squeeze_dim,
+                             regularizer=regularizer,
+                             initializer=initializer,
                              prefix=prefix + "squeeze_excite_")
 
     x = keras.layers.Conv2D(
@@ -182,6 +198,7 @@ def mobilenetV3_block(input_layer,
         padding="same",
         activation="linear",
         name=prefix + "conv2",
+        kernel_regularizer=regularizer,
         kernel_initializer=initializer)(x)
 
     # -------- build skip layer and main
@@ -206,6 +223,7 @@ def attention_block(input_layer,
                     kernel_size=[1, 1],
                     activation="linear",
                     initializer="glorot_normal",
+                    regularizer=None,
                     prefix="attention_"):
     """
     Builds a attention block
@@ -214,6 +232,7 @@ def attention_block(input_layer,
     :param kernel_size:
     :param activation:
     :param initializer:
+    :param regularizer:
     :param prefix:
     :return:
     """
@@ -234,6 +253,7 @@ def attention_block(input_layer,
         padding=padding,
         activation=activation,
         name=prefix + "theta",
+        kernel_regularizer=regularizer,
         kernel_initializer=initializer)(input_layer)
     phi = keras.layers.Conv2D(
         filters=filters,
@@ -242,6 +262,7 @@ def attention_block(input_layer,
         padding=padding,
         activation=activation,
         name=prefix + "phi",
+        kernel_regularizer=regularizer,
         kernel_initializer=initializer)(input_layer)
     g = keras.layers.Conv2D(
         filters=filters,
@@ -250,6 +271,7 @@ def attention_block(input_layer,
         padding=padding,
         activation=activation,
         name=prefix + "g",
+        kernel_regularizer=regularizer,
         kernel_initializer=initializer)(input_layer)
     # -------- build block
     h_x_w = np.prod(shape[1:3])
@@ -262,7 +284,8 @@ def attention_block(input_layer,
     g_flat = keras.layers.Reshape(new_shape)(g)
     # -------- multiply with attention map
     theta_x_phi_xg = keras.layers.Dot(axes=(1, 2))([theta_x_phi, g_flat])
-    theta_x_phi_xg = keras.layers.Reshape((shape[1:3] + (filters,)))(theta_x_phi_xg)
+    theta_x_phi_xg = keras.layers.Reshape(
+        (shape[1:3] + (filters,)))(theta_x_phi_xg)
 
     return theta_x_phi_xg
 
@@ -274,6 +297,7 @@ def self_attention_block(input_layer,
                          kernel_size=[1, 1],
                          activation="linear",
                          initializer="glorot_normal",
+                         regularizer=None,
                          prefix="self_attention_",
                          channels_index=3):
     """
@@ -293,6 +317,7 @@ def self_attention_block(input_layer,
                                 kernel_size=kernel_size,
                                 activation=activation,
                                 initializer=initializer,
+                                regularizer=regularizer,
                                 prefix=prefix)
     # -------- convolve to match output channels
     shape = K.int_shape(input_layer)
@@ -304,6 +329,7 @@ def self_attention_block(input_layer,
         padding="same",
         activation=activation,
         name=prefix + "result",
+        kernel_regularizer=regularizer,
         kernel_initializer=initializer)(attention)
     # -------- residual connection with input
     return keras.layers.Add()([attention, input_layer])
@@ -317,6 +343,7 @@ def resnet_block(input_layer,
                  kernel_size=[3, 3],
                  activation="relu",
                  initializer="glorot_normal",
+                 regularizer=None,
                  prefix="resnet_",
                  channels_index=3,
                  dropout_ratio=None,
@@ -353,6 +380,7 @@ def resnet_block(input_layer,
         padding="same",
         activation=activation,
         name=prefix + "conv0",
+        kernel_regularizer=regularizer,
         kernel_initializer=initializer)(input_layer)
 
     x = keras.layers.Conv2D(
@@ -362,6 +390,7 @@ def resnet_block(input_layer,
         padding="same",
         activation="linear",
         name=prefix + "conv1",
+        kernel_regularizer=regularizer,
         kernel_initializer=initializer)(x)
 
     if previous_no_filters == filters:
@@ -374,6 +403,7 @@ def resnet_block(input_layer,
             padding="same",
             activation="linear",
             name=prefix + "skip",
+            kernel_regularizer=regularizer,
             kernel_initializer=initializer)(input_layer)
 
     # -------- build skip layer and main
