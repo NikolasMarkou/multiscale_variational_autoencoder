@@ -554,13 +554,16 @@ def gaussian_filter_block(input_layer,
         assert len(size) == 2
         kern1d = []
         for i in range(2):
-            interval = (2 * nsig[i] + 1.) / (size[i])
-            x = np.linspace(-nsig[i] - interval / 2., nsig[i] + interval / 2.,
-                            size[i] + 1)
-            kern1d.append(np.diff(st.norm.cdf(x)))
-
-        kernel_raw = np.sqrt(np.outer(kern1d[0], kern1d[1]))
-        kernel = kernel_raw / kernel_raw.sum()
+            x = np.linspace(start=-np.abs(nsig[i]),
+                            stop=np.abs(nsig[i]),
+                            num=size[i],
+                            endpoint=True)
+            kern1d.append(x)
+        x, y = np.meshgrid(kern1d[0], kern1d[1])
+        d = np.sqrt(x*x + y*y)
+        sigma, mu = 1.0, 0.0
+        g = np.exp(-((d - mu) ** 2 / (2.0 * sigma ** 2)))
+        kernel = g / g.sum()
         return kernel
 
     # Initialise to set kernel to required value

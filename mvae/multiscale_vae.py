@@ -55,8 +55,8 @@ class MultiscaleVAE:
         self._compress_output = compress_output
         self._initialization_scheme = "glorot_normal"
         self._output_channels = input_dims[channels_index]
-        self._kernel_regularizer = None #keras.regularizers.l1(1.0)
-        self._dense_regularizer = None #keras.regularizers.l2(5.0)
+        self._kernel_regularizer = "l2"
+        self._dense_regularizer = None
         self._build()
 
     # ==========================================================================
@@ -85,16 +85,17 @@ class MultiscaleVAE:
                 self._scales.append(up)
 
         # --------- Create Encoder / Decoder
-        self._decoders = []
-        self._encoders = []
         self._mu = None
         self._log_var = None
+        self._decoders = []
+        self._encoders = []
+        self._encoders_no_random = []
         # --------- encoders
         mu = []
         log_var = []
         shapes_before_flattening = []
         for i in range(self._levels):
-            encoder, mu_log, shape_before_flattening = \
+            encoder, encoder_no_random, mu_log, shape_before_flattening = \
                 self._build_encoder(self._scales[i],
                                     z_dim=self._z_latent_dims[i],
                                     prefix="encoder_" + str(i) + "_")
@@ -102,9 +103,12 @@ class MultiscaleVAE:
             log_var.append(mu_log[1])
             shapes_before_flattening.append(shape_before_flattening)
             self._encoders.append(encoder)
+            self._encoders_no_random.append(encoder_no_random)
         # --------- concat all z-latent layers
         self._z_latent_concat = \
             keras.layers.Concatenate(axis=-1)(self._encoders)
+        self._z_latent_no_random_concat = \
+            keras.layers.Concatenate(axis=-1)(self._encoders_no_random)
         self._mu = \
             keras.layers.Concatenate(axis=-1, name="concat_mu")(mu)
         self._log_var = \
@@ -175,12 +179,12 @@ class MultiscaleVAE:
         self._model_trainable = keras.Model(self._input_layer,
                                             self._result)
 
-        # # --------- The encoding model
-        # self._model_encode = keras.Model(self._input_layer,
-        #                                  self._z_latent_concat)
-        #
+        # --------- The encoding model
+        self._model_encode = keras.Model(self._input_layer,
+                                         self._z_latent_no_random_concat)
+
         # # --------- The sample model
-        # self._model_sample = keras.Model(self._z_latent_concat,
+        # self._model_sample = keras.Model(self._z_latent_no_random_concat,
         #                                  self._result)
 
     # ==========================================================================
@@ -264,12 +268,20 @@ class MultiscaleVAE:
             epsilon = K.random_normal(
                 shape=K.shape(tmp_mu),
                 mean=0.,
-                stddev=0.01)
+                stddev=0.001)
             return tmp_mu + K.exp(tmp_log_var) * epsilon
 
-        return keras.layers.Lambda(
-            sample, name=prefix + "output")([mu, log_var]), \
-               [mu, log_var], shape_before_flattening
+        def dont_sample(args):
+            tmp_mu, tmp_log_var = args
+            return tmp_mu + K.exp(tmp_log_var)
+
+        return \
+            keras.layers.Lambda(
+                sample, name=prefix + "_sample_output")([mu, log_var]), \
+            keras.layers.Lambda(
+                dont_sample, name=prefix + "_dont_sample_output")([mu, log_var]), \
+            [mu, log_var], \
+            shape_before_flattening
 
     # ==========================================================================
 
@@ -443,4 +455,11 @@ class MultiscaleVAE:
         self._learning_rate = value
 
     # ==========================================================================
+    @property
+    def model_encode(self):
+        return self._model_encode
+
+    @property
+    def model_sample(self):
+        return self._model_sample
 

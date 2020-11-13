@@ -84,6 +84,14 @@ multiscale_vae.compile(
 with open("model_trainable.json", "w") as json_file:
     json_file.write(multiscale_vae.model_trainable.to_json())
 
+# serialize model to JSON
+with open("model_encode.json", "w") as json_file:
+    json_file.write(multiscale_vae.model_encode.to_json())
+
+# # serialize model to JSON
+# with open("model_sample.json", "w") as json_file:
+#     json_file.write(multiscale_vae.model_sample.to_json())
+
 # ==============================================================================
 
 multiscale_vae.train(
