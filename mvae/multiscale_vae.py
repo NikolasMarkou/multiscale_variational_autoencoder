@@ -49,6 +49,7 @@ class MultiscaleVAE:
         self._encoder_config = encoder
         self._decoder_config = decoder
         self._gaussian_kernel = [5, 5]
+        self._gaussian_nsig = [2, 2]
         self._clip_min_value = (1.0 / 255.0)
         self._clip_max_value = 255.0
         self._training_noise_std = None
@@ -56,7 +57,7 @@ class MultiscaleVAE:
         self._initialization_scheme = "glorot_normal"
         self._output_channels = input_dims[channels_index]
         self._kernel_regularizer = "l2"
-        self._dense_regularizer = None
+        self._dense_regularizer = "l2"
         self._build()
 
     # ==========================================================================
@@ -204,7 +205,10 @@ class MultiscaleVAE:
         """
         # --------- filter and downsample
         f0 = layer_blocks.gaussian_filter_block(
-            i0, kernel_size=self._gaussian_kernel, strides=(1, 1))
+            i0,
+            strides=(1, 1),
+            xy_max=self._gaussian_nsig,
+            kernel_size=self._gaussian_kernel)
 
         # --------- downsample
         d0 = keras.layers.MaxPool2D(pool_size=(1, 1),
@@ -274,7 +278,7 @@ class MultiscaleVAE:
             epsilon = K.random_normal(
                 shape=K.shape(tmp_mu),
                 mean=0.,
-                stddev=0.001)
+                stddev=0.01)
             return tmp_mu + K.exp(tmp_log_var) * epsilon
 
         def dont_sample(args):

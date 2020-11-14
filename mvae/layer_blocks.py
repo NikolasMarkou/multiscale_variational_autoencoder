@@ -530,6 +530,7 @@ def gaussian_filter_block(input_layer,
                           strides=(1, 1),
                           dilation_rate=(1, 1),
                           padding="same",
+                          xy_max=(1.5, 1.5),
                           activation=None,
                           trainable=False,
                           use_bias=False):
@@ -542,11 +543,12 @@ def gaussian_filter_block(input_layer,
     :param use_bias:
     :param strides:
     :param padding:
+    :param xy_max:
     :param dilation_rate:
     :return:
     """
 
-    def _gaussian_kernel(size, nsig=[1.5, 1.5]):
+    def _gaussian_kernel(size, nsig=xy_max):
         """
         Returns a 2D Gaussian kernel array
         """
