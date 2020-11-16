@@ -48,11 +48,11 @@ class MultiscaleVAE:
         self._inputs_dims = input_dims
         self._encoder_config = encoder
         self._decoder_config = decoder
-        self._gaussian_kernel = [5, 5]
+        self._gaussian_kernel = (5, 5)
         self._gaussian_nsig = [2, 2]
-        self._clip_min_value = (1.0 / 255.0)
+        self._clip_min_value = 0.0
         self._clip_max_value = 255.0
-        self._training_noise_std = None
+        self._training_noise_std = (1.0 / 255.0)
         self._compress_output = compress_output
         self._initialization_scheme = "glorot_normal"
         self._output_channels = input_dims[channels_index]
@@ -145,8 +145,9 @@ class MultiscaleVAE:
                 layer = self._decoders[i]
             else:
                 x = keras.layers.Conv2DTranspose(
-                    filters=self._conv_base_filters,
-                    kernel_size=[3, 3],
+                    groups=self._output_channels,
+                    filters=self._output_channels,
+                    kernel_size=(3, 3),
                     strides=(2, 2),
                     padding="same",
                     activation="linear",
@@ -154,26 +155,17 @@ class MultiscaleVAE:
                     kernel_initializer=self._initialization_scheme)(layer)
                 x = keras.layers.Add()(
                     [x, self._decoders[i]])
-                x = keras.layers.ReLU()(x)
-                x = keras.layers.DepthwiseConv2D(
-                    depth_multiplier=1,
-                    kernel_size=[3, 3],
-                    strides=(1, 1),
-                    padding="same",
-                    activation=self._conv_activation,
-                    depthwise_regularizer=self._kernel_regularizer,
-                    depthwise_initializer=self._initialization_scheme,
-                    kernel_regularizer=self._kernel_regularizer,
-                    kernel_initializer=self._initialization_scheme)(x)
+                # x = keras.layers.DepthwiseConv2D(
+                #     depth_multiplier=1,
+                #     kernel_size=self._gaussian_kernel,
+                #     strides=(1, 1),
+                #     padding="same",
+                #     activation="linear",
+                #     depthwise_regularizer=self._kernel_regularizer,
+                #     depthwise_initializer=self._initialization_scheme,
+                #     kernel_regularizer=self._kernel_regularizer,
+                #     kernel_initializer=self._initialization_scheme)(x)
                 layer = x
-        x = keras.layers.Conv2D(
-            filters=self._output_channels,
-            kernel_size=[1, 1],
-            strides=(1, 1),
-            padding="same",
-            activation="linear",
-            kernel_regularizer=self._kernel_regularizer,
-            kernel_initializer=self._initialization_scheme)(x)
 
         if self._compress_output:
             # -------- Cap output to [0, 1]
@@ -301,6 +293,7 @@ class MultiscaleVAE:
                        prefix="decoder_"):
         """
         Creates a decoder block
+
         :param input_layer:
         :param target_shape: HxWxC
         :param prefix:
@@ -329,7 +322,7 @@ class MultiscaleVAE:
 
         # -------- Match target channels
         x = keras.layers.Conv2D(
-            filters=self._conv_base_filters,
+            filters=self._output_channels,
             strides=(1, 1),
             kernel_size=(1, 1),
             padding="same",
