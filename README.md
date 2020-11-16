@@ -10,7 +10,7 @@ The downscaled versions are used to learn high level features and the higher lev
 
 The model allows to create as much as log_2(input_size) numbers of levels.
 
-![GitHub Logo](graphics/mvae.jpg)
+![GitHub Logo](graphics/mvae.png)
 
 I intend to use this m-vae as a building block for Classifiers, Fuzzers, Anomaly Detection and more.
 
