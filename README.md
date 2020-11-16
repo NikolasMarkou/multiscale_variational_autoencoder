@@ -31,9 +31,12 @@ Trained on the ```CIFAR10``` dataset to recreate images for 10 epochs.
 
 ### Original / Recreation comparison
 
-![GitHub Logo](graphics/cifar10_0.png)
+Cifar10 - Epoch 1
 
-![GitHub Logo](graphics/cifar10_1.png)
+![GitHub Logo](graphics/cifar10_epoch_1.png)
 
-![GitHub Logo](graphics/cifar10_2.png)
+Cifar10 - Epoch 150
+
+![GitHub Logo](graphics/cifar10_epoch_150.png)
+
 
