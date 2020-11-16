@@ -48,7 +48,7 @@ class MultiscaleVAE:
         self._inputs_dims = input_dims
         self._encoder_config = encoder
         self._decoder_config = decoder
-        self._gaussian_kernel = (5, 5)
+        self._gaussian_kernel = (3, 3)
         self._gaussian_nsig = [2, 2]
         self._clip_min_value = 0.0
         self._clip_max_value = 255.0
@@ -144,27 +144,22 @@ class MultiscaleVAE:
             if i == self._levels - 1:
                 layer = self._decoders[i]
             else:
-                x = keras.layers.Conv2DTranspose(
-                    groups=self._output_channels,
-                    filters=self._output_channels,
-                    kernel_size=(3, 3),
-                    strides=(2, 2),
+                x = keras.layers.UpSampling2D(
+                    size=(2, 2),
+                    interpolation="nearest")(layer)
+                # -- reverse blur filter
+                x = keras.layers.DepthwiseConv2D(
+                    depth_multiplier=1,
+                    kernel_size=self._gaussian_kernel,
+                    strides=(1, 1),
                     padding="same",
                     activation="linear",
+                    depthwise_regularizer=self._kernel_regularizer,
+                    depthwise_initializer=self._initialization_scheme,
                     kernel_regularizer=self._kernel_regularizer,
-                    kernel_initializer=self._initialization_scheme)(layer)
+                    kernel_initializer=self._initialization_scheme)(x)
                 x = keras.layers.Add()(
                     [x, self._decoders[i]])
-                # x = keras.layers.DepthwiseConv2D(
-                #     depth_multiplier=1,
-                #     kernel_size=self._gaussian_kernel,
-                #     strides=(1, 1),
-                #     padding="same",
-                #     activation="linear",
-                #     depthwise_regularizer=self._kernel_regularizer,
-                #     depthwise_initializer=self._initialization_scheme,
-                #     kernel_regularizer=self._kernel_regularizer,
-                #     kernel_initializer=self._initialization_scheme)(x)
                 layer = x
 
         if self._compress_output:
