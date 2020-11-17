@@ -12,18 +12,15 @@ class MultiscaleVAE:
     def __init__(
             self,
             input_dims,
-            levels,
             z_dims,
-            channels_index=2,
             compress_output=True,
             encoder={
                 "filters": [32],
-                "kernel_size": [(3, 3)]
+                "kernel_size": [(3, 3)],
+                "strides": [(1, 1)]
             },
-            decoder={
-                "filters": [32],
-                "kernel_size": [(3, 3)]
-            }):
+            decoder=None,
+            channels_index=2):
         """
         Encoder that compresses a signal
         into a latent space of normally distributed variables
@@ -32,12 +29,18 @@ class MultiscaleVAE:
         :param z_dims:
         """
         # --------- Argument checking
-        if levels <= 0:
-            raise ValueError("levels should be integer and > 0")
-        if len(z_dims) != levels:
-            raise ValueError("z_dims should be a list of length levels")
+        if encoder is None:
+            raise ValueError("encoder cannot be None")
         if not all(i > 0 for i in z_dims):
             raise ValueError("z_dims elements should be > 0")
+        # --------- decoder is reverse encoder
+        if decoder is None:
+            decoder = {
+                "filters": encoder["filters"][::-1],
+                "strides": encoder["strides"][::-1],
+                "kernel_size": encoder["kernel_size"][::-1]
+            }
+        levels = len(z_dims)
         # --------- Variable initialization
         self._name = "mvae"
         self._levels = levels
@@ -131,17 +134,6 @@ class MultiscaleVAE:
                 x = keras.layers.UpSampling2D(
                     size=(2, 2),
                     interpolation="bilinear")(layer)
-                # -- reverse blur filter
-                x = keras.layers.DepthwiseConv2D(
-                    depth_multiplier=1,
-                    kernel_size=self._gaussian_kernel,
-                    strides=(1, 1),
-                    padding="same",
-                    activation="linear",
-                    depthwise_regularizer=self._kernel_regularizer,
-                    depthwise_initializer=self._initialization_scheme,
-                    kernel_regularizer=self._kernel_regularizer,
-                    kernel_initializer=self._initialization_scheme)(x)
                 x = keras.layers.Add()(
                     [x, self._decoders[i]])
                 layer = x
@@ -297,7 +289,8 @@ class MultiscaleVAE:
             prefix=prefix)
 
         # -------- Add batchnorm to boost signal
-        x = keras.layers.BatchNormalization()(x)
+        x = keras.layers.BatchNormalization(momentum=0.999,
+                                            epsilon=0.0001)(x)
 
         # -------- Match target channels
         x = keras.layers.Conv2D(
