@@ -59,6 +59,7 @@ class SaveIntermediateResultsCallback(Callback):
     def on_batch_end(self, batch, logs={}):  
         if batch % self.print_every_n_batches == 0:
             reconstructions = self.vae.model_trainable.predict(self.images)
+            reconstructions = self.vae.normalize(reconstructions)
             reconstructions = np.clip(reconstructions, a_min=0.0, a_max=1.0)
             # --- create collage of the reconstructions
             x = collage(reconstructions)

@@ -13,13 +13,16 @@ class MultiscaleVAE:
             self,
             input_dims,
             z_dims,
-            compress_output=True,
+            compress_output=False,
             encoder={
                 "filters": [32],
                 "kernel_size": [(3, 3)],
                 "strides": [(1, 1)]
             },
             decoder=None,
+            min_value=0.0,
+            max_value=255.0,
+            sample_std=0.01,
             channels_index=2):
         """
         Encoder that compresses a signal
@@ -44,23 +47,26 @@ class MultiscaleVAE:
         # --------- Variable initialization
         self._name = "mvae"
         self._levels = levels
-        self._share_z_space = False
+        self._share_z_space = True
         self._conv_base_filters = 32
-        self._conv_activation = "relu"
+        self._conv_activation = "elu"
         self._z_latent_dims = z_dims
         self._inputs_dims = input_dims
         self._encoder_config = encoder
         self._decoder_config = decoder
         self._gaussian_kernel = (3, 3)
         self._gaussian_nsig = [2, 2]
-        self._clip_min_value = 0.0
-        self._clip_max_value = 255.0
-        self._training_noise_std = (1.0 / 255.0)
+        self._clip_min_value = min_value
+        self._clip_max_value = max_value
+        self._training_noise_std = 1.0 / (max_value - min_value)
         self._compress_output = compress_output
         self._initialization_scheme = "glorot_normal"
         self._output_channels = input_dims[channels_index]
         self._kernel_regularizer = "l2"
         self._dense_regularizer = "l2"
+        self._min_value = min_value
+        self._max_value = max_value
+        self._sample_std = sample_std
         self._build()
 
     # ==========================================================================
@@ -74,7 +80,22 @@ class MultiscaleVAE:
         self._scales = []
         self._input_layer = keras.Input(shape=self._inputs_dims,
                                         name="input_layer")
+
+        min_value = K.constant(self._min_value)
+        max_value = K.constant(self._max_value)
+        std_value = K.constant(self._sample_std)
+
+        def normalize(args):
+            y, v0, v1 = args
+            return (y - v0) / (v1 - v0)
+
+        def denormalize(args):
+            y, v0, v1 = args
+            return K.clip(y * (v1 - v0) + v0, v0, v1)
+
         layer = self._input_layer
+        layer = keras.layers.Lambda(normalize)([layer, min_value, max_value])
+
         if self._training_noise_std is not None:
             if self._training_noise_std > 0.0:
                 layer = keras.layers.GaussianNoise(
@@ -93,38 +114,49 @@ class MultiscaleVAE:
         self._log_var = None
         self._decoders = []
         self._encoders = []
-        self._encoders_no_random = []
         # --------- encoders
         mu = []
         log_var = []
         shapes_before_flattening = []
         for i in range(self._levels):
-            encoder, encoder_no_random, mu_log, shape_before_flattening = \
+            encoder, mu_log, shape_before_flattening = \
                 self._build_encoder(self._scales[i],
+                                    sample_stddev=std_value,
                                     z_dim=self._z_latent_dims[i],
                                     prefix="encoder_" + str(i) + "_")
             mu.append(mu_log[0])
             log_var.append(mu_log[1])
             shapes_before_flattening.append(shape_before_flattening)
             self._encoders.append(encoder)
-            self._encoders_no_random.append(encoder_no_random)
         # --------- concat all z-latent layers
         self._z_latent_concat = \
             keras.layers.Concatenate(axis=-1)(self._encoders)
-        self._z_latent_no_random_concat = \
-            keras.layers.Concatenate(axis=-1)(self._encoders_no_random)
         self._mu = \
             keras.layers.Concatenate(axis=-1, name="concat_mu")(mu)
         self._log_var = \
             keras.layers.Concatenate(axis=-1, name="concat_log_var")(log_var)
         # --------- decoders
-        for i in range(self._levels):
-            decoder = \
-                self._build_decoder(
-                    self._z_latent_concat,
-                    target_shape=shapes_before_flattening[i],
-                    prefix="decoder_" + str(i) + "_")
-            self._decoders.append(decoder)
+        if self._share_z_space:
+            z_no_gradients = [K.stop_gradient(z) for z in self._encoders]
+            for i in range(self._levels):
+                # --------- get encodings of all
+                # except this one and stop gradients
+                # this way they can all share information on the z-space
+                z_tmp = z_no_gradients[:]
+                z_tmp[i] = self._encoders[i]
+                decoder = self._build_decoder(
+                        keras.layers.Concatenate()(z_tmp),
+                        target_shape=shapes_before_flattening[i],
+                        prefix="decoder_" + str(i) + "_")
+                self._decoders.append(decoder)
+        else:
+            for i in range(self._levels):
+                decoder = \
+                    self._build_decoder(
+                        self._encoders[i],
+                        target_shape=shapes_before_flattening[i],
+                        prefix="decoder_" + str(i) + "_")
+                self._decoders.append(decoder)
         # --------- upsample and merge decoders
         layer = None
         for i in range(self._levels-1, -1, -1):
@@ -137,11 +169,11 @@ class MultiscaleVAE:
                 x = keras.layers.Add()(
                     [x, self._decoders[i]])
                 layer = x
+        # -------- Cap output to [0, 1]
+        x = keras.layers.Activation("sigmoid")(x)
 
-        if self._compress_output:
-            # -------- Cap output to [0, 1]
-            x = keras.layers.Activation("sigmoid")(x)
-
+        # -------- Bring bang to initial value range
+        x = keras.layers.Lambda(denormalize)([x, min_value, max_value])
         self._result = keras.layers.Layer(name="output")(x)
 
         # --------- The end-to-end trainable model
@@ -150,7 +182,7 @@ class MultiscaleVAE:
 
         # --------- The encoding model
         self._model_encode = keras.Model(self._input_layer,
-                                         self._z_latent_no_random_concat)
+                                         self._z_latent_concat)
 
         # # --------- The sample model
         # self._model_sample = keras.Model(self._z_latent_no_random_concat,
@@ -188,6 +220,7 @@ class MultiscaleVAE:
     def _build_encoder(self,
                        encoder_input,
                        z_dim,
+                       sample_stddev=0.01,
                        prefix="encoder_"):
         """
         Creates an encoder block
@@ -237,22 +270,16 @@ class MultiscaleVAE:
             name=prefix + "log_var")(x)
 
         def sample(args):
-            tmp_mu, tmp_log_var = args
+            tmp_mu, tmp_log_var, tmp_stddev = args
             epsilon = K.random_normal(
                 shape=K.shape(tmp_mu),
                 mean=0.,
-                stddev=0.01)
+                stddev=tmp_stddev)
             return tmp_mu + K.exp(tmp_log_var) * epsilon
-
-        def dont_sample(args):
-            tmp_mu, tmp_log_var = args
-            return tmp_mu + K.exp(tmp_log_var)
 
         return \
             keras.layers.Lambda(
-                sample, name=prefix + "_sample_output")([mu, log_var]), \
-            keras.layers.Lambda(
-                dont_sample, name=prefix + "_dont_sample_output")([mu, log_var]), \
+                sample, name=prefix + "_sample_output")([mu, log_var, sample_stddev]), \
             [mu, log_var], \
             shape_before_flattening
 
@@ -326,29 +353,22 @@ class MultiscaleVAE:
             tmp0 = K.abs(y_true - y_pred)
             return K.mean(tmp0, axis=[1, 2, 3])
 
-        def vae_r_experimental(y_true, y_pred):
-            x = K.clip(x=K.abs(y_true - y_pred),
-                       min_value=self._clip_min_value,
-                       max_value=self._clip_max_value)
-            return K.mean(x, axis=[1, 2, 3])
-
         # --------- Define KL loss for the latent space
         # (difference from normally distributed m=0, var=1)
         def vae_kl_loss(y_true, y_pred):
-            tmp = 1.0 + self._log_var - \
-                  K.square(self._mu) - \
-                  K.exp(self._log_var)
-            tmp = -0.5 * K.sum(tmp, axis=-1)
-            return tmp
+            x = 1.0 + self._log_var - K.square(self._mu) - K.exp(self._log_var)
+            x = -0.5 * K.sum(x, axis=-1)
+            return x
 
         # --------- Define combined loss
         def vae_loss(y_true, y_pred):
             kl_loss = vae_kl_loss(y_true, y_pred)
-            r_loss = vae_r_experimental(y_true, y_pred)
-            return (r_loss * r_loss_factor) + (kl_loss * kl_loss_factor)
+            r_loss = vae_r_loss(y_true, y_pred)
+            return (r_loss * r_loss_factor) + \
+                   (kl_loss * kl_loss_factor)
 
         optimizer = keras.optimizers.Adagrad(
-            lr=self._learning_rate,
+            lr=self.learning_rate,
             clipnorm=clip_norm)
 
         self._model_trainable.compile(
@@ -437,3 +457,5 @@ class MultiscaleVAE:
     def model_sample(self):
         return self._model_sample
 
+    def normalize(self, v):
+        return (v - self._min_value) / (self._max_value - self._min_value)

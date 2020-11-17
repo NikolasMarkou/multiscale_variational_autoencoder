@@ -52,8 +52,8 @@ mode = "build"
 # ==============================================================================
 
 (x_train, y_train), (x_test, y_test) = cifar10.load_data()
-x_train = x_train.astype("float32") / 255.0
-x_test = x_test.astype("float32") / 255.0
+x_train = x_train.astype("float32")
+x_test = x_test.astype("float32")
 
 # ==============================================================================
 
@@ -64,7 +64,9 @@ multiscale_vae = mvae.MultiscaleVAE(
         "filters": [32, 32],
         "kernel_size": [(3, 3), (3, 3)],
         "strides": [(1, 1), (1, 1)]
-    })
+    },
+    min_value=0.0,
+    max_value=255.0)
 
 # ==============================================================================
 
