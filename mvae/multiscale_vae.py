@@ -115,29 +115,13 @@ class MultiscaleVAE:
         self._log_var = \
             keras.layers.Concatenate(axis=-1, name="concat_log_var")(log_var)
         # --------- decoders
-        if self._share_z_space:
-            z_no_gradients = [K.stop_gradient(z)
-                              for z in self._encoders]
-            for i in range(self._levels):
-                # --------- get encodings of all
-                # except this one and stop gradients
-                # this way they can all share information on the z-space
-                z_tmp = z_no_gradients[:]
-                z_tmp[i] = self._encoders[i]
-                decoder = \
-                    self._build_decoder(
-                        keras.layers.Concatenate()(z_tmp),
-                        target_shape=shapes_before_flattening[i],
-                        prefix="decoder_" + str(i) + "_")
-                self._decoders.append(decoder)
-        else:
-            for i in range(self._levels):
-                decoder = \
-                    self._build_decoder(
-                        self._encoders[i],
-                        target_shape=shapes_before_flattening[i],
-                        prefix="decoder_" + str(i) + "_")
-                self._decoders.append(decoder)
+        for i in range(self._levels):
+            decoder = \
+                self._build_decoder(
+                    self._z_latent_concat,
+                    target_shape=shapes_before_flattening[i],
+                    prefix="decoder_" + str(i) + "_")
+            self._decoders.append(decoder)
         # --------- upsample and merge decoders
         layer = None
         for i in range(self._levels-1, -1, -1):
@@ -146,7 +130,7 @@ class MultiscaleVAE:
             else:
                 x = keras.layers.UpSampling2D(
                     size=(2, 2),
-                    interpolation="nearest")(layer)
+                    interpolation="bilinear")(layer)
                 # -- reverse blur filter
                 x = keras.layers.DepthwiseConv2D(
                     depth_multiplier=1,
@@ -164,7 +148,7 @@ class MultiscaleVAE:
 
         if self._compress_output:
             # -------- Cap output to [0, 1]
-            x = keras.layers.Activation("hard_sigmoid")(x)
+            x = keras.layers.Activation("sigmoid")(x)
 
         self._result = keras.layers.Layer(name="output")(x)
 
@@ -358,12 +342,11 @@ class MultiscaleVAE:
         # --------- Define KL loss for the latent space
         # (difference from normally distributed m=0, var=1)
         def vae_kl_loss(y_true, y_pred):
-            tmp = 1 + self._log_var[1] - \
-                  K.square(self._mu[0]) - \
-                  K.exp(self._log_var[1])
-            tmp = K.sum(tmp, axis=-1)
-            tmp *= -0.5
-            return K.mean(tmp)
+            tmp = 1.0 + self._log_var - \
+                  K.square(self._mu) - \
+                  K.exp(self._log_var)
+            tmp = -0.5 * K.sum(tmp, axis=-1)
+            return tmp
 
         # --------- Define combined loss
         def vae_loss(y_true, y_pred):
