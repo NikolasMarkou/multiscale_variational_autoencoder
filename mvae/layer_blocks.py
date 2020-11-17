@@ -7,12 +7,68 @@ from .custom_logger import logger
 # ==============================================================================
 
 
+def upsample_excite_block(input_layer,
+                          squeeze_units=32,
+                          filters=64,
+                          initializer="glorot_normal",
+                          regularizer=None,
+                          channels_index=3,
+                          prefix="upsample_excite_"):
+    # -------- argument checking
+    if input_layer is None:
+        raise ValueError("input_layer cannot be empty")
+    if squeeze_units <= 0:
+        raise ValueError("squeeze_units must be > 0")
+    shape = K.int_shape(input_layer)
+    if len(shape) != 4:
+        raise ValueError("works only on 4d tensors")
+    channels = shape[channels_index]
+    # ---
+    x1 = keras.layers.UpSampling2D(
+        size=(2, 2),
+        interpolation="nearest")(input_layer)
+    x3 = keras.layers.Conv2DTranspose(
+        filters=filters,
+        kernel_size=(3, 3),
+        strides=(2, 2),
+        padding="same",
+        activation="linear",
+        kernel_initializer=initializer,
+        kernel_regularizer=regularizer)(input_layer)
+    x5 = keras.layers.Conv2DTranspose(
+        filters=filters,
+        kernel_size=(5, 5),
+        strides=(2, 2),
+        padding="same",
+        activation="linear",
+        kernel_initializer=initializer,
+        kernel_regularizer=regularizer)(input_layer)
+    x135 = keras.layers.Concatenate()([x1, x3, x5])
+    x0 = squeeze_excite_block(x135,
+                              squeeze_units,
+                              initializer=initializer,
+                              regularizer=regularizer,
+                              channels_index=channels_index,
+                              prefix=prefix + "squeeze_excite_")
+    x1 = keras.layers.Conv2D(
+        filters=channels,
+        kernel_size=(1, 1),
+        strides=(1, 1),
+        padding="same",
+        activation="linear",
+        kernel_initializer=initializer,
+        kernel_regularizer=regularizer)(x0)
+    return x1
+
+# ==============================================================================
+
+
 def squeeze_excite_block(input_layer,
                          squeeze_units=32,
-                         prefix="squeeze_excite_",
                          initializer="glorot_normal",
                          regularizer=None,
-                         channels_index=3):
+                         channels_index=3,
+                         prefix="squeeze_excite_"):
     # -------- argument checking
     if input_layer is None:
         raise ValueError("input_layer cannot be empty")
@@ -23,19 +79,23 @@ def squeeze_excite_block(input_layer,
         raise ValueError("works only on 4d tensors")
     channels = shape[channels_index]
     # -------- squeeze
-    x = keras.layers.GlobalMaxPool2D(name=prefix + "max_pool")(input_layer)
-    x = keras.layers.Dense(units=squeeze_units,
-                           name=prefix + "dense0",
-                           activation="relu",
-                           kernel_regularizer=regularizer,
-                           kernel_initializer=initializer)(x)
-    x = keras.layers.Dense(units=channels,
-                           name=prefix + "dense1",
-                           activation="hard_sigmoid",
-                           kernel_regularizer=regularizer,
-                           kernel_initializer=initializer)(x)
+    x = keras.layers.GlobalMaxPool2D(
+        name=prefix + "max_pool")(input_layer)
+    x = keras.layers.Dense(
+        units=squeeze_units,
+        name=prefix + "dense0",
+        activation="relu",
+        kernel_regularizer=regularizer,
+        kernel_initializer=initializer)(x)
+    x = keras.layers.Dense(
+        units=channels,
+        name=prefix + "dense1",
+        activation="hard_sigmoid",
+        kernel_regularizer=regularizer,
+        kernel_initializer=initializer)(x)
     # -------- scale input
-    x = keras.layers.Multiply(name=prefix + "multiply",)([x, input_layer])
+    x = keras.layers.Multiply(
+        name=prefix + "multiply")([x, input_layer])
     return x
 
 # ==============================================================================
@@ -142,6 +202,7 @@ def mobilenetV3_block(input_layer,
     :param input_layer:
     :param filters:
     :param initializer:
+    :param regularizer:
     :param activation:
     :param squeeze_dim:
     :param prefix:
@@ -179,7 +240,9 @@ def mobilenetV3_block(input_layer,
         activation=activation,
         name=prefix + "conv1",
         kernel_regularizer=regularizer,
-        kernel_initializer=initializer)(x)
+        kernel_initializer=initializer,
+        depthwise_initializer=initializer,
+        depthwise_regularizer=regularizer)(x)
 
     if use_batchnorm:
         x = keras.layers.BatchNormalization(
@@ -437,9 +500,11 @@ def basic_block(input_layer,
                 filters=[64],
                 kernel_size=[(3, 3)],
                 strides=[(1, 1)],
+                initializer="glorot_normal",
+                regularizer=None,
                 use_batchnorm=False,
                 use_dropout=False,
-                prefix="block_"):
+                prefix="block_",):
     """
 
     :param input_layer:
@@ -447,6 +512,8 @@ def basic_block(input_layer,
     :param filters:
     :param kernel_size:
     :param strides:
+    :param initializer:
+    :param regularizer:
     :param use_batchnorm:
     :param use_dropout:
     :param prefix:
@@ -455,67 +522,57 @@ def basic_block(input_layer,
     if len(filters) != len(kernel_size) or \
             len(filters) != len(strides) or \
             len(filters) <= 0:
-        raise ValueError("len(filters) should be equal to "
-                         "len(kernel_size) and len(strides)")
+        raise ValueError(
+            "len(filters) [{0}] should be equal to "
+            "len(kernel_size) [{1}] and len(strides) [{2}]".format(
+                len(filters), len(kernel_size), len(strides)))
 
     if block_type != "encoder" and block_type != "decoder":
         raise ValueError("block_type should be encoder or decoder")
 
     x = input_layer
+    padding = "same"
+    activation = "linear"
     previous_no_filters = K.int_shape(input_layer)[3]
 
     for i in range(len(filters)):
-        tmp_layer = x
-        if block_type == "encoder":
-            x = keras.layers.Conv2D(
-                filters=filters[i],
-                kernel_size=kernel_size[i],
-                strides=strides[i],
-                padding="same",
-                activation="linear",
-                kernel_initializer="glorot_normal")(x)
-        elif block_type == "decoder":
-            x = keras.layers.Conv2DTranspose(
-                filters=filters[i],
-                kernel_size=kernel_size[i],
-                strides=strides[i],
-                padding="same",
-                activation="linear",
-                kernel_initializer="glorot_normal")(x)
+        prefix_i = prefix + str(i) + "_"
+        # --- handle subsampling and change in the number of filters
+        if strides[i][0] != 1 or strides[i][1] != 1 or \
+                filters[i] != previous_no_filters:
+            if block_type == "encoder":
+                x = keras.layers.Conv2D(
+                    filters=filters[i],
+                    kernel_size=(3, 3),
+                    strides=strides[i],
+                    padding=padding,
+                    activation=activation,
+                    kernel_initializer=initializer,
+                    kernel_regularizer=regularizer)(x)
+            elif block_type == "decoder":
+                x = keras.layers.Conv2DTranspose(
+                    filters=filters[i],
+                    kernel_size=(3, 3),
+                    strides=strides[i],
+                    padding=padding,
+                    activation=activation,
+                    kernel_initializer=initializer,
+                    kernel_regularizer=regularizer)(x)
 
-        x = keras.layers.ReLU()(x)
-
-        x = keras.layers.Conv2D(
-            filters=filters[i],
-            kernel_size=kernel_size[i],
-            strides=(1, 1),
-            padding="same",
-            activation="linear",
-            kernel_initializer="glorot_normal")(x)
-
-        if use_batchnorm:
-            x = keras.layers.BatchNormalization()(x)
-
-        # --------- Add bottleneck layer
-        if (strides[i][0] == 1 and strides[i][0] == strides[i][1]) and \
-                previous_no_filters != filters[i]:
-            tmp_layer = keras.layers.Conv2D(
-                filters=filters[i],
-                kernel_size=(1, 1),
-                strides=strides[i],
-                activation="linear",
-                kernel_initializer="glorot_uniform",
-                padding="same")(tmp_layer)
-
-        x = keras.layers.Add()([
+        x = mobilenetV3_block(
             x,
-            tmp_layer
-        ])
-        # --------- Relu combined result
-        x = keras.layers.ReLU()(x)
+            filters=filters[i],
+            activation="relu",
+            initializer=initializer,
+            regularizer=regularizer,
+            prefix=prefix_i + "mobilenetV3_")
 
         if use_dropout:
             x = keras.layers.Dropout(rate=0.1)(x)
+
+        if use_batchnorm:
+            x = keras.layers.BatchNormalization()(x)
+            x = keras.layers.ReLU()(x)
 
         previous_no_filters = filters[i]
 
