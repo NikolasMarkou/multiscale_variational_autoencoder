@@ -12,7 +12,7 @@ tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)
 # ==============================================================================
 
 EPOCHS = 150
-STEP_SIZE = 15
+STEP_SIZE = 30
 LR_DECAY = 0.5
 BATCH_SIZE = 32
 INITIAL_EPOCH = 0
@@ -61,9 +61,9 @@ multiscale_vae = mvae.MultiscaleVAE(
     input_dims=(32, 32, 3),
     z_dims=[128, 128, 128, 128],
     encoder={
-        "filters": [32, 32],
-        "kernel_size": [(3, 3), (3, 3)],
-        "strides": [(1, 1), (1, 1)]
+        "filters": [32, 64, 32],
+        "kernel_size": [(3, 3), (3, 3), (3, 3)],
+        "strides": [(1, 1), (2, 2), (1, 1)]
     },
     min_value=0.0,
     max_value=255.0)

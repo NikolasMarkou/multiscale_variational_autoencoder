@@ -47,7 +47,7 @@ class MultiscaleVAE:
         # --------- Variable initialization
         self._name = "mvae"
         self._levels = levels
-        self._share_z_space = True
+        self._share_z_space = False
         self._conv_base_filters = 32
         self._conv_activation = "elu"
         self._z_latent_dims = z_dims
@@ -55,9 +55,7 @@ class MultiscaleVAE:
         self._encoder_config = encoder
         self._decoder_config = decoder
         self._gaussian_kernel = (3, 3)
-        self._gaussian_nsig = [2, 2]
-        self._clip_min_value = min_value
-        self._clip_max_value = max_value
+        self._gaussian_nsig = (2, 2)
         self._training_noise_std = 1.0 / (max_value - min_value)
         self._compress_output = compress_output
         self._initialization_scheme = "glorot_normal"
@@ -86,12 +84,21 @@ class MultiscaleVAE:
         std_value = K.constant(self._sample_std)
 
         def normalize(args):
+            """
+            Convert input from [v0, v1] to [-1, +1] range
+            """
             y, v0, v1 = args
-            return (y - v0) / (v1 - v0)
+            return 2.0 * (y - v0) / (v1 - v0) - 1.0
 
         def denormalize(args):
+            """
+            Convert input [-1, +1] to [v0, v1] range
+            """
             y, v0, v1 = args
-            return K.clip(y * (v1 - v0) + v0, v0, v1)
+            return K.clip(
+                (y + 1.0) * (v1 - v0) / 2.0 + v0,
+                min_value=v0,
+                max_value=v1)
 
         layer = self._input_layer
         layer = keras.layers.Lambda(normalize)([layer, min_value, max_value])
@@ -169,8 +176,6 @@ class MultiscaleVAE:
                 x = keras.layers.Add()(
                     [x, self._decoders[i]])
                 layer = x
-        # -------- Cap output to [0, 1]
-        x = keras.layers.Activation("sigmoid")(x)
 
         # -------- Bring bang to initial value range
         x = keras.layers.Lambda(denormalize)([x, min_value, max_value])
@@ -350,8 +355,9 @@ class MultiscaleVAE:
 
         # --------- Define VAE reconstruction loss
         def vae_r_loss(y_true, y_pred):
-            tmp0 = K.abs(y_true - y_pred)
-            return K.mean(tmp0, axis=[1, 2, 3])
+            tmp = K.abs(y_true - y_pred)
+
+            return K.mean(tmp, axis=[1, 2, 3])
 
         # --------- Define KL loss for the latent space
         # (difference from normally distributed m=0, var=1)

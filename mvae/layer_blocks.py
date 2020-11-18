@@ -7,62 +7,6 @@ from .custom_logger import logger
 # ==============================================================================
 
 
-def upsample_excite_block(input_layer,
-                          squeeze_units=32,
-                          filters=64,
-                          initializer="glorot_normal",
-                          regularizer=None,
-                          channels_index=3,
-                          prefix="upsample_excite_"):
-    # -------- argument checking
-    if input_layer is None:
-        raise ValueError("input_layer cannot be empty")
-    if squeeze_units <= 0:
-        raise ValueError("squeeze_units must be > 0")
-    shape = K.int_shape(input_layer)
-    if len(shape) != 4:
-        raise ValueError("works only on 4d tensors")
-    channels = shape[channels_index]
-    # ---
-    x1 = keras.layers.UpSampling2D(
-        size=(2, 2),
-        interpolation="nearest")(input_layer)
-    x3 = keras.layers.Conv2DTranspose(
-        filters=filters,
-        kernel_size=(3, 3),
-        strides=(2, 2),
-        padding="same",
-        activation="linear",
-        kernel_initializer=initializer,
-        kernel_regularizer=regularizer)(input_layer)
-    x5 = keras.layers.Conv2DTranspose(
-        filters=filters,
-        kernel_size=(5, 5),
-        strides=(2, 2),
-        padding="same",
-        activation="linear",
-        kernel_initializer=initializer,
-        kernel_regularizer=regularizer)(input_layer)
-    x135 = keras.layers.Concatenate()([x1, x3, x5])
-    x0 = squeeze_excite_block(x135,
-                              squeeze_units,
-                              initializer=initializer,
-                              regularizer=regularizer,
-                              channels_index=channels_index,
-                              prefix=prefix + "squeeze_excite_")
-    x1 = keras.layers.Conv2D(
-        filters=channels,
-        kernel_size=(1, 1),
-        strides=(1, 1),
-        padding="same",
-        activation="linear",
-        kernel_initializer=initializer,
-        kernel_regularizer=regularizer)(x0)
-    return x1
-
-# ==============================================================================
-
-
 def squeeze_excite_block(input_layer,
                          squeeze_units=32,
                          initializer="glorot_normal",
@@ -581,6 +525,28 @@ def basic_block(input_layer,
 
 # ==============================================================================
 
+def gaussian_kernel(size, nsig):
+    """
+    Returns a 2D Gaussian kernel array
+    """
+    assert len(nsig) == 2
+    assert len(size) == 2
+    kern1d = []
+    for i in range(2):
+        x = np.linspace(start=-np.abs(nsig[i]),
+                        stop=np.abs(nsig[i]),
+                        num=size[i],
+                        endpoint=True)
+        kern1d.append(x)
+    x, y = np.meshgrid(kern1d[0], kern1d[1])
+    d = np.sqrt(x * x + y * y)
+    sigma, mu = 1.0, 0.0
+    g = np.exp(-((d - mu) ** 2 / (2.0 * sigma ** 2)))
+    kernel = g / g.sum()
+    return kernel
+
+# ==============================================================================
+
 
 def gaussian_filter_block(input_layer,
                           kernel_size=3,
@@ -605,30 +571,10 @@ def gaussian_filter_block(input_layer,
     :return:
     """
 
-    def _gaussian_kernel(size, nsig=xy_max):
-        """
-        Returns a 2D Gaussian kernel array
-        """
-        assert len(nsig) == 2
-        assert len(size) == 2
-        kern1d = []
-        for i in range(2):
-            x = np.linspace(start=-np.abs(nsig[i]),
-                            stop=np.abs(nsig[i]),
-                            num=size[i],
-                            endpoint=True)
-            kern1d.append(x)
-        x, y = np.meshgrid(kern1d[0], kern1d[1])
-        d = np.sqrt(x*x + y*y)
-        sigma, mu = 1.0, 0.0
-        g = np.exp(-((d - mu) ** 2 / (2.0 * sigma ** 2)))
-        kernel = g / g.sum()
-        return kernel
-
     # Initialise to set kernel to required value
     def kernel_init(shape, dtype):
         kernel = np.zeros(shape)
-        kernel[:, :, 0, 0] = _gaussian_kernel([shape[0], shape[1]])
+        kernel[:, :, 0, 0] = gaussian_kernel([shape[0], shape[1]], xy_max)
         return kernel
 
     return keras.layers.DepthwiseConv2D(
