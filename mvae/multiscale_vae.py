@@ -74,14 +74,6 @@ class MultiscaleVAE:
         Creates then multiscale VAE networks
         :return:
         """
-        # --------- Build multiscale input
-        self._scales = []
-        self._input_layer = keras.Input(shape=self._inputs_dims,
-                                        name="input_layer")
-
-        min_value = K.constant(self._min_value)
-        max_value = K.constant(self._max_value)
-        std_value = K.constant(self._sample_std)
 
         def normalize(args):
             """
@@ -100,9 +92,25 @@ class MultiscaleVAE:
                 min_value=v0,
                 max_value=v1)
 
-        layer = self._input_layer
-        layer = keras.layers.Lambda(normalize)([layer, min_value, max_value])
+        def split(args):
+            """
+            Split one dimensional input to set parts
+            """
+            y, z_dims = args
+            start = 0
+            result = []
+            for z in z_dims:
+                result.append(y[:,start:(start+z)])
+                start += z
+            return result
 
+        # --------- Build multiscale input
+        logger.info("Building multiscale input")
+        input_layer = keras.Input(shape=self._inputs_dims)
+        layer = keras.layers.Lambda(normalize, name="normalize")([
+            input_layer, self._min_value, self._max_value])
+
+        scales = []
         if self._training_noise_std is not None:
             if self._training_noise_std > 0.0:
                 layer = keras.layers.GaussianNoise(
@@ -110,88 +118,128 @@ class MultiscaleVAE:
 
         for i in range(self._levels):
             if i == self._levels - 1:
-                self._scales.append(layer)
+                scales.append(layer)
             else:
                 layer, up = self._downsample_upsample(
                     layer, prefix="du_" + str(i) + "_")
-                self._scales.append(up)
+                scales.append(up)
 
+        input_multiscale = keras.Model(inputs=input_layer,
+                                       outputs=scales,
+                                       name="input_multiscale")
         # --------- Create Encoder / Decoder
         self._mu = None
         self._log_var = None
-        self._decoders = []
-        self._encoders = []
+
         # --------- encoders
-        mu = []
-        log_var = []
+        logger.info("Building encoder")
+        encoders = []
         shapes_before_flattening = []
+
         for i in range(self._levels):
-            encoder, mu_log, shape_before_flattening = \
-                self._build_encoder(self._scales[i],
-                                    sample_stddev=std_value,
+            logger.info("Encoder scale [{0}]".format(i))
+            encoder_input = keras.Input(shape=K.int_shape(scales[i])[1:],
+                                        name="encoder_" + str(i) + "_input")
+            encoder_output, mu_log, shape = \
+                self._build_encoder(encoder_input,
+                                    sample_stddev=self._sample_std,
                                     z_dim=self._z_latent_dims[i],
                                     prefix="encoder_" + str(i) + "_")
-            mu.append(mu_log[0])
-            log_var.append(mu_log[1])
-            shapes_before_flattening.append(shape_before_flattening)
-            self._encoders.append(encoder)
-        # --------- concat all z-latent layers
-        self._z_latent_concat = \
-            keras.layers.Concatenate(axis=-1)(self._encoders)
-        self._mu = \
-            keras.layers.Concatenate(axis=-1, name="concat_mu")(mu)
-        self._log_var = \
-            keras.layers.Concatenate(axis=-1, name="concat_log_var")(log_var)
+            shapes_before_flattening.append(shape)
+            encoders.append(
+                keras.Model(inputs=encoder_input, outputs=[encoder_output,
+                                                           mu_log[0],
+                                                           mu_log[1]]))
+
         # --------- decoders
-        if self._share_z_space:
-            z_no_gradients = [K.stop_gradient(z) for z in self._encoders]
-            for i in range(self._levels):
-                # --------- get encodings of all
-                # except this one and stop gradients
-                # this way they can all share information on the z-space
-                z_tmp = z_no_gradients[:]
-                z_tmp[i] = self._encoders[i]
-                decoder = self._build_decoder(
-                        keras.layers.Concatenate()(z_tmp),
-                        target_shape=shapes_before_flattening[i],
-                        prefix="decoder_" + str(i) + "_")
-                self._decoders.append(decoder)
-        else:
-            for i in range(self._levels):
-                decoder = \
-                    self._build_decoder(
-                        self._encoders[i],
-                        target_shape=shapes_before_flattening[i],
-                        prefix="decoder_" + str(i) + "_")
-                self._decoders.append(decoder)
+        logger.info("Building decoder")
+        decoders = []
+        for i in range(self._levels):
+            logger.info("Decoder scale [{0}]".format(i))
+            decoder_input = keras.Input(shape=(self._z_latent_dims[i],),
+                                        name="decoder_" + str(i) + "_input")
+            decoder_output = \
+                self._build_decoder(
+                    decoder_input,
+                    target_shape=shapes_before_flattening[i],
+                    prefix="decoder_" + str(i) + "_")
+            decoders.append(
+                keras.Model(inputs=decoder_input, outputs=decoder_output))
+
         # --------- upsample and merge decoders
+        logger.info("Building merge decoder")
+        output_merge_inputs = [
+            keras.Input(shape=K.int_shape(scales[i])[1:])
+            for i in range(self._levels)
+        ]
         layer = None
+
         for i in range(self._levels-1, -1, -1):
             if i == self._levels - 1:
-                layer = self._decoders[i]
+                layer = output_merge_inputs[i]
             else:
                 x = keras.layers.UpSampling2D(
                     size=(2, 2),
                     interpolation="bilinear")(layer)
                 x = keras.layers.Add()(
-                    [x, self._decoders[i]])
+                    [x, output_merge_inputs[i]])
                 layer = x
+        # --- Bring bang to initial value range
+        x = keras.layers.Lambda(denormalize, name="denormalize")(
+            [x, self._min_value, self._max_value])
+        output_merge_inputs = keras.Model(inputs=output_merge_inputs,
+                                          outputs=x)
 
-        # -------- Bring bang to initial value range
-        x = keras.layers.Lambda(denormalize)([x, min_value, max_value])
-        self._result = keras.layers.Layer(name="output")(x)
+        # --------- build encoder model
+        logger.info("Building encoder model")
+        model_encoder_input = keras.Input(shape=self._inputs_dims,
+                                          name="input")
+        model_encoder_input_multiscale = input_multiscale(model_encoder_input)
+        model_encoder_scale = [
+            encoders[i](model_encoder_input_multiscale[i])[0]
+            for i in range(self._levels)
+        ]
+        model_encoder_output = keras.layers.Concatenate()(model_encoder_scale)
+        self._model_encoder = keras.Model(inputs=model_encoder_input,
+                                          outputs=model_encoder_output)
 
-        # --------- The end-to-end trainable model
-        self._model_trainable = keras.Model(self._input_layer,
-                                            self._result)
+        # # --------- build decoder model
+        logger.info("Building decoder model")
+        model_decoder_input = keras.Input(shape=(np.sum(self._z_latent_dims),),
+                                          name="input")
+        model_decoder_split = keras.layers.Lambda(split, name="split")(
+            [model_decoder_input, self._z_latent_dims])
+        model_decoder_decode = []
+        for i in range(self._levels):
+            decode = decoders[i](model_decoder_split[i])
+            model_decoder_decode.append(decode)
+        model_decoder_output = output_merge_inputs(model_decoder_decode)
+        self._model_decoder = keras.Model(inputs=model_decoder_input,
+                                          outputs=model_decoder_output)
 
-        # --------- The encoding model
-        self._model_encode = keras.Model(self._input_layer,
-                                         self._z_latent_concat)
+        # --------- build end-to-end trainable model
+        logger.info("Building end-to-end trainable model")
+        model_input = keras.Input(shape=self._inputs_dims, name="input")
+        model_input_multiscale = input_multiscale(model_input)
+        model_encode_decode = []
+        mu = []
+        log_var = []
+        for i in range(self._levels):
+            enc = encoders[i](model_input_multiscale[i])
+            encode = enc[0]
+            mu.append(enc[1])
+            log_var.append(enc[2])
+            decode = decoders[i](encode)
+            model_encode_decode.append(decode)
+        model_output = output_merge_inputs(model_encode_decode)
+        self._model_trainable = keras.Model(inputs=model_input,
+                                            outputs=model_output)
 
-        # # --------- The sample model
-        # self._model_sample = keras.Model(self._z_latent_no_random_concat,
-        #                                  self._result)
+        # --------- concat all z-latent layers
+        self._mu = \
+            keras.layers.Concatenate(axis=-1, name="mu")(mu)
+        self._log_var = \
+            keras.layers.Concatenate(axis=-1, name="log_var")(log_var)
 
     # ==========================================================================
 
@@ -229,22 +277,22 @@ class MultiscaleVAE:
                        prefix="encoder_"):
         """
         Creates an encoder block
+
         :param encoder_input:
         :param z_dim:
         :param prefix:
         :return:
         """
-        x = encoder_input
-
         # --------- Transforming here
         x = keras.layers.Conv2D(
             filters=self._conv_base_filters,
             kernel_size=(3, 3),
             strides=(1, 1),
             padding="same",
+            name=prefix + "conv_base",
             activation=self._conv_activation,
             kernel_regularizer=self._kernel_regularizer,
-            kernel_initializer=self._initialization_scheme)(x)
+            kernel_initializer=self._initialization_scheme)(encoder_input)
 
         # --------- Transforming here
         x = layer_blocks.basic_block(
@@ -256,6 +304,7 @@ class MultiscaleVAE:
             prefix=prefix,
             use_dropout=False,
             use_batchnorm=False)
+
         # --------- Keep shape before flattening
         shape_before_flattening = K.int_shape(x)[1:]
 
@@ -443,6 +492,14 @@ class MultiscaleVAE:
     # ==========================================================================
 
     @property
+    def encoder(self):
+        return self._model_encoder
+
+    @property
+    def decoder(self):
+        return self._model_decoder
+
+    @property
     def model_trainable(self):
         return self._model_trainable
 
@@ -455,13 +512,7 @@ class MultiscaleVAE:
         self._learning_rate = value
 
     # ==========================================================================
-    @property
-    def model_encode(self):
-        return self._model_encode
 
-    @property
-    def model_sample(self):
-        return self._model_sample
 
     def normalize(self, v):
         return (v - self._min_value) / (self._max_value - self._min_value)

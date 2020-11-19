@@ -81,12 +81,12 @@ with open("model_trainable.json", "w") as json_file:
     json_file.write(multiscale_vae.model_trainable.to_json())
 
 # serialize model to JSON
-with open("model_encode.json", "w") as json_file:
-    json_file.write(multiscale_vae.model_encode.to_json())
+with open("model_encoder.json", "w") as json_file:
+    json_file.write(multiscale_vae.encoder.to_json())
 
-# # serialize model to JSON
-# with open("model_sample.json", "w") as json_file:
-#     json_file.write(multiscale_vae.model_sample.to_json())
+# serialize model to JSON
+with open("model_decoder.json", "w") as json_file:
+    json_file.write(multiscale_vae.decoder.to_json())
 
 # ==============================================================================
 
