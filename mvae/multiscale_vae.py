@@ -258,6 +258,9 @@ class MultiscaleVAE:
 
         # --------- build end-to-end trainable model
         logger.info("Building end-to-end trainable model")
+        mu = []
+        log_var = []
+        model_encode_decode = []
         model_input = keras.Input(shape=self._inputs_dims, name="input")
         model_input_transform = input_transform(input_dims=self._inputs_dims,
                                                 levels=self._levels,
@@ -266,9 +269,7 @@ class MultiscaleVAE:
                                                 training_noise=self._training_noise_std,
                                                 training_dropout=self._training_dropout)
         model_input_multiscale = model_input_transform(model_input)
-        model_encode_decode = []
-        mu = []
-        log_var = []
+
         for i in range(self._levels):
             enc = encoders[i](model_input_multiscale[i])
             encode = enc[0]
@@ -450,9 +451,34 @@ class MultiscaleVAE:
 
         # --------- Define VAE reconstruction loss
         def vae_r_loss(y_true, y_pred):
-            tmp = K.abs(y_true - y_pred)
+            # focus on matching all pixels
+            tmp_pixels = K.abs(y_true - y_pred)
+            return K.mean(tmp_pixels, axis=[1, 2, 3])
 
-            return K.mean(tmp, axis=[1, 2, 3])
+        def vae_r_experimental_loss(y_true, y_pred):
+            d0 = int(self._inputs_dims[0] / 2)
+            d1 = int(self._inputs_dims[1] / 2)
+
+            # focus on matching all pixels
+            tmp_pixels = K.abs(y_true - y_pred)
+
+            # focus on matching channel mean
+            y_true_c = K.mean(y_true, axis=[1, 2])
+            y_pred_c = K.mean(y_pred, axis=[1, 2])
+            tmp_channels = K.abs(y_true_c - y_pred_c)
+
+            # focus on match channel mean on center
+            y_true_c1 = K.mean(
+                y_true[:, int(d0/2):int(d0*3/2), int(d1/2):int(d1*3/2), :],
+                axis=[1, 2])
+            y_pred_c1 = K.mean(
+                y_pred[:, int(d0/2):int(d0*3/2), int(d1/2):int(d1*3/2), :],
+                axis=[1, 2])
+            tmp_center_channels = K.abs(y_true_c1 - y_pred_c1)
+
+            return K.mean(tmp_pixels, axis=[1, 2, 3]) + \
+                   (K.mean(tmp_channels, axis=[1]) +
+                    K.mean(tmp_center_channels, axis=[1])) / 2.0
 
         # --------- Define KL loss for the latent space
         # (difference from normally distributed m=0, var=1)
@@ -464,7 +490,7 @@ class MultiscaleVAE:
         # --------- Define combined loss
         def vae_loss(y_true, y_pred):
             kl_loss = vae_kl_loss(y_true, y_pred)
-            r_loss = vae_r_loss(y_true, y_pred)
+            r_loss = vae_r_experimental_loss(y_true, y_pred)
             return (r_loss * r_loss_factor) + \
                    (kl_loss * kl_loss_factor)
 
