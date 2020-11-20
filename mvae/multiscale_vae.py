@@ -47,7 +47,6 @@ class MultiscaleVAE:
         # --------- Variable initialization
         self._name = "mvae"
         self._levels = levels
-        self._share_z_space = False
         self._conv_base_filters = 32
         self._conv_activation = "elu"
         self._z_latent_dims = z_dims
@@ -56,6 +55,7 @@ class MultiscaleVAE:
         self._decoder_config = decoder
         self._gaussian_kernel = (3, 3)
         self._gaussian_nsig = (2, 2)
+        self._training_dropout = 0.1
         self._training_noise_std = 1.0 / (max_value - min_value)
         self._compress_output = compress_output
         self._initialization_scheme = "glorot_normal"
@@ -65,6 +65,7 @@ class MultiscaleVAE:
         self._min_value = min_value
         self._max_value = max_value
         self._sample_std = sample_std
+        self._channels_index = channels_index
         self._build()
 
     # ==========================================================================
@@ -100,33 +101,64 @@ class MultiscaleVAE:
             start = 0
             result = []
             for z in z_dims:
-                result.append(y[:,start:(start+z)])
+                result.append(y[:, start:(start+z)])
                 start += z
             return result
 
         # --------- Build multiscale input
         logger.info("Building multiscale input")
-        input_layer = keras.Input(shape=self._inputs_dims)
-        layer = keras.layers.Lambda(normalize, name="normalize")([
-            input_layer, self._min_value, self._max_value])
 
-        scales = []
-        if self._training_noise_std is not None:
-            if self._training_noise_std > 0.0:
-                layer = keras.layers.GaussianNoise(
-                    self._training_noise_std)(layer)
+        def compute_scales(input_dims=self._inputs_dims,
+                           levels=self._inputs_dims):
+            result = []
+            for i in range(levels):
+                if i == 0:
+                    result.append(input_dims)
+                else:
+                    s = tuple()
+                    for j in range(len(result[i-1])):
+                        if j == self._channels_index:
+                            s += (result[i-1][j],)
+                        else:
+                            s += (int(result[i - 1][j]/2),)
+                    result.append(s)
+            for i in range(levels):
+                result[i] = result[i]
+            return result
 
-        for i in range(self._levels):
-            if i == self._levels - 1:
-                scales.append(layer)
-            else:
-                layer, up = self._downsample_upsample(
-                    layer, prefix="du_" + str(i) + "_")
-                scales.append(up)
+        def input_transform(input_dims=self._inputs_dims,
+                            levels=self._levels,
+                            min_value=self._min_value,
+                            max_value=self._max_value,
+                            training_noise=self._training_noise_std,
+                            training_dropout=self._training_dropout):
+            input_layer = keras.Input(shape=input_dims)
+            layer = keras.layers.Lambda(normalize, name="normalize")([
+                input_layer, min_value, max_value])
 
-        input_multiscale = keras.Model(inputs=input_layer,
-                                       outputs=scales,
-                                       name="input_multiscale")
+            if training_noise is not None:
+                if training_noise > 0.0:
+                    layer = keras.layers.GaussianNoise(
+                        training_noise)(layer)
+
+            if training_dropout is not None:
+                if training_dropout > 0.0:
+                    layer = keras.layers.SpatialDropout2D(
+                        training_dropout)(layer)
+
+            result = []
+            for i in range(levels):
+                if i == levels - 1:
+                    result.append(layer)
+                else:
+                    layer, up = self._downsample_upsample(
+                        layer, prefix="du_" + str(i) + "_")
+                    result.append(up)
+
+            return keras.Model(inputs=input_layer,
+                               outputs=result,
+                               name="multiscale")
+
         # --------- Create Encoder / Decoder
         self._mu = None
         self._log_var = None
@@ -135,10 +167,11 @@ class MultiscaleVAE:
         logger.info("Building encoder")
         encoders = []
         shapes_before_flattening = []
+        scales = compute_scales(self._inputs_dims, self._levels)
 
         for i in range(self._levels):
             logger.info("Encoder scale [{0}]".format(i))
-            encoder_input = keras.Input(shape=K.int_shape(scales[i])[1:],
+            encoder_input = keras.Input(shape=scales[i],
                                         name="encoder_" + str(i) + "_input")
             encoder_output, mu_log, shape = \
                 self._build_encoder(encoder_input,
@@ -169,7 +202,7 @@ class MultiscaleVAE:
         # --------- upsample and merge decoders
         logger.info("Building merge decoder")
         output_merge_inputs = [
-            keras.Input(shape=K.int_shape(scales[i])[1:])
+            keras.Input(shape=scales[i])
             for i in range(self._levels)
         ]
         layer = None
@@ -194,7 +227,13 @@ class MultiscaleVAE:
         logger.info("Building encoder model")
         model_encoder_input = keras.Input(shape=self._inputs_dims,
                                           name="input")
-        model_encoder_input_multiscale = input_multiscale(model_encoder_input)
+        input_transform_encoder = input_transform(input_dims=self._inputs_dims,
+                                                  levels=self._levels,
+                                                  min_value=self._min_value,
+                                                  max_value=self._max_value,
+                                                  training_noise=None,
+                                                  training_dropout=None)
+        model_encoder_input_multiscale = input_transform_encoder(model_encoder_input)
         model_encoder_scale = [
             encoders[i](model_encoder_input_multiscale[i])[0]
             for i in range(self._levels)
@@ -203,7 +242,7 @@ class MultiscaleVAE:
         self._model_encoder = keras.Model(inputs=model_encoder_input,
                                           outputs=model_encoder_output)
 
-        # # --------- build decoder model
+        # --------- build decoder model
         logger.info("Building decoder model")
         model_decoder_input = keras.Input(shape=(np.sum(self._z_latent_dims),),
                                           name="input")
@@ -220,7 +259,13 @@ class MultiscaleVAE:
         # --------- build end-to-end trainable model
         logger.info("Building end-to-end trainable model")
         model_input = keras.Input(shape=self._inputs_dims, name="input")
-        model_input_multiscale = input_multiscale(model_input)
+        model_input_transform = input_transform(input_dims=self._inputs_dims,
+                                                levels=self._levels,
+                                                min_value=self._min_value,
+                                                max_value=self._max_value,
+                                                training_noise=self._training_noise_std,
+                                                training_dropout=self._training_dropout)
+        model_input_multiscale = model_input_transform(model_input)
         model_encode_decode = []
         mu = []
         log_var = []
@@ -333,7 +378,8 @@ class MultiscaleVAE:
 
         return \
             keras.layers.Lambda(
-                sample, name=prefix + "_sample_output")([mu, log_var, sample_stddev]), \
+                sample, name=prefix + "_sample_output")(
+                [mu, log_var, sample_stddev]), \
             [mu, log_var], \
             shape_before_flattening
 
@@ -510,9 +556,6 @@ class MultiscaleVAE:
     @learning_rate.setter
     def learning_rate(self, value):
         self._learning_rate = value
-
-    # ==========================================================================
-
 
     def normalize(self, v):
         return (v - self._min_value) / (self._max_value - self._min_value)

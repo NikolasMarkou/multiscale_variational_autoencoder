@@ -3,7 +3,11 @@ import sys
 import mvae
 import numpy as np
 import tensorflow as tf
+from scipy import ndimage
 from keras.datasets import cifar10
+from mvae.custom_logger import logger
+
+# ==============================================================================
 
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
 tf.compat.v1.disable_eager_execution()
@@ -20,6 +24,7 @@ KL_LOSS_FACTOR = 1
 R_LOSS_FACTOR = 100
 LEARNING_RATE = 0.01
 PRINT_EVERY_N_BATCHES = 1000
+EXPAND_DATASET = True
 
 # run params
 SECTION = "vae"
@@ -28,6 +33,8 @@ BASE_DIR = "./run"
 DATA_NAME = "cifar10"
 BASE_DIR_SECTION = "{0}/{1}/".format(BASE_DIR, SECTION)
 RUN_FOLDER = BASE_DIR_SECTION + "_".join([RUN_ID, DATA_NAME])
+
+logger.info("Creating training directories")
 
 if not os.path.exists(BASE_DIR):
     os.mkdir(BASE_DIR)
@@ -47,15 +54,29 @@ for filename in os.listdir(images_directory):
     full_image_path = os.path.join(images_directory, filename)
     os.remove(full_image_path)
 
-mode = "build"
-
 # ==============================================================================
+
+logger.info("Loading and expanding dataset")
 
 (x_train, y_train), (x_test, y_test) = cifar10.load_data()
 x_train = x_train.astype("float32")
 x_test = x_test.astype("float32")
 
+if EXPAND_DATASET:
+    x_train_extra = np.ndarray(x_train.shape,
+                               dtype=np.float32)
+    no_training_samples = x_train.shape[0]
+
+    for i in range(no_training_samples):
+        if i % 100 == 0:
+            logger.info("Expanding [{0}/{1}]".format(i, no_training_samples))
+        sample = x_train[i, :, :, :]
+        x_train_extra[i, :, :, :] = ndimage.median_filter(sample, size=3)
+    x_train = np.concatenate([x_train, x_train_extra, x_test], axis=0)
+
 # ==============================================================================
+
+logger.info("Creating model")
 
 multiscale_vae = mvae.MultiscaleVAE(
     input_dims=(32, 32, 3),
@@ -89,6 +110,8 @@ with open("model_decoder.json", "w") as json_file:
     json_file.write(multiscale_vae.decoder.to_json())
 
 # ==============================================================================
+
+logger.info("Training model")
 
 multiscale_vae.train(
     x_train,
