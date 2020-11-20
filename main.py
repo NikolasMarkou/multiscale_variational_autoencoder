@@ -23,8 +23,8 @@ INITIAL_EPOCH = 0
 KL_LOSS_FACTOR = 1
 R_LOSS_FACTOR = 100
 LEARNING_RATE = 0.01
-PRINT_EVERY_N_BATCHES = 1000
 EXPAND_DATASET = True
+PRINT_EVERY_N_BATCHES = 1000
 
 # run params
 SECTION = "vae"
@@ -68,7 +68,7 @@ if EXPAND_DATASET:
     no_training_samples = x_train.shape[0]
 
     for i in range(no_training_samples):
-        if i % 100 == 0:
+        if i % 1000 == 0:
             logger.info("Expanding [{0}/{1}]".format(i, no_training_samples))
         sample = x_train[i, :, :, :]
         x_train_extra[i, :, :, :] = ndimage.median_filter(sample, size=3)
