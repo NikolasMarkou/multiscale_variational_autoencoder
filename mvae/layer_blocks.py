@@ -7,6 +7,64 @@ from .custom_logger import logger
 # ==============================================================================
 
 
+def excite_inhibit_block(input_layer,
+                         filters=32,
+                         kernel_size=[3, 3],
+                         channels_index=3,
+                         residual=True,
+                         prefix="excite_inhibit_"):
+    # -------- argument checking
+    if input_layer is None:
+        raise ValueError("input_layer cannot be empty")
+    # -------- infer shape
+    shape = K.int_shape(input_layer)
+    if len(shape) != 4:
+        raise ValueError("works only on 4d tensors")
+    channels = shape[channels_index]
+    # --------
+    kernel_regularizer = keras.regularizers.l1_l2(l1=0.75, l2=0.25)
+    initializer = keras.initializers.RandomUniform(minval=0.0, maxval=0.1, seed=None)
+    # -------- excite
+    x_e = keras.layers.Conv2D(
+        filters=filters,
+        kernel_size=kernel_size,
+        strides=(1, 1),
+        padding="same",
+        activation="relu",
+        name=prefix + "conv0_excite",
+        kernel_regularizer=kernel_regularizer,
+        kernel_initializer=initializer)(input_layer)
+    # -------- inhibit
+    x_i = keras.layers.Conv2D(
+        filters=filters,
+        kernel_size=kernel_size,
+        strides=(1, 1),
+        padding="same",
+        activation="relu",
+        name=prefix + "conv0_inhibit",
+        kernel_regularizer=kernel_regularizer,
+        kernel_initializer=initializer)(input_layer)
+    # -------- mix and apply non linearity
+    x = x_e - x_i
+    x = keras.layers.ReLU()(x)
+    # -------- bring back to original channels
+    if residual:
+        if channels != filters:
+            x = keras.layers.Conv2D(
+                    filters=channels,
+                    kernel_size=(1, 1),
+                    strides=(1, 1),
+                    padding="same",
+                    activation="linear",
+                    name=prefix + "conv1",
+                    kernel_regularizer=kernel_regularizer,
+                    kernel_initializer=initializer)(x)
+        x = x + input_layer
+    return x
+
+# ==============================================================================
+
+
 def squeeze_excite_block(input_layer,
                          squeeze_units=32,
                          initializer="glorot_normal",
@@ -503,13 +561,14 @@ def basic_block(input_layer,
                     kernel_initializer=initializer,
                     kernel_regularizer=regularizer)(x)
 
-        x = mobilenetV3_block(
-            x,
-            filters=filters[i],
-            activation="relu",
-            initializer=initializer,
-            regularizer=regularizer,
-            prefix=prefix_i + "mobilenetV3_")
+        x = excite_inhibit_block(x, filters[i], prefix=prefix_i + "excite_inhibit_")
+        # x = mobilenetV3_block(
+        #     x,
+        #     filters=filters[i],
+        #     activation="relu",
+        #     initializer=initializer,
+        #     regularizer=regularizer,
+        #     prefix=prefix_i + "mobilenetV3_")
 
         if use_dropout:
             x = keras.layers.Dropout(rate=0.1)(x)
