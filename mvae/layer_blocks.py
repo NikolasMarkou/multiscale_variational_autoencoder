@@ -1,66 +1,241 @@
 import keras
 import numpy as np
-import scipy.stats as st
 from keras import backend as K
 from .custom_logger import logger
+
+DEFAULT_CHANNEL_INDEX = 3
+DEFAULT_ATTENUATION_MULTIPLIER = 4.0
+DEFAULT_KERNEL_REGULARIZER = "l1"
+DEFAULT_KERNEL_INITIALIZER = "glorot_normal"
+
 
 # ==============================================================================
 
 
-def excite_inhibit_block(input_layer,
-                         filters=32,
-                         kernel_size=[3, 3],
-                         channels_index=3,
-                         residual=True,
-                         prefix="excite_inhibit_"):
-    # -------- argument checking
+def attenuate_activation(
+        input_layer,
+        multiplier: float = DEFAULT_ATTENUATION_MULTIPLIER):
+    """
+    Transform an input to [0, 1] range
+    """
+    return (keras.activations.tanh(input_layer * multiplier) + 1.0) / 2.0
+
+
+# ==============================================================================
+
+
+def excite_inhibit_spatial_mask_block(
+        input_layer,
+        filters: int = 32,
+        kernel_size=(3, 3),
+        flatten: bool = False,
+        add_batchnorm: bool = False,
+        first_level_activation: str = "relu",
+        second_level_activation: str = "sigmoid",
+        multiplier: float = DEFAULT_ATTENUATION_MULTIPLIER,
+        kernel_regularizer: str = DEFAULT_KERNEL_REGULARIZER,
+        kernel_initializer: str = DEFAULT_KERNEL_INITIALIZER,
+        channels_index: int = DEFAULT_CHANNEL_INDEX):
+    """
+    Compute a channel a differentiable spatial mask for the input layer
+    """
+    # --- argument checking
     if input_layer is None:
         raise ValueError("input_layer cannot be empty")
-    # -------- infer shape
+
+    # --- infer shape
+    shape = K.int_shape(input_layer)
+    if len(shape) != 4:
+        raise ValueError("works only on 4d tensors")
+
+    if flatten:
+        channels = 1
+    else:
+        channels = shape[channels_index]
+
+    # --- initialize parameters
+    first_level_params = dict(
+        filters=filters,
+        kernel_size=kernel_size,
+        strides=(1, 1),
+        padding="same",
+        activation=first_level_activation,
+        kernel_regularizer=kernel_regularizer,
+        kernel_initializer=kernel_initializer
+    )
+
+    second_level_params = dict(
+        filters=channels,
+        kernel_size=(1, 1),
+        strides=(1, 1),
+        padding="same",
+        activation=second_level_activation,
+        kernel_regularizer=kernel_regularizer,
+        kernel_initializer=kernel_initializer
+    )
+
+    # --- excite
+    x_e = keras.layers.Conv2D(**first_level_params)(input_layer)
+    if add_batchnorm:
+        x_e = keras.layers.BatchNormalization()(x_e)
+    x_e = keras.layers.Conv2D(**second_level_params)(x_e)
+
+    # --- inhibit
+    x_i = keras.layers.Conv2D(**first_level_params)(input_layer)
+    if add_batchnorm:
+        x_i = keras.layers.BatchNormalization()(x_i)
+    x_i = keras.layers.Conv2D(**second_level_params)(x_i)
+
+    # --- excite vs inhibit, then attenuate
+    x = x_e - x_i
+    return attenuate_activation(x, multiplier=multiplier)
+
+
+# ==============================================================================
+
+
+def excite_inhibit_channel_mask_block(
+        input_layer,
+        filters: int = 32,
+        kernel_size=(3, 3),
+        shared: bool = True,
+        add_batchnorm: bool = False,
+        first_level_activation: str = "linear",
+        second_level_activation: str = "sigmoid",
+        multiplier: float = DEFAULT_ATTENUATION_MULTIPLIER,
+        kernel_regularizer: str = DEFAULT_KERNEL_REGULARIZER,
+        kernel_initializer: str = DEFAULT_KERNEL_INITIALIZER,
+        channels_index: int = DEFAULT_CHANNEL_INDEX):
+    """
+    Compute a channel a differentiable channel mask for the input layer
+    """
+    # --- argument checking
+    if input_layer is None:
+        raise ValueError("input_layer cannot be empty")
+
+    # --- infer shape
+    shape = K.int_shape(input_layer)
+    if len(shape) != 4:
+        raise ValueError("works only on 4d tensors")
+
+    channels = shape[channels_index]
+
+    # --- initialize parameters
+    first_level_params = dict(
+        strides=(1, 1),
+        padding="same",
+        filters=filters,
+        kernel_size=kernel_size,
+        activation=first_level_activation,
+        kernel_regularizer=kernel_regularizer,
+        kernel_initializer=kernel_initializer
+    )
+
+    second_level_params = dict(
+        units=channels,
+        activation=second_level_activation,
+        kernel_regularizer=kernel_regularizer,
+        kernel_initializer=kernel_initializer
+    )
+
+    if shared:
+        # --- compute shared
+        x = keras.layers.Conv2D(**first_level_params)(input_layer)
+        x = keras.layers.GlobalMaxPool2D()(x)
+        if add_batchnorm:
+            x = keras.layers.BatchNormalization()(x)
+
+        # --- excite
+        x_e = keras.layers.Dense(**second_level_params)(x)
+
+        # --- inhibit
+        x_i = keras.layers.Dense(**second_level_params)(x)
+    else:
+        # --- excite
+        x_e = keras.layers.Conv2D(**first_level_params)(input_layer)
+        x_e = keras.layers.GlobalMaxPool2D()(x_e)
+        if add_batchnorm:
+            x_e = keras.layers.BatchNormalization()(x_e)
+        x_e = keras.layers.Dense(**second_level_params)(x_e)
+
+        # --- inhibit
+        x_i = keras.layers.Conv2D(**first_level_params)(input_layer)
+        x_i = keras.layers.GlobalMaxPool2D()(x_i)
+        if add_batchnorm:
+            x_i = keras.layers.BatchNormalization()(x_i)
+        x_i = keras.layers.Dense(**second_level_params)(x_i)
+
+    # --- excite vs inhibit, then attenuate
+    x = x_e - x_i
+
+    return attenuate_activation(x, multiplier=multiplier)
+
+
+# ==============================================================================
+
+
+def excite_inhibit_block(
+        input_layer,
+        filters: int = 32,
+        kernel_size=(3, 3),
+        kernel_regularizer: str = DEFAULT_KERNEL_REGULARIZER,
+        kernel_initializer: str = DEFAULT_KERNEL_INITIALIZER,
+        channels_index: int = DEFAULT_CHANNEL_INDEX):
+    # --- infer shape
     shape = K.int_shape(input_layer)
     if len(shape) != 4:
         raise ValueError("works only on 4d tensors")
     channels = shape[channels_index]
-    # --------
-    kernel_regularizer = keras.regularizers.l1_l2(l1=0.75, l2=0.25)
-    initializer = keras.initializers.RandomUniform(minval=0.0, maxval=0.1, seed=None)
-    # -------- excite
-    x_e = keras.layers.Conv2D(
-        filters=filters,
-        kernel_size=kernel_size,
-        strides=(1, 1),
-        padding="same",
-        activation="relu",
-        name=prefix + "conv0_excite",
-        kernel_regularizer=kernel_regularizer,
-        kernel_initializer=initializer)(input_layer)
-    # -------- inhibit
-    x_i = keras.layers.Conv2D(
-        filters=filters,
-        kernel_size=kernel_size,
-        strides=(1, 1),
-        padding="same",
-        activation="relu",
-        name=prefix + "conv0_inhibit",
-        kernel_regularizer=kernel_regularizer,
-        kernel_initializer=initializer)(input_layer)
-    # -------- mix and apply non linearity
-    x = x_e - x_i
-    x = keras.layers.ReLU()(x)
-    # -------- bring back to original channels
-    if residual:
-        if channels != filters:
-            x = keras.layers.Conv2D(
-                    filters=channels,
-                    kernel_size=(1, 1),
-                    strides=(1, 1),
-                    padding="same",
-                    activation="linear",
-                    name=prefix + "conv1",
-                    kernel_regularizer=kernel_regularizer,
-                    kernel_initializer=initializer)(x)
-        x = x + input_layer
+
+    # --- create spatial and channel mask
+    spatial_mask = \
+        excite_inhibit_spatial_mask_block(
+            input_layer=input_layer,
+            filters=filters,
+            kernel_size=kernel_size,
+            channels_index=channels_index)
+
+    channel_mask = \
+        excite_inhibit_channel_mask_block(
+            input_layer=input_layer,
+            filters=filters,
+            kernel_size=kernel_size,
+            channels_index=channels_index)
+
+    masked_input = \
+        keras.layers.Multiply()([input_layer, spatial_mask])
+
+    masked_input = \
+        keras.layers.Multiply()([masked_input, channel_mask])
+
+    # --- operate on input
+    x = \
+        keras.layers.Conv2D(
+            filters=filters,
+            kernel_size=kernel_size,
+            strides=(1, 1),
+            padding="same",
+            activation="relu",
+            kernel_regularizer=kernel_regularizer,
+            kernel_initializer=kernel_initializer)(masked_input)
+
+    # --- bring back to original channels
+    x = \
+        keras.layers.Conv2D(
+            filters=channels,
+            kernel_size=(1, 1),
+            strides=(1, 1),
+            padding="same",
+            activation="linear",
+            kernel_regularizer=kernel_regularizer,
+            kernel_initializer=kernel_initializer)(x)
+
+    # --- mask output
+    x = \
+        keras.layers.Multiply()([spatial_mask, x])
+
     return x
+
 
 # ==============================================================================
 
@@ -69,9 +244,9 @@ def squeeze_excite_block(input_layer,
                          squeeze_units=32,
                          initializer="glorot_normal",
                          regularizer=None,
-                         channels_index=3,
-                         prefix="squeeze_excite_"):
-    # -------- argument checking
+                         prefix="squeeze_excite_",
+                         channels_index: int = DEFAULT_CHANNEL_INDEX):
+    # --- argument checking
     if input_layer is None:
         raise ValueError("input_layer cannot be empty")
     if squeeze_units <= 0:
@@ -80,7 +255,7 @@ def squeeze_excite_block(input_layer,
     if len(shape) != 4:
         raise ValueError("works only on 4d tensors")
     channels = shape[channels_index]
-    # -------- squeeze
+    # --- squeeze
     x = keras.layers.GlobalMaxPool2D(
         name=prefix + "max_pool")(input_layer)
     x = keras.layers.Dense(
@@ -95,10 +270,11 @@ def squeeze_excite_block(input_layer,
         activation="hard_sigmoid",
         kernel_regularizer=regularizer,
         kernel_initializer=initializer)(x)
-    # -------- scale input
+    # --- scale input
     x = keras.layers.Multiply(
         name=prefix + "multiply")([x, input_layer])
     return x
+
 
 # ==============================================================================
 
@@ -108,9 +284,9 @@ def mobilenetV2_block(input_layer,
                       initializer="glorot_normal",
                       regularizer=None,
                       prefix="mobilenetV2_",
-                      channels_index=3,
                       dropout_ratio=None,
-                      use_batchnorm=False):
+                      use_batchnorm=False,
+                      channels_index: int = DEFAULT_CHANNEL_INDEX):
     """
     Build a mobilenet V2 bottleneck with residual block
     :param input_layer:
@@ -123,7 +299,7 @@ def mobilenetV2_block(input_layer,
     :param dropout_ratio:
     :return: mobilenet V2 bottleneck with residual block
     """
-    # -------- argument checking
+    # --- argument checking
     if input_layer is None:
         raise ValueError("input_layer cannot be empty")
     if filters <= 0:
@@ -131,7 +307,7 @@ def mobilenetV2_block(input_layer,
     if dropout_ratio is not None:
         if dropout_ratio > 1.0 or dropout_ratio < 0.0:
             raise ValueError("Dropout ration must be [0, 1]")
-    # -------- build block
+    # --- build block
     previous_no_filters = K.int_shape(input_layer)[channels_index]
 
     x = keras.layers.Conv2D(
@@ -172,7 +348,7 @@ def mobilenetV2_block(input_layer,
         x = keras.layers.BatchNormalization(
             name=prefix + "batchnorm1")(x)
 
-    # -------- build skip layer and main
+    # --- build skip layer and main
     x = keras.layers.Add(name=prefix + "add")([
         x,
         input_layer
@@ -186,21 +362,24 @@ def mobilenetV2_block(input_layer,
 
     return x
 
+
 # ==============================================================================
 
 
-def mobilenetV3_block(input_layer,
-                      filters=32,
-                      squeeze_dim=4,
-                      initializer="glorot_normal",
-                      regularizer=None,
-                      prefix="mobilenetV3_",
-                      activation="relu",
-                      channels_index=3,
-                      dropout_ratio=None,
-                      use_batchnorm=False):
+def mobilenetV3_block(
+        input_layer,
+        filters=32,
+        squeeze_dim=4,
+        initializer="glorot_normal",
+        regularizer=None,
+        prefix="mobilenetV3_",
+        activation="relu",
+        dropout_ratio=None,
+        use_batchnorm: bool = False,
+        channels_index: int = DEFAULT_CHANNEL_INDEX):
     """
     Build a mobilenet V3 block is bottleneck with residual + squeeze and excite
+
     :param input_layer:
     :param filters:
     :param initializer:
@@ -211,9 +390,10 @@ def mobilenetV3_block(input_layer,
     :param channels_index:
     :param use_batchnorm:
     :param dropout_ratio:
+
     :return: mobilenet V3 block
     """
-    # -------- argument checking
+    # --- argument checking
     if input_layer is None:
         raise ValueError("input_layer cannot be empty")
     if filters <= 0:
@@ -221,12 +401,12 @@ def mobilenetV3_block(input_layer,
     if dropout_ratio is not None:
         if dropout_ratio > 1.0 or dropout_ratio < 0.0:
             raise ValueError("Dropout ration must be [0, 1]")
-    # -------- build block
+    # --- build block
     previous_no_filters = K.int_shape(input_layer)[channels_index]
 
     x = keras.layers.Conv2D(
         filters=filters,
-        kernel_size=[1, 1],
+        kernel_size=(1, 1),
         strides=(1, 1),
         padding="same",
         activation=activation,
@@ -236,7 +416,7 @@ def mobilenetV3_block(input_layer,
 
     x = keras.layers.DepthwiseConv2D(
         depth_multiplier=1,
-        kernel_size=[3, 3],
+        kernel_size=(3, 3),
         strides=(1, 1),
         padding="same",
         activation=activation,
@@ -250,27 +430,31 @@ def mobilenetV3_block(input_layer,
         x = keras.layers.BatchNormalization(
             name=prefix + "batchnorm0")(x)
 
-    x = squeeze_excite_block(x,
-                             squeeze_units=squeeze_dim,
-                             regularizer=regularizer,
-                             initializer=initializer,
-                             prefix=prefix + "squeeze_excite_")
+    x = \
+        squeeze_excite_block(
+            x,
+            squeeze_units=squeeze_dim,
+            regularizer=regularizer,
+            initializer=initializer,
+            prefix=prefix + "squeeze_excite_")
 
-    x = keras.layers.Conv2D(
-        filters=previous_no_filters,
-        kernel_size=[1, 1],
-        strides=(1, 1),
-        padding="same",
-        activation="linear",
-        name=prefix + "conv2",
-        kernel_regularizer=regularizer,
-        kernel_initializer=initializer)(x)
+    x = \
+        keras.layers.Conv2D(
+            filters=previous_no_filters,
+            kernel_size=(1, 1),
+            strides=(1, 1),
+            padding="same",
+            activation="linear",
+            name=prefix + "conv2",
+            kernel_regularizer=regularizer,
+            kernel_initializer=initializer)(x)
 
-    # -------- build skip layer and main
-    x = keras.layers.Add(name=prefix + "add")([
-        x,
-        input_layer
-    ])
+    # --- build skip layer and main
+    x = \
+        keras.layers.Add(name=prefix + "add")([
+            x,
+            input_layer
+        ])
 
     if dropout_ratio is not None:
         if dropout_ratio > 0.0:
@@ -280,16 +464,18 @@ def mobilenetV3_block(input_layer,
 
     return x
 
+
 # ==============================================================================
 
 
-def attention_block(input_layer,
-                    filters=32,
-                    kernel_size=[1, 1],
-                    activation="linear",
-                    initializer="glorot_normal",
-                    regularizer=None,
-                    prefix="attention_"):
+def attention_block(
+        input_layer,
+        filters=32,
+        kernel_size=(1, 1),
+        activation="linear",
+        initializer="glorot_normal",
+        regularizer=None,
+        prefix="attention_"):
     """
     Builds a attention block
     :param input_layer:
@@ -301,6 +487,7 @@ def attention_block(input_layer,
     :param prefix:
     :return:
     """
+    # --- argument checking
     if input_layer is None:
         raise ValueError("input_layer cannot be empty")
     shape = K.int_shape(input_layer)
@@ -310,7 +497,8 @@ def attention_block(input_layer,
         raise ValueError("Filters should be > 0")
     padding = "same"
     strides = (1, 1)
-    # -------- theta, phi, g
+
+    # --- theta, phi, g
     theta = keras.layers.Conv2D(
         filters=filters,
         kernel_size=kernel_size,
@@ -338,7 +526,8 @@ def attention_block(input_layer,
         name=prefix + "g",
         kernel_regularizer=regularizer,
         kernel_initializer=initializer)(input_layer)
-    # -------- build block
+
+    # --- build block
     h_x_w = np.prod(shape[1:3])
     new_shape = (h_x_w, filters)
     theta_flat = keras.layers.Reshape(new_shape)(theta)
@@ -347,24 +536,27 @@ def attention_block(input_layer,
     theta_x_phi = keras.layers.Dot(axes=(1, 2))([theta_flat, phi_flat])
     theta_x_phi = keras.layers.Softmax()(theta_x_phi)
     g_flat = keras.layers.Reshape(new_shape)(g)
-    # -------- multiply with attention map
+
+    # --- multiply with attention map
     theta_x_phi_xg = keras.layers.Dot(axes=(1, 2))([theta_x_phi, g_flat])
     theta_x_phi_xg = keras.layers.Reshape(
         (shape[1:3] + (filters,)))(theta_x_phi_xg)
 
     return theta_x_phi_xg
 
+
 # ==============================================================================
 
 
-def self_attention_block(input_layer,
-                         filters=32,
-                         kernel_size=[1, 1],
-                         activation="linear",
-                         initializer="glorot_normal",
-                         regularizer=None,
-                         prefix="self_attention_",
-                         channels_index=3):
+def self_attention_block(
+        input_layer,
+        filters=32,
+        kernel_size=[1, 1],
+        activation="linear",
+        initializer="glorot_normal",
+        regularizer=None,
+        prefix="self_attention_",
+        channels_index: int = DEFAULT_CHANNEL_INDEX):
     """
     Builds a self-attention block, attention block plus residual skip
     :param input_layer:
@@ -372,47 +564,56 @@ def self_attention_block(input_layer,
     :param kernel_size:
     :param activation:
     :param initializer:
+    :param regularizer:
     :param prefix:
     :param channels_index:
     :return:
     """
-    # -------- argument checking
-    attention = attention_block(input_layer=input_layer,
-                                filters=filters,
-                                kernel_size=kernel_size,
-                                activation=activation,
-                                initializer=initializer,
-                                regularizer=regularizer,
-                                prefix=prefix)
-    # -------- convolve to match output channels
+
     shape = K.int_shape(input_layer)
     previous_no_filters = shape[channels_index]
-    attention = keras.layers.Conv2D(
-        filters=previous_no_filters,
-        kernel_size=kernel_size,
-        strides=(1, 1),
-        padding="same",
-        activation=activation,
-        name=prefix + "result",
-        kernel_regularizer=regularizer,
-        kernel_initializer=initializer)(attention)
-    # -------- residual connection with input
+
+    # --- build attention block
+    attention = \
+        attention_block(
+            input_layer=input_layer,
+            filters=filters,
+            kernel_size=kernel_size,
+            activation=activation,
+            initializer=initializer,
+            regularizer=regularizer,
+            prefix=prefix)
+
+    # --- convolve to match output channels
+    attention = \
+        keras.layers.Conv2D(
+            filters=previous_no_filters,
+            kernel_size=kernel_size,
+            strides=(1, 1),
+            padding="same",
+            activation=activation,
+            name=prefix + "result",
+            kernel_regularizer=regularizer,
+            kernel_initializer=initializer)(attention)
+
+    # --- residual connection with input
     return keras.layers.Add()([attention, input_layer])
 
 
 # ==============================================================================
 
 
-def resnet_block(input_layer,
-                 filters=32,
-                 kernel_size=[3, 3],
-                 activation="relu",
-                 initializer="glorot_normal",
-                 regularizer=None,
-                 prefix="resnet_",
-                 channels_index=3,
-                 dropout_ratio=None,
-                 use_batchnorm=False):
+def resnet_block(
+        input_layer,
+        filters=32,
+        kernel_size=(3, 3),
+        activation="relu",
+        initializer="glorot_normal",
+        regularizer=None,
+        prefix="resnet_",
+        dropout_ratio=None,
+        use_batchnorm=False,
+        channels_index: int = DEFAULT_CHANNEL_INDEX):
     """
     Build a resnet block
     :param input_layer:
@@ -420,13 +621,14 @@ def resnet_block(input_layer,
     :param kernel_size:
     :param activation:
     :param initializer:
+    :param regularizer:
     :param prefix:
     :param channels_index:
     :param use_batchnorm:
     :param dropout_ratio:
     :return: Resnet block
     """
-    # -------- argument checking
+    # --- argument checking
     if input_layer is None:
         raise ValueError("input_layer cannot be empty")
     if filters <= 0:
@@ -435,7 +637,8 @@ def resnet_block(input_layer,
         if dropout_ratio > 1.0 or dropout_ratio < 0.0:
             raise ValueError("Dropout ration must be [0, 1]")
     strides = (1, 1)
-    # -------- build block
+
+    # --- build block
     previous_no_filters = K.int_shape(input_layer)[channels_index]
 
     x = keras.layers.Conv2D(
@@ -459,7 +662,9 @@ def resnet_block(input_layer,
         kernel_initializer=initializer)(x)
 
     if previous_no_filters == filters:
-        tmp_layer = keras.layers.Layer(name=prefix + "skip")(input_layer)
+        tmp_layer = \
+            keras.layers.Layer(
+                name=prefix + "skip")(input_layer)
     else:
         tmp_layer = keras.layers.Conv2D(
             filters=filters,
@@ -471,7 +676,7 @@ def resnet_block(input_layer,
             kernel_regularizer=regularizer,
             kernel_initializer=initializer)(input_layer)
 
-    # -------- build skip layer and main
+    # --- build skip layer and main
     x = keras.layers.Add(name=prefix + "add")([
         x,
         tmp_layer
@@ -497,16 +702,17 @@ def resnet_block(input_layer,
 # ==============================================================================
 
 
-def basic_block(input_layer,
-                block_type="encoder",
-                filters=[64],
-                kernel_size=[(3, 3)],
-                strides=[(1, 1)],
-                initializer="glorot_normal",
-                regularizer=None,
-                use_batchnorm=False,
-                use_dropout=False,
-                prefix="block_",):
+def basic_block(
+        input_layer,
+        block_type="encoder",
+        filters=[64],
+        kernel_size=[(3, 3)],
+        strides=[(1, 1)],
+        initializer="glorot_normal",
+        regularizer=None,
+        use_batchnorm=False,
+        use_dropout=False,
+        prefix="block_", ):
     """
 
     :param input_layer:
@@ -561,14 +767,18 @@ def basic_block(input_layer,
                     kernel_initializer=initializer,
                     kernel_regularizer=regularizer)(x)
 
-        x = excite_inhibit_block(x, filters[i], prefix=prefix_i + "excite_inhibit_")
-        # x = mobilenetV3_block(
-        #     x,
-        #     filters=filters[i],
-        #     activation="relu",
-        #     initializer=initializer,
-        #     regularizer=regularizer,
-        #     prefix=prefix_i + "mobilenetV3_")
+        # x = \
+        #     excite_inhibit_block(
+        #         x,
+        #         filters[i])
+        x = \
+            mobilenetV3_block(
+                x,
+                filters=filters[i],
+                activation="relu",
+                initializer=initializer,
+                regularizer=regularizer,
+                prefix=prefix_i + "mobilenetV3_")
 
         if use_dropout:
             x = keras.layers.Dropout(rate=0.1)(x)
@@ -584,7 +794,10 @@ def basic_block(input_layer,
 
 # ==============================================================================
 
-def gaussian_kernel(size, nsig):
+
+def gaussian_kernel(
+        size,
+        nsig):
     """
     Returns a 2D Gaussian kernel array
     """
@@ -604,18 +817,20 @@ def gaussian_kernel(size, nsig):
     kernel = g / g.sum()
     return kernel
 
+
 # ==============================================================================
 
 
-def gaussian_filter_block(input_layer,
-                          kernel_size=3,
-                          strides=(1, 1),
-                          dilation_rate=(1, 1),
-                          padding="same",
-                          xy_max=(1.5, 1.5),
-                          activation=None,
-                          trainable=False,
-                          use_bias=False):
+def gaussian_filter_block(
+        input_layer,
+        kernel_size=3,
+        strides=(1, 1),
+        dilation_rate=(1, 1),
+        padding="same",
+        xy_max=(1.5, 1.5),
+        activation=None,
+        trainable=False,
+        use_bias=False):
     """
     Build a gaussian filter block
     :param input_layer:

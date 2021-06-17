@@ -48,7 +48,7 @@ class MultiscaleVAE:
         self._name = "mvae"
         self._levels = levels
         self._conv_base_filters = 32
-        self._conv_activation = "elu"
+        self._conv_activation = "relu"
         self._z_latent_dims = z_dims
         self._inputs_dims = input_dims
         self._encoder_config = encoder
@@ -417,8 +417,7 @@ class MultiscaleVAE:
             prefix=prefix)
 
         # -------- Add batchnorm to boost signal
-        x = keras.layers.BatchNormalization(momentum=0.999,
-                                            epsilon=0.0001)(x)
+        x = keras.layers.BatchNormalization()(x)
 
         # -------- Match target channels
         x = keras.layers.Conv2D(
@@ -453,12 +452,9 @@ class MultiscaleVAE:
         def vae_r_loss(y_true, y_pred):
             # focus on matching all pixels
             tmp_pixels = K.abs(y_true - y_pred)
-            return K.mean(tmp_pixels, axis=[1, 2, 3])
+            return K.mean(tmp_pixels)
 
         def vae_r_experimental_loss(y_true, y_pred):
-            d0 = int(self._inputs_dims[0] / 2)
-            d1 = int(self._inputs_dims[1] / 2)
-
             # focus on matching all pixels
             tmp_pixels = K.abs(y_true - y_pred)
 
@@ -467,18 +463,8 @@ class MultiscaleVAE:
             y_pred_c = K.mean(y_pred, axis=[1, 2])
             tmp_channels = K.abs(y_true_c - y_pred_c)
 
-            # focus on match channel mean on center
-            y_true_c1 = K.mean(
-                y_true[:, int(d0/2):int(d0*3/2), int(d1/2):int(d1*3/2), :],
-                axis=[1, 2])
-            y_pred_c1 = K.mean(
-                y_pred[:, int(d0/2):int(d0*3/2), int(d1/2):int(d1*3/2), :],
-                axis=[1, 2])
-            tmp_center_channels = K.abs(y_true_c1 - y_pred_c1)
-
             return K.mean(tmp_pixels, axis=[1, 2, 3]) + \
-                   (K.mean(tmp_channels, axis=[1]) +
-                    K.mean(tmp_center_channels, axis=[1])) / 2.0
+                   K.mean(tmp_channels, axis=[1])
 
         # --------- Define KL loss for the latent space
         # (difference from normally distributed m=0, var=1)

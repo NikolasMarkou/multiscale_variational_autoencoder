@@ -1,5 +1,4 @@
 import os
-import sys
 import mvae
 import numpy as np
 import tensorflow as tf
@@ -20,8 +19,8 @@ STEP_SIZE = 30
 LR_DECAY = 0.5
 BATCH_SIZE = 32
 INITIAL_EPOCH = 0
-KL_LOSS_FACTOR = 1
-R_LOSS_FACTOR = 100
+KL_LOSS_FACTOR = 0.01
+R_LOSS_FACTOR = 1
 LEARNING_RATE = 0.01
 EXPAND_DATASET = False
 PRINT_EVERY_N_BATCHES = 1000
@@ -80,7 +79,7 @@ logger.info("Creating model")
 
 multiscale_vae = mvae.MultiscaleVAE(
     input_dims=(32, 32, 3),
-    z_dims=[128, 128, 128, 128],
+    z_dims=[32, 32],
     encoder={
         "filters": [32, 64, 32],
         "kernel_size": [(3, 3), (3, 3), (3, 3)],
