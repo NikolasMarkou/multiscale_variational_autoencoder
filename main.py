@@ -81,9 +81,9 @@ multiscale_vae = mvae.MultiscaleVAE(
     input_dims=(32, 32, 3),
     z_dims=[32, 32],
     encoder={
-        "filters": [32, 64, 32],
+        "filters": [32, 64, 64],
         "kernel_size": [(3, 3), (3, 3), (3, 3)],
-        "strides": [(1, 1), (2, 2), (1, 1)]
+        "strides": [(1, 1), (2, 2), (2, 2)]
     },
     min_value=0.0,
     max_value=255.0)

@@ -760,28 +760,22 @@ def basic_block(
 
     for i in range(len(filters)):
         prefix_i = prefix + str(i) + "_"
+        params = dict(
+            padding=padding,
+            strides=strides[i],
+            filters=filters[i],
+            activation=activation,
+            kernel_size=kernel_size[i],
+            kernel_initializer=initializer,
+            kernel_regularizer=regularizer)
 
         # --- handle subsampling and change in the number of filters
         if strides[i][0] != 1 or strides[i][1] != 1 or \
                 filters[i] != previous_no_filters:
             if block_type == "encoder":
-                x = keras.layers.Conv2D(
-                    filters=filters[i],
-                    kernel_size=(3, 3),
-                    strides=strides[i],
-                    padding=padding,
-                    activation=activation,
-                    kernel_initializer=initializer,
-                    kernel_regularizer=regularizer)(x)
+                x = keras.layers.Conv2D(**params)(x)
             elif block_type == "decoder":
-                x = keras.layers.Conv2DTranspose(
-                    filters=filters[i],
-                    kernel_size=(3, 3),
-                    strides=strides[i],
-                    padding=padding,
-                    activation=activation,
-                    kernel_initializer=initializer,
-                    kernel_regularizer=regularizer)(x)
+                x = keras.layers.Conv2DTranspose(**params)(x)
 
         # x = \
         #     excite_inhibit_block(
@@ -848,7 +842,9 @@ def gaussian_filter_block(
         trainable=False,
         use_bias=False):
     """
-    Build a gaussian filter block
+    Build a gaussian filter block as non trainable Depthwise
+    convolution filter with fixed weights
+
     :param input_layer:
     :param kernel_size:
     :param activation:
@@ -861,7 +857,7 @@ def gaussian_filter_block(
     :return:
     """
 
-    # Initialise to set kernel to required value
+    # --- initialise to set kernel to required value
     def kernel_init(shape, dtype):
         kernel = np.zeros(shape)
         kernel[:, :, 0, 0] = \
@@ -870,16 +866,17 @@ def gaussian_filter_block(
                 xy_max)
         return kernel
 
-    return keras.layers.DepthwiseConv2D(
-        kernel_size=kernel_size,
-        strides=strides,
-        padding=padding,
-        depth_multiplier=1,
-        dilation_rate=dilation_rate,
-        activation=activation,
-        use_bias=use_bias,
-        trainable=trainable,
-        depthwise_initializer=kernel_init,
-        kernel_initializer=kernel_init)(input_layer)
+    return \
+        keras.layers.DepthwiseConv2D(
+            kernel_size=kernel_size,
+            strides=strides,
+            padding=padding,
+            depth_multiplier=1,
+            dilation_rate=dilation_rate,
+            activation=activation,
+            use_bias=use_bias,
+            trainable=trainable,
+            depthwise_initializer=kernel_init,
+            kernel_initializer=kernel_init)(input_layer)
 
 # ==============================================================================
