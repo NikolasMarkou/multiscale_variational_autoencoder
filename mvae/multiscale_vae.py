@@ -5,6 +5,7 @@ from keras import backend as K
 from .custom_logger import logger
 from . import schedule, layer_blocks, callbacks
 
+
 # ==============================================================================
 
 
@@ -31,12 +32,13 @@ class MultiscaleVAE:
         :param levels:
         :param z_dims:
         """
-        # --------- Argument checking
+        # --- argument checking
         if encoder is None:
             raise ValueError("encoder cannot be None")
         if not all(i > 0 for i in z_dims):
             raise ValueError("z_dims elements should be > 0")
-        # --------- decoder is reverse encoder
+
+        # --- decoder is reverse encoder
         if decoder is None:
             decoder = {
                 "filters": encoder["filters"][::-1],
@@ -44,7 +46,8 @@ class MultiscaleVAE:
                 "kernel_size": encoder["kernel_size"][::-1]
             }
         levels = len(z_dims)
-        # --------- Variable initialization
+
+        # --- Variable initialization
         self._name = "mvae"
         self._levels = levels
         self._conv_base_filters = 32
@@ -101,37 +104,37 @@ class MultiscaleVAE:
             start = 0
             result = []
             for z in z_dims:
-                result.append(y[:, start:(start+z)])
+                result.append(y[:, start:(start + z)])
                 start += z
             return result
 
-        # --------- Build multiscale input
-        logger.info("Building multiscale input")
+        # --- Build multi-scale input
+        logger.info("Building multi-scale input")
 
-        def compute_scales(input_dims=self._inputs_dims,
-                           levels=self._inputs_dims):
+        def compute_scales(
+                input_dims=self._inputs_dims,
+                levels=self._inputs_dims):
             result = []
             for i in range(levels):
                 if i == 0:
                     result.append(input_dims)
                 else:
                     s = tuple()
-                    for j in range(len(result[i-1])):
+                    for j in range(len(result[i - 1])):
                         if j == self._channels_index:
-                            s += (result[i-1][j],)
+                            s += (result[i - 1][j],)
                         else:
-                            s += (int(result[i - 1][j]/2),)
+                            s += (int(result[i - 1][j] / 2),)
                     result.append(s)
-            for i in range(levels):
-                result[i] = result[i]
             return result
 
-        def input_transform(input_dims=self._inputs_dims,
-                            levels=self._levels,
-                            min_value=self._min_value,
-                            max_value=self._max_value,
-                            training_noise=self._training_noise_std,
-                            training_dropout=self._training_dropout):
+        def input_transform(
+                input_dims=self._inputs_dims,
+                levels=self._levels,
+                min_value=self._min_value,
+                max_value=self._max_value,
+                training_noise=self._training_noise_std,
+                training_dropout=self._training_dropout):
             input_layer = keras.Input(shape=input_dims)
             layer = keras.layers.Lambda(normalize, name="normalize")([
                 input_layer, min_value, max_value])
@@ -159,11 +162,11 @@ class MultiscaleVAE:
                                outputs=result,
                                name="multiscale")
 
-        # --------- Create Encoder / Decoder
+        # --- Create Encoder / Decoder
         self._mu = None
         self._log_var = None
 
-        # --------- encoders
+        # --- encoders
         logger.info("Building encoder")
         encoders = []
         shapes_before_flattening = []
@@ -184,7 +187,7 @@ class MultiscaleVAE:
                                                            mu_log[0],
                                                            mu_log[1]]))
 
-        # --------- decoders
+        # --- decoders
         logger.info("Building decoder")
         decoders = []
         for i in range(self._levels):
@@ -199,7 +202,7 @@ class MultiscaleVAE:
             decoders.append(
                 keras.Model(inputs=decoder_input, outputs=decoder_output))
 
-        # --------- upsample and merge decoders
+        # --- upsample and merge decoders
         logger.info("Building merge decoder")
         output_merge_inputs = [
             keras.Input(shape=scales[i])
@@ -207,7 +210,7 @@ class MultiscaleVAE:
         ]
         layer = None
 
-        for i in range(self._levels-1, -1, -1):
+        for i in range(self._levels - 1, -1, -1):
             if i == self._levels - 1:
                 layer = output_merge_inputs[i]
             else:
@@ -223,7 +226,7 @@ class MultiscaleVAE:
         output_merge_inputs = keras.Model(inputs=output_merge_inputs,
                                           outputs=x)
 
-        # --------- build encoder model
+        # --- build encoder model
         logger.info("Building encoder model")
         model_encoder_input = keras.Input(shape=self._inputs_dims,
                                           name="input")
@@ -242,7 +245,7 @@ class MultiscaleVAE:
         self._model_encoder = keras.Model(inputs=model_encoder_input,
                                           outputs=model_encoder_output)
 
-        # --------- build decoder model
+        # --- build decoder model
         logger.info("Building decoder model")
         model_decoder_input = keras.Input(shape=(np.sum(self._z_latent_dims),),
                                           name="input")
@@ -256,7 +259,7 @@ class MultiscaleVAE:
         self._model_decoder = keras.Model(inputs=model_decoder_input,
                                           outputs=model_decoder_output)
 
-        # --------- build end-to-end trainable model
+        # --- build end-to-end trainable model
         logger.info("Building end-to-end trainable model")
         mu = []
         log_var = []
@@ -281,7 +284,7 @@ class MultiscaleVAE:
         self._model_trainable = keras.Model(inputs=model_input,
                                             outputs=model_output)
 
-        # --------- concat all z-latent layers
+        # --- concat all z-latent layers
         self._mu = \
             keras.layers.Concatenate(axis=-1, name="mu")(mu)
         self._log_var = \
@@ -297,20 +300,21 @@ class MultiscaleVAE:
         :param i0: input
         :return:
         """
-        # --------- filter and downsample
+
+        # --- filter and downsample
         f0 = layer_blocks.gaussian_filter_block(
             i0,
             strides=(1, 1),
             xy_max=self._gaussian_nsig,
             kernel_size=self._gaussian_kernel)
 
-        # --------- downsample
+        # --- downsample
         d0 = keras.layers.MaxPool2D(pool_size=(1, 1),
                                     strides=(2, 2),
                                     padding="valid",
                                     name=prefix + "down")(f0)
 
-        # --------- diff
+        # --- diff
         diff = keras.layers.Subtract()([i0, f0])
         return d0, diff
 
@@ -329,7 +333,7 @@ class MultiscaleVAE:
         :param prefix:
         :return:
         """
-        # --------- Transforming here
+        # --- Transforming here
         x = keras.layers.Conv2D(
             filters=self._conv_base_filters,
             kernel_size=(3, 3),
@@ -340,7 +344,7 @@ class MultiscaleVAE:
             kernel_regularizer=self._kernel_regularizer,
             kernel_initializer=self._initialization_scheme)(encoder_input)
 
-        # --------- Transforming here
+        # --- Transforming here
         x = layer_blocks.basic_block(
             x,
             block_type="encoder",
@@ -349,12 +353,12 @@ class MultiscaleVAE:
             strides=self._encoder_config["strides"],
             prefix=prefix,
             use_dropout=False,
-            use_batchnorm=False)
+            use_batchnorm=True)
 
-        # --------- Keep shape before flattening
+        # --- Keep shape before flattening
         shape_before_flattening = K.int_shape(x)[1:]
 
-        # --------- flatten and convert to z_dim dimensions
+        # --- flatten and convert to z_dim dimensions
         x = keras.layers.Flatten()(x)
         mu = keras.layers.Dense(
             z_dim,
@@ -398,7 +402,7 @@ class MultiscaleVAE:
         :param prefix:
         :return:
         """
-        # --------- Decoding here
+        # --- Decoding here
         x = keras.layers.Dense(
             units=np.prod(target_shape),
             activation="linear",
@@ -407,19 +411,17 @@ class MultiscaleVAE:
 
         x = keras.layers.Reshape(target_shape)(x)
 
-        # --------- Transforming here
+        # --- Transforming here
         x = layer_blocks.basic_block(
             input_layer=x,
             block_type="decoder",
+            use_batchnorm=True,
             filters=self._decoder_config["filters"],
             kernel_size=self._decoder_config["kernel_size"],
             strides=self._decoder_config["strides"],
             prefix=prefix)
 
-        # -------- Add batchnorm to boost signal
-        x = keras.layers.BatchNormalization()(x)
-
-        # -------- Match target channels
+        # --- Match target channels
         x = keras.layers.Conv2D(
             filters=self._output_channels,
             strides=(1, 1),
@@ -448,35 +450,23 @@ class MultiscaleVAE:
         """
         self.learning_rate = learning_rate
 
-        # --------- Define VAE reconstruction loss
+        # --- Define VAE reconstruction loss
         def vae_r_loss(y_true, y_pred):
             # focus on matching all pixels
             tmp_pixels = K.abs(y_true - y_pred)
             return K.mean(tmp_pixels)
 
-        def vae_r_experimental_loss(y_true, y_pred):
-            # focus on matching all pixels
-            tmp_pixels = K.abs(y_true - y_pred)
-
-            # focus on matching channel mean
-            y_true_c = K.mean(y_true, axis=[1, 2])
-            y_pred_c = K.mean(y_pred, axis=[1, 2])
-            tmp_channels = K.abs(y_true_c - y_pred_c)
-
-            return K.mean(tmp_pixels, axis=[1, 2, 3]) + \
-                   K.mean(tmp_channels, axis=[1])
-
-        # --------- Define KL loss for the latent space
+        # --- Define KL loss for the latent space
         # (difference from normally distributed m=0, var=1)
         def vae_kl_loss(y_true, y_pred):
             x = 1.0 + self._log_var - K.square(self._mu) - K.exp(self._log_var)
             x = -0.5 * K.sum(x, axis=-1)
             return x
 
-        # --------- Define combined loss
+        # --- Define combined loss
         def vae_loss(y_true, y_pred):
             kl_loss = vae_kl_loss(y_true, y_pred)
-            r_loss = vae_r_experimental_loss(y_true, y_pred)
+            r_loss = vae_r_loss(y_true, y_pred)
             return (r_loss * r_loss_factor) + \
                    (kl_loss * kl_loss_factor)
 

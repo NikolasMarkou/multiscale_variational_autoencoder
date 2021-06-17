@@ -240,12 +240,14 @@ def excite_inhibit_block(
 # ==============================================================================
 
 
-def squeeze_excite_block(input_layer,
-                         squeeze_units=32,
-                         initializer="glorot_normal",
-                         regularizer=None,
-                         prefix="squeeze_excite_",
-                         channels_index: int = DEFAULT_CHANNEL_INDEX):
+def squeeze_excite_block(
+        input_layer,
+        squeeze_units=32,
+        initializer="glorot_normal",
+        regularizer=None,
+        prefix="squeeze_excite_",
+        use_batchnorm: bool = False,
+        channels_index: int = DEFAULT_CHANNEL_INDEX):
     # --- argument checking
     if input_layer is None:
         raise ValueError("input_layer cannot be empty")
@@ -255,22 +257,30 @@ def squeeze_excite_block(input_layer,
     if len(shape) != 4:
         raise ValueError("works only on 4d tensors")
     channels = shape[channels_index]
+
     # --- squeeze
     x = keras.layers.GlobalMaxPool2D(
         name=prefix + "max_pool")(input_layer)
+
     x = keras.layers.Dense(
         units=squeeze_units,
         name=prefix + "dense0",
         activation="relu",
         kernel_regularizer=regularizer,
         kernel_initializer=initializer)(x)
+
+    if use_batchnorm:
+        x = keras.layers.BatchNormalization(
+            name=prefix + "batchnorm0")(x)
+
     x = keras.layers.Dense(
         units=channels,
         name=prefix + "dense1",
         activation="hard_sigmoid",
         kernel_regularizer=regularizer,
         kernel_initializer=initializer)(x)
-    # --- scale input
+
+    # --- mask channels
     x = keras.layers.Multiply(
         name=prefix + "multiply")([x, input_layer])
     return x
@@ -401,9 +411,9 @@ def mobilenetV3_block(
     if dropout_ratio is not None:
         if dropout_ratio > 1.0 or dropout_ratio < 0.0:
             raise ValueError("Dropout ration must be [0, 1]")
-    # --- build block
     previous_no_filters = K.int_shape(input_layer)[channels_index]
 
+    # --- build block
     x = keras.layers.Conv2D(
         filters=filters,
         kernel_size=(1, 1),
@@ -413,6 +423,10 @@ def mobilenetV3_block(
         name=prefix + "conv0",
         kernel_regularizer=regularizer,
         kernel_initializer=initializer)(input_layer)
+
+    if use_batchnorm:
+        x = keras.layers.BatchNormalization(
+            name=prefix + "batchnorm0")(x)
 
     x = keras.layers.DepthwiseConv2D(
         depth_multiplier=1,
@@ -426,17 +440,18 @@ def mobilenetV3_block(
         depthwise_initializer=initializer,
         depthwise_regularizer=regularizer)(x)
 
-    if use_batchnorm:
-        x = keras.layers.BatchNormalization(
-            name=prefix + "batchnorm0")(x)
-
     x = \
         squeeze_excite_block(
             x,
             squeeze_units=squeeze_dim,
             regularizer=regularizer,
             initializer=initializer,
+            use_batchnorm=use_batchnorm,
             prefix=prefix + "squeeze_excite_")
+
+    if use_batchnorm:
+        x = keras.layers.BatchNormalization(
+            name=prefix + "batchnorm2")(x)
 
     x = \
         keras.layers.Conv2D(
@@ -745,6 +760,7 @@ def basic_block(
 
     for i in range(len(filters)):
         prefix_i = prefix + str(i) + "_"
+
         # --- handle subsampling and change in the number of filters
         if strides[i][0] != 1 or strides[i][1] != 1 or \
                 filters[i] != previous_no_filters:
@@ -778,14 +794,15 @@ def basic_block(
                 activation="relu",
                 initializer=initializer,
                 regularizer=regularizer,
+                use_batchnorm=use_batchnorm,
                 prefix=prefix_i + "mobilenetV3_")
 
         if use_dropout:
             x = keras.layers.Dropout(rate=0.1)(x)
 
         if use_batchnorm:
-            x = keras.layers.BatchNormalization()(x)
             x = keras.layers.ReLU()(x)
+            x = keras.layers.BatchNormalization()(x)
 
         previous_no_filters = filters[i]
 
@@ -848,7 +865,10 @@ def gaussian_filter_block(
     # Initialise to set kernel to required value
     def kernel_init(shape, dtype):
         kernel = np.zeros(shape)
-        kernel[:, :, 0, 0] = gaussian_kernel([shape[0], shape[1]], xy_max)
+        kernel[:, :, 0, 0] = \
+            gaussian_kernel(
+                [shape[0], shape[1]],
+                xy_max)
         return kernel
 
     return keras.layers.DepthwiseConv2D(
