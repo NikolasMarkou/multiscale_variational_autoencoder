@@ -380,12 +380,12 @@ def mobilenetV3_block(
         input_layer,
         filters=32,
         squeeze_dim=4,
-        initializer="glorot_normal",
-        regularizer=None,
         prefix="mobilenetV3_",
         activation="relu",
         dropout_ratio=None,
         use_batchnorm: bool = False,
+        regularizer: str = DEFAULT_KERNEL_REGULARIZER,
+        initializer: str = DEFAULT_KERNEL_INITIALIZER,
         channels_index: int = DEFAULT_CHANNEL_INDEX):
     """
     Build a mobilenet V3 block is bottleneck with residual + squeeze and excite
@@ -801,7 +801,6 @@ def basic_block(
             x = keras.layers.Dropout(rate=0.1)(x)
 
         if use_batchnorm:
-            x = keras.layers.ReLU()(x)
             x = keras.layers.BatchNormalization()(x)
 
         previous_no_filters = filters[i]
