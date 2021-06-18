@@ -284,6 +284,7 @@ def squeeze_excite_block(
     # --- mask channels
     x = keras.layers.Multiply(
         name=prefix + "multiply")([x, input_layer])
+
     return x
 
 
@@ -776,11 +777,9 @@ def basic_block(
                 x = keras.layers.Conv2D(**params)(x)
             elif block_type == "decoder":
                 x = keras.layers.Conv2DTranspose(**params)(x)
+            else:
+                raise ValueError("don't know how to parse {0}".format(block_type))
 
-        # x = \
-        #     excite_inhibit_block(
-        #         x,
-        #         filters[i])
         x = \
             mobilenetV3_block(
                 x,
@@ -793,9 +792,6 @@ def basic_block(
 
         if use_dropout:
             x = keras.layers.Dropout(rate=0.1)(x)
-
-        if use_batchnorm:
-            x = keras.layers.BatchNormalization()(x)
 
         previous_no_filters = filters[i]
 

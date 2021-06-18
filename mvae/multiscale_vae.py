@@ -228,8 +228,11 @@ class MultiscaleVAE:
                 layer = x
 
         # --- Bring bang to initial value range
-        x = keras.layers.Lambda(denormalize, name="denormalize")(
-            [x, self._min_value, self._max_value])
+        x = \
+            keras.layers.Lambda(
+                denormalize,
+                name="denormalize")(
+                [x, self._min_value, self._max_value])
         output_merge_inputs = \
             keras.Model(
                 inputs=output_merge_inputs,
@@ -255,7 +258,8 @@ class MultiscaleVAE:
             encoders[i](model_encoder_input_multiscale[i])[0]
             for i in range(self._levels)
         ]
-        model_encoder_output = keras.layers.Concatenate()(model_encoder_scale)
+        model_encoder_output = \
+            keras.layers.Concatenate()(model_encoder_scale)
         self._model_encoder = \
             keras.Model(
                 inputs=model_encoder_input,
