@@ -23,8 +23,6 @@ def laplacian_transform_split(
         name: str = None,
         min_value: float = 0.0,
         max_value: float = 255.0,
-        training_noise: float = 0.0,
-        training_dropout: float = 0.0,
         gaussian_xy_max: tuple = (2, 2),
         gaussian_kernel_size: tuple = (3, 3)):
     """
@@ -83,17 +81,6 @@ def laplacian_transform_split(
             _normalize,
             name="normalize")([input_layer, min_value, max_value])
 
-    # --- add noise and/or dropout
-    if training_noise is not None and training_noise > 0.0:
-        input_normalized_layer = \
-            keras.layers.GaussianNoise(stddev=training_noise)(
-                input_normalized_layer)
-
-    if training_dropout is not None and training_dropout > 0.0:
-        input_normalized_layer = \
-            keras.layers.SpatialDropout2D(rate=training_dropout)(
-                input_normalized_layer)
-
     # --- split input in levels
     output_multiscale_layers = []
     for i in range(levels):
@@ -137,6 +124,7 @@ def laplacian_transform_merge(
             min_value=v0,
             max_value=v1)
 
+    # prepare input layers for each level
     input_layers = [
         keras.Input(shape=input_dims[i])
         for i in range(levels)
@@ -148,9 +136,10 @@ def laplacian_transform_merge(
         if i == levels - 1:
             output_layer = input_layers[i]
         else:
-            x = keras.layers.UpSampling2D(
-                size=(2, 2),
-                interpolation="nearest")(output_layer)
+            x = \
+                keras.layers.UpSampling2D(
+                    size=(2, 2),
+                    interpolation="nearest")(output_layer)
             x = \
                 gaussian_filter_block(
                     x,
