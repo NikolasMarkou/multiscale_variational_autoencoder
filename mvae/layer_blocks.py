@@ -3,6 +3,7 @@ import numpy as np
 from keras import backend as K
 from .custom_logger import logger
 
+DEFAULT_DROPOUT_RATIO = 0.0
 DEFAULT_CHANNEL_INDEX = 3
 DEFAULT_ATTENUATION_MULTIPLIER = 4.0
 DEFAULT_KERNEL_REGULARIZER = "l1"
@@ -177,7 +178,7 @@ def excite_inhibit_channel_mask_block(
 def excite_inhibit_block(
         input_layer,
         filters: int = 32,
-        kernel_size=(3, 3),
+        kernel_size: tuple = (3, 3),
         kernel_regularizer: str = DEFAULT_KERNEL_REGULARIZER,
         kernel_initializer: str = DEFAULT_KERNEL_INITIALIZER,
         channels_index: int = DEFAULT_CHANNEL_INDEX):
@@ -242,11 +243,11 @@ def excite_inhibit_block(
 
 def squeeze_excite_block(
         input_layer,
-        squeeze_units=32,
-        initializer="glorot_normal",
-        regularizer=None,
-        prefix="squeeze_excite_",
+        squeeze_units: int = 32,
         use_batchnorm: bool = False,
+        prefix="squeeze_excite_",
+        initializer=DEFAULT_KERNEL_INITIALIZER,
+        regularizer=DEFAULT_KERNEL_REGULARIZER,
         channels_index: int = DEFAULT_CHANNEL_INDEX):
     # --- argument checking
     if input_layer is None:
@@ -289,14 +290,15 @@ def squeeze_excite_block(
 # ==============================================================================
 
 
-def mobilenetV2_block(input_layer,
-                      filters=32,
-                      initializer="glorot_normal",
-                      regularizer=None,
-                      prefix="mobilenetV2_",
-                      dropout_ratio=None,
-                      use_batchnorm=False,
-                      channels_index: int = DEFAULT_CHANNEL_INDEX):
+def mobilenetV2_block(
+        input_layer,
+        filters: int = 32,
+        dropout_ratio: float = DEFAULT_DROPOUT_RATIO,
+        use_batchnorm: bool = False,
+        prefix: str = "mobilenetV2_",
+        initializer=DEFAULT_KERNEL_INITIALIZER,
+        regularizer=DEFAULT_KERNEL_REGULARIZER,
+        channels_index: int = DEFAULT_CHANNEL_INDEX):
     """
     Build a mobilenet V2 bottleneck with residual block
     :param input_layer:
@@ -317,12 +319,13 @@ def mobilenetV2_block(input_layer,
     if dropout_ratio is not None:
         if dropout_ratio > 1.0 or dropout_ratio < 0.0:
             raise ValueError("Dropout ration must be [0, 1]")
+
     # --- build block
     previous_no_filters = K.int_shape(input_layer)[channels_index]
 
     x = keras.layers.Conv2D(
         filters=filters,
-        kernel_size=[1, 1],
+        kernel_size=(1, 1),
         strides=(1, 1),
         padding="same",
         activation="linear",
@@ -332,7 +335,7 @@ def mobilenetV2_block(input_layer,
 
     x = keras.layers.DepthwiseConv2D(
         depth_multiplier=1,
-        kernel_size=[3, 3],
+        kernel_size=(3, 3),
         strides=(1, 1),
         padding="same",
         activation="relu",
@@ -346,7 +349,7 @@ def mobilenetV2_block(input_layer,
 
     x = keras.layers.Conv2D(
         filters=previous_no_filters,
-        kernel_size=[1, 1],
+        kernel_size=(1, 1),
         strides=(1, 1),
         padding="same",
         activation="relu",
@@ -364,11 +367,10 @@ def mobilenetV2_block(input_layer,
         input_layer
     ])
 
-    if dropout_ratio is not None:
-        if dropout_ratio > 0.0:
-            x = keras.layers.Dropout(
-                name=prefix + "dropout",
-                rate=dropout_ratio)(x)
+    if dropout_ratio is not None and dropout_ratio > 0.0:
+        x = keras.layers.Dropout(
+            name=prefix + "dropout",
+            rate=dropout_ratio)(x)
 
     return x
 
@@ -382,7 +384,7 @@ def mobilenetV3_block(
         squeeze_dim=4,
         prefix="mobilenetV3_",
         activation="relu",
-        dropout_ratio=None,
+        dropout_ratio: float = None,
         use_batchnorm: bool = False,
         regularizer: str = DEFAULT_KERNEL_REGULARIZER,
         initializer: str = DEFAULT_KERNEL_INITIALIZER,
@@ -471,11 +473,10 @@ def mobilenetV3_block(
             input_layer
         ])
 
-    if dropout_ratio is not None:
-        if dropout_ratio > 0.0:
-            x = keras.layers.Dropout(
-                name=prefix + "dropout",
-                rate=dropout_ratio)(x)
+    if dropout_ratio is not None and dropout_ratio > 0.0:
+        x = keras.layers.Dropout(
+            name=prefix + "dropout",
+            rate=dropout_ratio)(x)
 
     return x
 
@@ -701,11 +702,10 @@ def resnet_block(
         activation,
         name=prefix + "activation")(x)
 
-    if dropout_ratio is not None:
-        if dropout_ratio > 0.0:
-            x = keras.layers.Dropout(
-                name=prefix + "dropout",
-                rate=dropout_ratio)(x)
+    if dropout_ratio is not None and dropout_ratio > 0.0:
+        x = keras.layers.Dropout(
+            name=prefix + "dropout",
+            rate=dropout_ratio)(x)
 
     if use_batchnorm:
         x = keras.layers.BatchNormalization(

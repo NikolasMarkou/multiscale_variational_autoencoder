@@ -114,12 +114,12 @@ logger.info("Training model")
 
 multiscale_vae.train(
     x_train,
-    batch_size=BATCH_SIZE,
     epochs=EPOCHS,
-    run_folder=RUN_FOLDER,
-    print_every_n_batches=PRINT_EVERY_N_BATCHES,
-    initial_epoch=INITIAL_EPOCH,
+    lr_decay=LR_DECAY,
     step_size=STEP_SIZE,
-    lr_decay=LR_DECAY)
+    run_folder=RUN_FOLDER,
+    batch_size=BATCH_SIZE,
+    initial_epoch=INITIAL_EPOCH,
+    print_every_n_batches=PRINT_EVERY_N_BATCHES)
 
 # ==============================================================================
