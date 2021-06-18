@@ -392,9 +392,10 @@ class MultiscaleVAE:
                 kernel_initializer=self._initialization_scheme,
                 name=prefix + "log_var")(x)
         else:
+            kernel_size = (min(shape[1], 3), min(shape[2], 3))
             mu = keras.layers.Conv2D(
                 filters=z_dim,
-                kernel_size=(shape[1], shape[2]),
+                kernel_size=kernel_size,
                 activation="linear",
                 kernel_regularizer=self._dense_regularizer,
                 kernel_initializer=self._initialization_scheme,
@@ -404,14 +405,13 @@ class MultiscaleVAE:
 
             log_var = keras.layers.Conv2D(
                 filters=z_dim,
-                kernel_size=(shape[1], shape[2]),
+                kernel_size=kernel_size,
                 activation="linear",
                 kernel_regularizer=self._dense_regularizer,
                 kernel_initializer=self._initialization_scheme,
                 name=prefix + "log_var")(x)
             log_var = keras.layers.GlobalAveragePooling2D()(log_var)
             log_var = keras.layers.Flatten()(log_var)
-
 
         def sample(args):
             tmp_mu, tmp_log_var, tmp_stddev = args
