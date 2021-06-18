@@ -549,10 +549,8 @@ class MultiscaleVAE:
         # --- Define combined loss
         def vae_loss(y_true, y_pred):
             kl_loss = vae_kl_loss(y_true, y_pred)
-            r_loss = vae_r_loss(y_true, y_pred)
             multi_r_loss = vae_multi_r_loss(y_true, y_pred)
-            return r_loss * r_loss_factor + \
-                   kl_loss * kl_loss_factor + \
+            return kl_loss * kl_loss_factor + \
                    multi_r_loss * r_loss_factor * (self._max_value - self._min_value)
 
         optimizer = \
