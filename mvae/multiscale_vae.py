@@ -1,9 +1,10 @@
 import os
+import math
 import keras
 import numpy as np
 from keras import backend as K
 from .custom_logger import logger
-from . import schedule, layer_blocks, callbacks
+from . import schedule, layer_blocks, callbacks, utilities
 
 
 # ==============================================================================
@@ -57,7 +58,7 @@ class MultiscaleVAE:
         self._inputs_dims = input_dims
         self._encoder_config = encoder
         self._decoder_config = decoder
-        self._gaussian_kernel = (3, 3)
+        self._gaussian_kernel = (5, 5)
         self._gaussian_nsig = (2, 2)
         self._training_dropout = 0.0
         self._training_noise_std = 0.0
@@ -524,15 +525,13 @@ class MultiscaleVAE:
         """
         self.learning_rate = learning_rate
 
-        # --- Define VAE reconstruction loss
+        # --- define VAE reconstruction loss
         def vae_r_loss(y_true, y_pred):
-            # focus on matching all pixels
             tmp_pixels = K.abs(y_true - y_pred)
             return K.mean(tmp_pixels)
 
-        # --- Define VAE reconstruction loss
+        # --- define VAE reconstruction loss per scale
         def vae_multi_r_loss(y_true, y_pred):
-            # focus on matching all pixels
             result = 0.0
             for i in range(self._levels):
                 tmp_pixels = \
@@ -540,7 +539,7 @@ class MultiscaleVAE:
                 result += K.mean(tmp_pixels)
             return result
 
-        # --- Define KL loss for the latent space
+        # --- define KL loss for the latent space
         # (difference from normally distributed m=0, var=1)
         def vae_kl_loss(y_true, y_pred):
             x = 1.0 + self._log_var - K.square(self._mu) - K.exp(self._log_var)
@@ -575,8 +574,8 @@ class MultiscaleVAE:
     def train(
             self,
             x_train,
-            batch_size: int,
             epochs: int,
+            batch_size: int,
             run_folder: str,
             step_size: int = 1,
             lr_decay: float = 1.0,
@@ -618,14 +617,23 @@ class MultiscaleVAE:
         if save_checkpoint_weights:
             callbacks_fns += [checkpoint1, checkpoint2]
 
+        batches_per_epoch = 4 * int(math.ceil(len(x_train) / batch_size))
+
         self._model_trainable.fit(
-            x_train,
-            x_train,
-            shuffle=True,
+            utilities.noisy_image_data_generator(
+                dataset=x_train,
+                batch_size=batch_size,
+                min_value=0.0,
+                max_value=255.0,
+                min_noise_std=0.0,
+                max_noise_std=1.0,
+                random_invert=False,
+                vertical_flip=True,
+                horizontal_flip=True),
             epochs=epochs,
-            batch_size=batch_size,
             callbacks=callbacks_fns,
-            initial_epoch=initial_epoch)
+            initial_epoch=initial_epoch,
+            steps_per_epoch=batches_per_epoch)
 
     # ==========================================================================
 
@@ -656,3 +664,5 @@ class MultiscaleVAE:
 
     def normalize(self, v):
         return (v - self._min_value) / (self._max_value - self._min_value)
+
+    # ==========================================================================
