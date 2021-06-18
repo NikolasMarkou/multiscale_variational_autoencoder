@@ -13,6 +13,8 @@ DEFAULT_CHANNEL_INDEX = 3
 DEFAULT_ATTENUATION_MULTIPLIER = 4.0
 DEFAULT_KERNEL_REGULARIZER = "l1"
 DEFAULT_KERNEL_INITIALIZER = "glorot_normal"
+DEFAULT_GAUSSIAN_XY_MAX = (1, 1)
+DEFAULT_GAUSSIAN_KERNEL_SIZE = (3, 3)
 
 # ==============================================================================
 
@@ -23,8 +25,8 @@ def laplacian_transform_split(
         name: str = None,
         min_value: float = 0.0,
         max_value: float = 255.0,
-        gaussian_xy_max: tuple = (2, 2),
-        gaussian_kernel_size: tuple = (3, 3)):
+        gaussian_xy_max: tuple = DEFAULT_GAUSSIAN_XY_MAX,
+        gaussian_kernel_size: tuple = DEFAULT_GAUSSIAN_KERNEL_SIZE):
     """
     Normalize input values and the compute laplacian pyramid
     """
@@ -99,6 +101,7 @@ def laplacian_transform_split(
             inputs=input_layer,
             outputs=output_multiscale_layers)
 
+
 # ==============================================================================
 
 
@@ -108,8 +111,8 @@ def laplacian_transform_merge(
         name: str = None,
         min_value: float = 0.0,
         max_value: float = 255.0,
-        gaussian_xy_max: tuple = (2, 2),
-        gaussian_kernel_size: tuple = (3, 3)):
+        gaussian_xy_max: tuple = DEFAULT_GAUSSIAN_XY_MAX,
+        gaussian_kernel_size: tuple = DEFAULT_GAUSSIAN_KERNEL_SIZE):
     """
     Merge laplacian pyramid stages and then denormalize
     """
@@ -162,6 +165,7 @@ def laplacian_transform_merge(
             name=name,
             inputs=input_layers,
             outputs=output_denormalize_layer)
+
 
 # ==============================================================================
 
@@ -963,10 +967,12 @@ def gaussian_kernel(
     assert len(size) == 2
     kern1d = []
     for i in range(2):
-        x = np.linspace(start=-np.abs(nsig[i]),
-                        stop=np.abs(nsig[i]),
-                        num=size[i],
-                        endpoint=True)
+        x = \
+            np.linspace(
+                start=-np.abs(nsig[i]),
+                stop=np.abs(nsig[i]),
+                num=size[i],
+                endpoint=True)
         kern1d.append(x)
     x, y = np.meshgrid(kern1d[0], kern1d[1])
     d = np.sqrt(x * x + y * y)
@@ -981,23 +987,17 @@ def gaussian_kernel(
 
 def gaussian_filter_block(
         input_layer,
-        kernel_size=3,
+        kernel_size=DEFAULT_GAUSSIAN_KERNEL_SIZE,
         strides=(1, 1),
         dilation_rate=(1, 1),
         padding="same",
-        xy_max=(1.5, 1.5),
-        activation=None,
-        trainable=False,
-        use_bias=False):
+        xy_max=DEFAULT_GAUSSIAN_XY_MAX):
     """
-    Build a gaussian filter block as non trainable Depthwise
+    Build a gaussian filter block as non trainable depth wise
     convolution filter with fixed weights
 
     :param input_layer:
     :param kernel_size:
-    :param activation:
-    :param trainable:
-    :param use_bias:
     :param strides:
     :param padding:
     :param xy_max:
@@ -1007,11 +1007,13 @@ def gaussian_filter_block(
 
     # --- initialise to set kernel to required value
     def kernel_init(shape, dtype):
+        logger.info(">>>>> shape:{0}".format(shape))
         kernel = np.zeros(shape)
-        kernel[:, :, 0, 0] = \
-            gaussian_kernel(
-                [shape[0], shape[1]],
-                xy_max)
+        for i in range(shape[2]):
+            kernel[:, :, i, 0] = \
+                gaussian_kernel(
+                    [shape[0], shape[1]],
+                    xy_max)
         return kernel
 
     return \
@@ -1021,9 +1023,9 @@ def gaussian_filter_block(
             padding=padding,
             depth_multiplier=1,
             dilation_rate=dilation_rate,
-            activation=activation,
-            use_bias=use_bias,
-            trainable=trainable,
+            activation="linear",
+            use_bias=False,
+            trainable=False,
             depthwise_initializer=kernel_init,
             kernel_initializer=kernel_init)(input_layer)
 
