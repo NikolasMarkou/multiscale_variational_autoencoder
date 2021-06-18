@@ -56,16 +56,23 @@ def laplacian_transform_split(
                 kernel_size=gaussian_kernel_size)
 
         # downsample by order of 2
-        downsampled = \
+        filtered_downsampled = \
             keras.layers.MaxPool2D(
                 pool_size=(1, 1),
                 strides=(2, 2),
                 padding="valid",
                 name=prefix + "down")(filtered)
 
+        filtered_downsampled_upsampled = \
+            keras.layers.UpSampling2D(
+                size=(2, 2),
+                interpolation="nearest")(filtered_downsampled)
+
         # diff
-        diff = keras.layers.Subtract()([i0, filtered])
-        return downsampled, diff
+        diff = \
+            keras.layers.Subtract()(
+                [filtered, filtered_downsampled_upsampled])
+        return filtered_downsampled, diff
 
     # --- prepare input
     input_layer = \
@@ -143,7 +150,13 @@ def laplacian_transform_merge(
         else:
             x = keras.layers.UpSampling2D(
                 size=(2, 2),
-                interpolation="bilinear")(output_layer)
+                interpolation="nearest")(output_layer)
+            x = \
+                gaussian_filter_block(
+                    x,
+                    strides=(1, 1),
+                    xy_max=gaussian_xy_max,
+                    kernel_size=gaussian_kernel_size)
             x = keras.layers.Add()(
                 [x, input_layers[i]])
             output_layer = x
