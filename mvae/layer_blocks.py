@@ -1,7 +1,12 @@
 import keras
 import numpy as np
 from keras import backend as K
+
+# ==============================================================================
+
 from .custom_logger import logger
+
+# ==============================================================================
 
 DEFAULT_DROPOUT_RATIO = 0.0
 DEFAULT_CHANNEL_INDEX = 3
@@ -9,6 +14,152 @@ DEFAULT_ATTENUATION_MULTIPLIER = 4.0
 DEFAULT_KERNEL_REGULARIZER = "l1"
 DEFAULT_KERNEL_INITIALIZER = "glorot_normal"
 
+# ==============================================================================
+
+
+def laplacian_transform_split(
+        input_dims,
+        levels: int,
+        name: str = None,
+        min_value: float = 0.0,
+        max_value: float = 255.0,
+        training_noise: float = 0.0,
+        training_dropout: float = 0.0,
+        gaussian_xy_max: tuple = (2, 2),
+        gaussian_kernel_size: tuple = (3, 3)):
+    """
+    Normalize input values and the compute laplacian pyramid
+    """
+
+    def _normalize(args):
+        """
+        Convert input from [v0, v1] to [-1, +1] range
+        """
+        y, v0, v1 = args
+        return 2.0 * (y - v0) / (v1 - v0) - 1.0
+
+    def _downsample_upsample(
+            i0,
+            prefix: str = "downsample_upsample"):
+        """
+        Downsample and upsample the input
+        :param i0: input
+        :return:
+        """
+
+        # gaussian filter
+        filtered = \
+            gaussian_filter_block(
+                i0,
+                strides=(1, 1),
+                xy_max=gaussian_xy_max,
+                kernel_size=gaussian_kernel_size)
+
+        # downsample by order of 2
+        downsampled = \
+            keras.layers.MaxPool2D(
+                pool_size=(1, 1),
+                strides=(2, 2),
+                padding="valid",
+                name=prefix + "down")(filtered)
+
+        # diff
+        diff = keras.layers.Subtract()([i0, filtered])
+        return downsampled, diff
+
+    # --- prepare input
+    input_layer = \
+        keras.Input(shape=input_dims)
+
+    input_normalized_layer = \
+        keras.layers.Lambda(
+            _normalize,
+            name="normalize")([input_layer, min_value, max_value])
+
+    # --- add noise and/or dropout
+    if training_noise is not None and training_noise > 0.0:
+        input_normalized_layer = \
+            keras.layers.GaussianNoise(stddev=training_noise)(
+                input_normalized_layer)
+
+    if training_dropout is not None and training_dropout > 0.0:
+        input_normalized_layer = \
+            keras.layers.SpatialDropout2D(rate=training_dropout)(
+                input_normalized_layer)
+
+    # --- split input in levels
+    output_multiscale_layers = []
+    for i in range(levels):
+        if i == levels - 1:
+            output_multiscale_layers.append(
+                input_normalized_layer)
+        else:
+            input_normalized_layer, up = \
+                _downsample_upsample(
+                    input_normalized_layer, prefix=f"du_{i}_")
+            output_multiscale_layers.append(up)
+
+    return \
+        keras.Model(
+            name=name,
+            inputs=input_layer,
+            outputs=output_multiscale_layers)
+
+# ==============================================================================
+
+
+def laplacian_transform_merge(
+        input_dims,
+        levels: int,
+        name: str = None,
+        min_value: float = 0.0,
+        max_value: float = 255.0,
+        gaussian_xy_max: tuple = (2, 2),
+        gaussian_kernel_size: tuple = (3, 3)):
+    """
+    Merge laplacian pyramid stages and then denormalize
+    """
+
+    def _denormalize(args):
+        """
+        Convert input [-1, +1] to [v0, v1] range
+        """
+        y, v0, v1 = args
+        return K.clip(
+            (y + 1.0) * (v1 - v0) / 2.0 + v0,
+            min_value=v0,
+            max_value=v1)
+
+    input_layers = [
+        keras.Input(shape=input_dims[i])
+        for i in range(levels)
+    ]
+
+    output_layer = None
+
+    for i in range(levels - 1, -1, -1):
+        if i == levels - 1:
+            output_layer = input_layers[i]
+        else:
+            x = keras.layers.UpSampling2D(
+                size=(2, 2),
+                interpolation="bilinear")(output_layer)
+            x = keras.layers.Add()(
+                [x, input_layers[i]])
+            output_layer = x
+
+    # bring bang to initial value range
+    output_denormalize_layer = \
+        keras.layers.Lambda(
+            _denormalize,
+            name="denormalize")(
+            [output_layer, min_value, max_value])
+
+    return \
+        keras.Model(
+            name=name,
+            inputs=input_layers,
+            outputs=output_denormalize_layer)
 
 # ==============================================================================
 
@@ -724,11 +875,11 @@ def basic_block(
         filters=[64],
         kernel_size=[(3, 3)],
         strides=[(1, 1)],
-        initializer="glorot_normal",
-        regularizer=None,
-        use_batchnorm=False,
-        use_dropout=False,
-        prefix="block_", ):
+        initializer: str = DEFAULT_KERNEL_INITIALIZER,
+        regularizer: str = DEFAULT_KERNEL_REGULARIZER,
+        use_batchnorm: bool = False,
+        use_dropout: bool = False,
+        prefix: str = "block_", ):
     """
 
     :param input_layer:
@@ -783,8 +934,7 @@ def basic_block(
         x = \
             mobilenetV3_block(
                 x,
-                filters=filters[i],
-                activation="relu",
+                filters=filters[i] * 2,
                 initializer=initializer,
                 regularizer=regularizer,
                 use_batchnorm=use_batchnorm,

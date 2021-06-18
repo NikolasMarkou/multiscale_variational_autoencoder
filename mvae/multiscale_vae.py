@@ -3,9 +3,11 @@ import math
 import keras
 import numpy as np
 from keras import backend as K
+
+# ==============================================================================
+
 from .custom_logger import logger
 from . import schedule, layer_blocks, callbacks, utilities
-
 
 # ==============================================================================
 
@@ -81,23 +83,6 @@ class MultiscaleVAE:
         :return:
         """
 
-        def normalize(args):
-            """
-            Convert input from [v0, v1] to [-1, +1] range
-            """
-            y, v0, v1 = args
-            return 2.0 * (y - v0) / (v1 - v0) - 1.0
-
-        def denormalize(args):
-            """
-            Convert input [-1, +1] to [v0, v1] range
-            """
-            y, v0, v1 = args
-            return K.clip(
-                (y + 1.0) * (v1 - v0) / 2.0 + v0,
-                min_value=v0,
-                max_value=v1)
-
         def split(args):
             """
             Split one dimensional input to set parts
@@ -129,38 +114,6 @@ class MultiscaleVAE:
                             s += (int(result[i - 1][j] / 2),)
                     result.append(s)
             return result
-
-        def input_transform(
-                input_dims=self._inputs_dims,
-                levels=self._levels,
-                min_value=self._min_value,
-                max_value=self._max_value,
-                training_noise=self._training_noise_std,
-                training_dropout=self._training_dropout):
-            input_layer = keras.Input(shape=input_dims)
-            layer = \
-                keras.layers.Lambda(
-                    normalize,
-                    name="normalize")([input_layer, min_value, max_value])
-
-            if training_noise is not None and training_noise > 0.0:
-                layer = keras.layers.GaussianNoise(training_noise)(layer)
-
-            if training_dropout is not None and training_dropout > 0.0:
-                layer = keras.layers.SpatialDropout2D(training_dropout)(layer)
-
-            result = []
-            for i in range(levels):
-                if i == levels - 1:
-                    result.append(layer)
-                else:
-                    layer, up = self._downsample_upsample(
-                        layer, prefix=f"du_{i}_")
-                    result.append(up)
-
-            return keras.Model(inputs=input_layer,
-                               outputs=result,
-                               name="multiscale")
 
         # --- Create Encoder / Decoder
         self._mu = None
@@ -211,34 +164,13 @@ class MultiscaleVAE:
 
         # --- upsample and merge decoder outputs
         logger.info("Building decoder merge")
-        layer = None
-        decoder_inputs = [
-            keras.Input(shape=scales[i])
-            for i in range(self._levels)
-        ]
-
-        for i in range(self._levels - 1, -1, -1):
-            if i == self._levels - 1:
-                layer = decoder_inputs[i]
-            else:
-                x = keras.layers.UpSampling2D(
-                    size=(2, 2),
-                    interpolation="bilinear")(layer)
-                x = keras.layers.Add()(
-                    [x, decoder_inputs[i]])
-                layer = x
-
-        # Bring bang to initial value range
-        decoder_denormalize_output = \
-            keras.layers.Lambda(
-                denormalize,
-                name="denormalize")(
-                [layer, self._min_value, self._max_value])
 
         model_decoder_merge = \
-            keras.Model(
-                inputs=decoder_inputs,
-                outputs=decoder_denormalize_output)
+            layer_blocks.laplacian_transform_merge(
+                input_dims=scales,
+                levels=self._levels,
+                min_value=self._min_value,
+                max_value=self._max_value)
 
         # --- build encoder model
         logger.info("Building encoder model")
@@ -246,14 +178,16 @@ class MultiscaleVAE:
             keras.Input(
                 shape=self._inputs_dims,
                 name="input")
+
         input_transform_encoder = \
-            input_transform(
-                input_dims=self._inputs_dims,
+            layer_blocks.laplacian_transform_split(
                 levels=self._levels,
                 min_value=self._min_value,
                 max_value=self._max_value,
-                training_noise=None,
-                training_dropout=None)
+                input_dims=self._inputs_dims,
+                gaussian_xy_max=self._gaussian_nsig,
+                gaussian_kernel_size=self._gaussian_kernel,
+                name="input_multiscale_transform")
         model_encoder_input_multiscale = \
             input_transform_encoder(model_encoder_input)
         model_encoder_scale = [
@@ -297,13 +231,14 @@ class MultiscaleVAE:
                 shape=self._inputs_dims,
                 name="input")
         model_input_transform = \
-            input_transform(
-                input_dims=self._inputs_dims,
+            layer_blocks.laplacian_transform_split(
                 levels=self._levels,
                 min_value=self._min_value,
                 max_value=self._max_value,
-                training_noise=self._training_noise_std,
-                training_dropout=self._training_dropout)
+                input_dims=self._inputs_dims,
+                gaussian_xy_max=self._gaussian_nsig,
+                gaussian_kernel_size=self._gaussian_kernel,
+                name="laplacian_transform_split")
         model_input_multiscale = \
             model_input_transform(model_input)
 
@@ -336,38 +271,6 @@ class MultiscaleVAE:
         for i in range(self._levels):
             logger.info("input_multiscale[{0}]: {1}".format(i, K.int_shape(self._input_multiscale[i])))
             logger.info("output_multiscale[{0}]: {1}".format(i, K.int_shape(self._output_multiscale[i])))
-
-    # ==========================================================================
-
-    def _downsample_upsample(
-            self,
-            i0,
-            prefix: str = "downsample_upsample"):
-        """
-        Downsample and upsample the input
-        :param i0: input
-        :return:
-        """
-
-        # --- filter and downsample
-        filtered = \
-            layer_blocks.gaussian_filter_block(
-                i0,
-                strides=(1, 1),
-                xy_max=self._gaussian_nsig,
-                kernel_size=self._gaussian_kernel)
-
-        # --- downsample
-        downsampled = \
-            keras.layers.MaxPool2D(
-                pool_size=(1, 1),
-                strides=(2, 2),
-                padding="valid",
-                name=prefix + "down")(filtered)
-
-        # --- diff
-        diff = keras.layers.Subtract()([i0, filtered])
-        return downsampled, diff
 
     # ===============================================================================
 
