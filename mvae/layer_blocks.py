@@ -243,7 +243,7 @@ def excite_inhibit_block(
 
 def squeeze_excite_block(
         input_layer,
-        squeeze_units: int = 32,
+        squeeze_units: int = -1,
         use_batchnorm: bool = False,
         prefix="squeeze_excite_",
         initializer=DEFAULT_KERNEL_INITIALIZER,
@@ -252,16 +252,16 @@ def squeeze_excite_block(
     # --- argument checking
     if input_layer is None:
         raise ValueError("input_layer cannot be empty")
-    if squeeze_units <= 0:
-        raise ValueError("squeeze_units must be > 0")
     shape = K.int_shape(input_layer)
     if len(shape) != 4:
         raise ValueError("works only on 4d tensors")
     channels = shape[channels_index]
+    if squeeze_units is None or squeeze_units <= 0:
+        squeeze_units = channels * 2
 
     # --- squeeze
-    x = keras.layers.GlobalMaxPool2D(
-        name=prefix + "max_pool")(input_layer)
+    x = keras.layers.GlobalAveragePooling2D(
+        name=prefix + "avg_pool")(input_layer)
 
     x = keras.layers.Dense(
         units=squeeze_units,
@@ -381,12 +381,12 @@ def mobilenetV2_block(
 
 def mobilenetV3_block(
         input_layer,
-        filters=32,
-        squeeze_dim=4,
-        prefix="mobilenetV3_",
-        activation="relu",
+        filters: int = 32,
+        squeeze_units: int = -1,
+        activation: str = "relu",
         dropout_ratio: float = None,
         use_batchnorm: bool = False,
+        prefix: str = "mobilenetV3_",
         regularizer: str = DEFAULT_KERNEL_REGULARIZER,
         initializer: str = DEFAULT_KERNEL_INITIALIZER,
         channels_index: int = DEFAULT_CHANNEL_INDEX):
@@ -398,7 +398,7 @@ def mobilenetV3_block(
     :param initializer:
     :param regularizer:
     :param activation:
-    :param squeeze_dim:
+    :param squeeze_units:
     :param prefix:
     :param channels_index:
     :param use_batchnorm:
@@ -446,15 +446,15 @@ def mobilenetV3_block(
     x = \
         squeeze_excite_block(
             x,
-            squeeze_units=squeeze_dim,
+            squeeze_units=squeeze_units,
             regularizer=regularizer,
             initializer=initializer,
-            use_batchnorm=use_batchnorm,
+            use_batchnorm=True,
             prefix=prefix + "squeeze_excite_")
 
     if use_batchnorm:
         x = keras.layers.BatchNormalization(
-            name=prefix + "batchnorm2")(x)
+            name=prefix + "batchnorm1")(x)
 
     x = \
         keras.layers.Conv2D(
