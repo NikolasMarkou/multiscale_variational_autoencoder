@@ -60,8 +60,8 @@ class MultiscaleVAE:
         self._inputs_dims = input_dims
         self._encoder_config = encoder
         self._decoder_config = decoder
-        self._gaussian_kernel = (5, 5)
-        self._gaussian_nsig = (2, 2)
+        self._gaussian_kernel = (3, 3)
+        self._gaussian_nsig = (0.5, 0.5)
         self._training_dropout = 0.0
         self._training_noise_std = 0.0
         self._compress_output = compress_output

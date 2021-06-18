@@ -66,7 +66,7 @@ def laplacian_transform_split(
         filtered_downsampled_upsampled = \
             keras.layers.UpSampling2D(
                 size=(2, 2),
-                interpolation="nearest")(filtered_downsampled)
+                interpolation="bilinear")(filtered_downsampled)
 
         # diff
         diff = \
@@ -142,7 +142,7 @@ def laplacian_transform_merge(
             x = \
                 keras.layers.UpSampling2D(
                     size=(2, 2),
-                    interpolation="nearest")(output_layer)
+                    interpolation="bilinear")(output_layer)
             x = \
                 gaussian_filter_block(
                     x,
