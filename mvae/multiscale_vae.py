@@ -50,7 +50,7 @@ class MultiscaleVAE:
         # --- Variable initialization
         self._name = "mvae"
         self._levels = levels
-        self._dense_encoding = False
+        self._dense_encoding = True
         self._conv_base_filters = 32
         self._conv_activation = "relu"
         self._z_latent_dims = z_dims
@@ -193,7 +193,7 @@ class MultiscaleVAE:
         logger.info("Building decoder")
         decoders = []
         for i in range(self._levels):
-            logger.info("Decoder scale [{0}]".format(i))
+            logger.info(f"Decoder scale [{i}]")
             decoder_input = \
                 keras.Input(
                     shape=(self._z_latent_dims[i],),
@@ -208,35 +208,36 @@ class MultiscaleVAE:
                     inputs=decoder_input,
                     outputs=decoder_output))
 
-        # --- upsample and merge decoders
-        logger.info("Building merge decoder")
-        output_merge_inputs = [
+        # --- upsample and merge decoder outputs
+        logger.info("Building decoder merge")
+        layer = None
+        decoder_inputs = [
             keras.Input(shape=scales[i])
             for i in range(self._levels)
         ]
-        layer = None
 
         for i in range(self._levels - 1, -1, -1):
             if i == self._levels - 1:
-                layer = output_merge_inputs[i]
+                layer = decoder_inputs[i]
             else:
                 x = keras.layers.UpSampling2D(
                     size=(2, 2),
                     interpolation="bilinear")(layer)
                 x = keras.layers.Add()(
-                    [x, output_merge_inputs[i]])
+                    [x, decoder_inputs[i]])
                 layer = x
 
-        # --- Bring bang to initial value range
-        x = \
+        # Bring bang to initial value range
+        decoder_denormalize_output = \
             keras.layers.Lambda(
                 denormalize,
                 name="denormalize")(
-                [x, self._min_value, self._max_value])
-        output_merge_inputs = \
+                [layer, self._min_value, self._max_value])
+
+        model_decoder_merge = \
             keras.Model(
-                inputs=output_merge_inputs,
-                outputs=x)
+                inputs=decoder_inputs,
+                outputs=decoder_denormalize_output)
 
         # --- build encoder model
         logger.info("Building encoder model")
@@ -278,7 +279,8 @@ class MultiscaleVAE:
         for i in range(self._levels):
             decode = decoders[i](model_decoder_split[i])
             model_decoder_decode.append(decode)
-        model_decoder_output = output_merge_inputs(model_decoder_decode)
+        model_decoder_output = \
+            model_decoder_merge(model_decoder_decode)
         self._model_decoder = \
             keras.Model(
                 inputs=model_decoder_input,
@@ -286,8 +288,8 @@ class MultiscaleVAE:
 
         # --- build end-to-end trainable model
         logger.info("Building end-to-end trainable model")
-        mu = []
-        log_var = []
+        mu_s = []
+        log_var_s = []
         model_encode_decode = []
         model_input = \
             keras.Input(
@@ -301,16 +303,20 @@ class MultiscaleVAE:
                 max_value=self._max_value,
                 training_noise=self._training_noise_std,
                 training_dropout=self._training_dropout)
-        model_input_multiscale = model_input_transform(model_input)
+        model_input_multiscale = \
+            model_input_transform(model_input)
 
         for i in range(self._levels):
-            enc = encoders[i](model_input_multiscale[i])
-            encode = enc[0]
-            mu.append(enc[1])
-            log_var.append(enc[2])
+            encode, mu, log_var = \
+                encoders[i](model_input_multiscale[i])
+            mu_s.append(mu)
+            log_var_s.append(log_var)
             decode = decoders[i](encode)
             model_encode_decode.append(decode)
-        model_output = output_merge_inputs(model_encode_decode)
+
+        # merge multiple outputs in a single output
+        model_output = model_decoder_merge(model_encode_decode)
+
         self._model_trainable = \
             keras.Model(
                 inputs=model_input,
@@ -318,9 +324,17 @@ class MultiscaleVAE:
 
         # --- concat all z-latent layers
         self._mu = \
-            keras.layers.Concatenate(axis=-1, name="mu")(mu)
+            keras.layers.Concatenate(axis=-1, name="mu")(mu_s)
         self._log_var = \
-            keras.layers.Concatenate(axis=-1, name="log_var")(log_var)
+            keras.layers.Concatenate(axis=-1, name="log_var")(log_var_s)
+
+        # --- save intermediate levels
+        self._input_multiscale = model_input_multiscale
+        self._output_multiscale = model_encode_decode
+
+        for i in range(self._levels):
+            logger.info("input_multiscale[{0}]: {1}".format(i, K.int_shape(self._input_multiscale[i])))
+            logger.info("output_multiscale[{0}]: {1}".format(i, K.int_shape(self._output_multiscale[i])))
 
     # ==========================================================================
 
@@ -386,7 +400,7 @@ class MultiscaleVAE:
             input_layer=x,
             prefix=prefix,
             use_dropout=False,
-            use_batchnorm=True,
+            use_batchnorm=False,
             block_type="encoder",
             strides=self._encoder_config["strides"],
             filters=self._encoder_config["filters"],
@@ -474,7 +488,7 @@ class MultiscaleVAE:
         x = layer_blocks.basic_block(
             input_layer=x,
             prefix=prefix,
-            use_batchnorm=True,
+            use_batchnorm=False,
             block_type="decoder",
             filters=self._decoder_config["filters"],
             strides=self._decoder_config["strides"],
@@ -516,29 +530,45 @@ class MultiscaleVAE:
             tmp_pixels = K.abs(y_true - y_pred)
             return K.mean(tmp_pixels)
 
+        # --- Define VAE reconstruction loss
+        def vae_multi_r_loss(y_true, y_pred):
+            # focus on matching all pixels
+            result = 0.0
+            for i in range(self._levels):
+                tmp_pixels = \
+                    K.abs(self._input_multiscale[i] - self._output_multiscale[i])
+                result += K.mean(tmp_pixels)
+            return result
+
         # --- Define KL loss for the latent space
         # (difference from normally distributed m=0, var=1)
         def vae_kl_loss(y_true, y_pred):
             x = 1.0 + self._log_var - K.square(self._mu) - K.exp(self._log_var)
             x = -0.5 * K.sum(x, axis=1)
-            x = K.mean(x)
-            return x
+            return K.mean(x)
 
         # --- Define combined loss
         def vae_loss(y_true, y_pred):
             kl_loss = vae_kl_loss(y_true, y_pred)
             r_loss = vae_r_loss(y_true, y_pred)
-            return (r_loss * r_loss_factor) + \
-                   (kl_loss * kl_loss_factor)
+            multi_r_loss = vae_multi_r_loss(y_true, y_pred)
+            return r_loss * r_loss_factor + \
+                   kl_loss * kl_loss_factor + \
+                   multi_r_loss * r_loss_factor * (self._max_value - self._min_value)
 
-        optimizer = keras.optimizers.Adagrad(
-            lr=self.learning_rate,
-            clipnorm=clip_norm)
+        optimizer = \
+            keras.optimizers.Adagrad(
+                lr=self.learning_rate,
+                clipnorm=clip_norm)
 
         self._model_trainable.compile(
             optimizer=optimizer,
             loss=vae_loss,
-            metrics=[vae_r_loss, vae_kl_loss])
+            metrics=[
+                vae_r_loss,
+                vae_kl_loss,
+                vae_multi_r_loss
+            ])
 
     # ==========================================================================
 
