@@ -69,9 +69,7 @@ def laplacian_transform_split(
                 interpolation="bilinear")(filtered_downsampled)
 
         # diff
-        diff = \
-            keras.layers.Subtract()(
-                [filtered, filtered_downsampled_upsampled])
+        diff = i0 - filtered_downsampled_upsampled
         return filtered_downsampled, diff
 
     # --- prepare input
