@@ -198,6 +198,7 @@ class MultiscaleVAE:
             keras.layers.Concatenate()(model_encoder_scale)
         self._model_encoder = \
             keras.Model(
+                name="encoder",
                 inputs=model_encoder_input,
                 outputs=model_encoder_output)
 
@@ -218,6 +219,7 @@ class MultiscaleVAE:
             model_decoder_merge(model_decoder_decode)
         self._model_decoder = \
             keras.Model(
+                name="decoder",
                 inputs=model_decoder_input,
                 outputs=model_decoder_output)
 
@@ -256,7 +258,8 @@ class MultiscaleVAE:
         self._model_trainable = \
             keras.Model(
                 inputs=model_input,
-                outputs=model_output)
+                outputs=model_output,
+                name="trainable_vae")
 
         # --- concat all z-latent layers
         self._mu = \
@@ -316,38 +319,21 @@ class MultiscaleVAE:
 
         # --- flatten and convert to z_dim dimensions
         if self._dense_encoding:
-            x = keras.layers.Flatten()(x)
-            mu = keras.layers.Dense(
-                units=z_dim,
-                name=prefix + "mu",
-                activation="linear",
-                kernel_regularizer=self._dense_regularizer,
-                kernel_initializer=self._initialization_scheme)(x)
-            log_var = keras.layers.Dense(
-                units=z_dim,
-                activation="linear",
-                name=prefix + "log_var",
-                kernel_regularizer=self._dense_regularizer,
-                kernel_initializer=self._initialization_scheme)(x)
-        else:
-            kernel_size = (min(shape[1], 3), min(shape[2], 3))
-            mu = keras.layers.Conv2D(
-                filters=z_dim,
-                name=prefix + "mu",
-                activation="linear",
-                kernel_size=kernel_size,
-                kernel_regularizer=self._dense_regularizer,
-                kernel_initializer=self._initialization_scheme)(x)
-            mu = keras.layers.GlobalAveragePooling2D()(mu)
+            x = keras.layers.GlobalAveragePooling2D()(x)
 
-            log_var = keras.layers.Conv2D(
-                filters=z_dim,
-                activation="linear",
-                name=prefix + "log_var",
-                kernel_size=kernel_size,
-                kernel_regularizer=self._dense_regularizer,
-                kernel_initializer=self._initialization_scheme)(x)
-            log_var = keras.layers.GlobalAveragePooling2D()(log_var)
+        x = keras.layers.Flatten()(x)
+        mu = keras.layers.Dense(
+            units=z_dim,
+            name=prefix + "mu",
+            activation="linear",
+            kernel_regularizer=self._dense_regularizer,
+            kernel_initializer=self._initialization_scheme)(x)
+        log_var = keras.layers.Dense(
+            units=z_dim,
+            activation="linear",
+            name=prefix + "log_var",
+            kernel_regularizer=self._dense_regularizer,
+            kernel_initializer=self._initialization_scheme)(x)
 
         def sample(args):
             tmp_mu, tmp_log_var, tmp_stddev = args
@@ -457,7 +443,7 @@ class MultiscaleVAE:
             return \
                 r_loss * r_loss_factor + \
                 kl_loss * kl_loss_factor + \
-                multi_r_loss * r_loss_factor
+                multi_r_loss * r_loss_factor * (self._max_value - self._min_value)
 
         optimizer = \
             keras.optimizers.Adagrad(

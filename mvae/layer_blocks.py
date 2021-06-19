@@ -63,13 +63,13 @@ def laplacian_transform_split(
                 padding="valid",
                 name=prefix + "down")(filtered)
 
+        # upsample back
         filtered_downsampled_upsampled = \
             keras.layers.UpSampling2D(
                 size=(2, 2),
                 interpolation="bilinear")(filtered_downsampled)
 
-        # diff
-        diff = i0 - filtered_downsampled_upsampled
+        diff = keras.layers.Subtract()([i0, filtered_downsampled_upsampled])
         return filtered_downsampled, diff
 
     # --- prepare input
@@ -141,7 +141,7 @@ def laplacian_transform_merge(
                 keras.layers.UpSampling2D(
                     size=(2, 2),
                     interpolation="bilinear")(output_layer)
-            output_layer = x + input_layers[i]
+            output_layer = keras.layers.Add()([x, input_layers[i]])
 
     # bring bang to initial value range
     output_denormalize_layer = \

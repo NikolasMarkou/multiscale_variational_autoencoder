@@ -79,11 +79,17 @@ logger.info("Creating model")
 
 multiscale_vae = mvae.MultiscaleVAE(
     input_dims=(32, 32, 3),
-    z_dims=[32, 32, 32],
+    z_dims=[16, 32, 64],
     encoder={
-        "filters": [32],
-        "kernel_size": [(3, 3)],
-        "strides": [(1, 1)]
+        "filters": [
+            32, 32, 32
+        ],
+        "kernel_size": [
+            (3, 3), (3, 3), (3, 3)
+        ],
+        "strides": [
+            (1, 1), (1, 1), (1, 1)
+        ]
     },
     min_value=0.0,
     max_value=255.0)
@@ -111,6 +117,8 @@ with open("model_decoder.json", "w") as json_file:
 # ==============================================================================
 
 logger.info("Training model")
+
+multiscale_vae.model_trainable.summary()
 
 multiscale_vae.train(
     x_train,
