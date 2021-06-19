@@ -141,10 +141,7 @@ def laplacian_transform_merge(
                 keras.layers.UpSampling2D(
                     size=(2, 2),
                     interpolation="bilinear")(output_layer)
-
-            x = keras.layers.Add()(
-                [x, input_layers[i]])
-            output_layer = x
+            output_layer = x + input_layers[i]
 
     # bring bang to initial value range
     output_denormalize_layer = \

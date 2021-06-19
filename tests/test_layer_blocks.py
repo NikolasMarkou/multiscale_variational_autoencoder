@@ -159,7 +159,7 @@ def test_laplacian_transform_merge():
 
 def test_laplacian_transform_split_merge():
     input_dims = (18, 32, 32, 3)
-    x = np.zeros(shape=input_dims)
+    x = np.random.uniform(low=0.0, high=255.0, size=input_dims)
     model_split = \
         mvae.layer_blocks.laplacian_transform_split(
             input_dims=input_dims[1:],
@@ -170,11 +170,6 @@ def test_laplacian_transform_split_merge():
     # split zeros to laplacian pyramid
     results_split = model_split(x)
     assert len(results_split) == 3
-    assert K.int_shape(results_split[0]) == (18, 32, 32, 3)
-    assert K.int_shape(results_split[1]) == (18, 16, 16, 3)
-    assert K.int_shape(results_split[2]) == (18, 8, 8, 3)
-
-    #assert np.alltrue(np.abs(results_split[0][:, 1:31, 1:31, :]) <= 0.1)
 
     model_merge = \
         mvae.layer_blocks.laplacian_transform_merge(
@@ -186,8 +181,13 @@ def test_laplacian_transform_split_merge():
             levels=3,
             min_value=0.0,
             max_value=255.0)
+
+    # merge them again
     results_merge = model_merge(results_split)
-    assert K.int_shape(results_merge) == (18, 32, 32, 3)
+    assert K.int_shape(results_merge) == input_dims
+
+    assert np.alltrue(
+        np.abs(results_merge - x)[:, 1:31, 1:31, :] <= 0.001)
 
 
 # ==============================================================================
