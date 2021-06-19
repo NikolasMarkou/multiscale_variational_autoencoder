@@ -826,7 +826,7 @@ def resnet_block(
     # adjust strides
     if strides != (1, 1):
         input_layer = \
-            keras.layers.AveragePooling2D(
+            keras.layers.MaxPooling2D(
                 pool_size=tuple(s + 1 for s in strides),
                 padding="same",
                 strides=strides)(input_layer)
@@ -1041,33 +1041,32 @@ def tensor_to_target_encoding_thinning(
     # --- setup variables
     x = input_layer
     _, height, width, channels = input_shape
+    iteration = 0
 
     # --- iteratively thin the tensor
     while height >= 3 and width >= 3:
-        channels = channels * 2
-
         x = \
             resnet_block(
                 x,
                 filters=channels,
                 strides=(2, 2),
                 kernel_size=(3, 3),
-                prefix=f"{prefix}_{channels}",
+                prefix=f"{prefix}_{iteration}",
                 initializer=kernel_initializer,
                 regularizer=kernel_regularizer)
         _, height, width, channels = K.int_shape(x)
+        iteration += 1
 
     # target output number of channels
     if target_encoding_size > 0:
-        x = \
-            resnet_block(
-                x,
-                filters=target_encoding_size,
-                strides=(1, 1),
-                kernel_size=(1, 1),
-                prefix=f"{prefix}_{1}",
-                initializer=kernel_initializer,
-                regularizer=kernel_regularizer)
+        x = keras.layers.Conv2D(
+            filters=target_encoding_size,
+            kernel_size=(1, 1),
+            strides=(1, 1),
+            padding="same",
+            activation="linear",
+            kernel_regularizer=kernel_regularizer,
+            kernel_initializer=kernel_initializer)(x)
 
     shape_before_flattening = K.int_shape(x)
     x = keras.layers.GlobalAveragePooling2D()(x)
