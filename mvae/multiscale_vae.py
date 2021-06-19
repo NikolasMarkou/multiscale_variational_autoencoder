@@ -297,7 +297,7 @@ class MultiscaleVAE:
             input_layer=x,
             prefix=prefix,
             use_dropout=False,
-            use_batchnorm=False,
+            use_batchnorm=True,
             block_type="encoder",
             strides=self._encoder_config["strides"],
             filters=self._encoder_config["filters"],
@@ -308,13 +308,15 @@ class MultiscaleVAE:
         shape_before_flattening = shape[1:]
 
         # --- flatten and convert to z_dim dimensions
-        x, _ = \
-            layer_blocks.tensor_to_target_encoding_thinning(
-                x,
-                prefix=prefix + "thinning",
-                target_encoding_size=z_dim,
-                kernel_initializer=self._initialization_scheme,
-                kernel_regularizer=self._kernel_regularizer)
+        # x, _ = \
+        #     layer_blocks.tensor_to_target_encoding_thinning(
+        #         x,
+        #         prefix=prefix + "thinning",
+        #         target_encoding_size=z_dim,
+        #         kernel_initializer=self._initialization_scheme,
+        #         kernel_regularizer=self._kernel_regularizer)
+
+        x = keras.layers.Flatten()(x)
 
         mu = keras.layers.Dense(
             units=z_dim,
@@ -372,7 +374,7 @@ class MultiscaleVAE:
         x = layer_blocks.basic_block(
             input_layer=x,
             prefix=prefix,
-            use_batchnorm=False,
+            use_batchnorm=True,
             block_type="decoder",
             filters=self._decoder_config["filters"],
             strides=self._decoder_config["strides"],

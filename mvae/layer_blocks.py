@@ -911,7 +911,7 @@ def basic_block(
     previous_no_filters = K.int_shape(input_layer)[3]
 
     for i in range(len(filters)):
-        prefix_i = prefix + str(i) + "_"
+        prefix_i = f"{prefix}_{i}_"
         params = dict(
             padding=padding,
             strides=strides[i],
@@ -931,17 +931,31 @@ def basic_block(
             else:
                 raise ValueError("don't know how to parse {0}".format(block_type))
 
-        x = \
-            mobilenetV3_block(
-                x,
-                filters=filters[i] * 2,
-                initializer=initializer,
-                regularizer=regularizer,
-                use_batchnorm=use_batchnorm,
-                prefix=prefix_i + "mobilenetV3_")
+        # x = \
+        #     mobilenetV3_block(
+        #         x,
+        #         filters=filters[i],
+        #         initializer=initializer,
+        #         regularizer=regularizer,
+        #         use_batchnorm=use_batchnorm,
+        #         prefix=prefix_i + "mobilenetV3_")
+
+        x = keras.layers.Conv2D(
+            padding="same",
+            strides=(1, 1),
+            filters=filters[i],
+            activation="relu",
+            kernel_size=(3, 3),
+            kernel_initializer=initializer,
+            kernel_regularizer=regularizer)(x)
 
         if use_dropout:
-            x = keras.layers.Dropout(rate=0.1)(x)
+            x = keras.layers.Dropout(
+                name=prefix_i + "dropout", rate=0.1)(x)
+
+        if use_batchnorm:
+            x = keras.layers.BatchNormalization(
+                name=prefix_i + "batchnorm")(x)
 
         previous_no_filters = filters[i]
 
