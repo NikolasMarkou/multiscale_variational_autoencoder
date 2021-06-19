@@ -303,15 +303,19 @@ class MultiscaleVAE:
             filters=self._encoder_config["filters"],
             kernel_size=self._encoder_config["kernel_size"])
 
-        # --- Keep shape before flattening
+        # --- keep shape before flattening
         shape = K.int_shape(x)
         shape_before_flattening = shape[1:]
 
         # --- flatten and convert to z_dim dimensions
-        if self._dense_encoding:
-            x = keras.layers.GlobalAveragePooling2D()(x)
+        x, _ = \
+            layer_blocks.tensor_to_target_encoding_thinning(
+                x,
+                prefix=prefix + "thinning",
+                target_encoding_size=z_dim,
+                kernel_initializer=self._initialization_scheme,
+                kernel_regularizer=self._kernel_regularizer)
 
-        x = keras.layers.Flatten()(x)
         mu = keras.layers.Dense(
             units=z_dim,
             name=prefix + "mu",

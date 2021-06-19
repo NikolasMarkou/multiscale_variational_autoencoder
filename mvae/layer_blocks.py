@@ -16,6 +16,7 @@ DEFAULT_KERNEL_INITIALIZER = "glorot_normal"
 DEFAULT_GAUSSIAN_XY_MAX = (1, 1)
 DEFAULT_GAUSSIAN_KERNEL_SIZE = (3, 3)
 
+
 # ==============================================================================
 
 
@@ -768,12 +769,13 @@ def resnet_block(
         input_layer,
         filters=32,
         kernel_size=(3, 3),
+        strides=(1, 1),
         activation="relu",
-        initializer="glorot_normal",
-        regularizer=None,
-        prefix="resnet_",
-        dropout_ratio=None,
+        dropout_ratio=DEFAULT_DROPOUT_RATIO,
         use_batchnorm=False,
+        prefix="resnet_",
+        initializer=DEFAULT_KERNEL_INITIALIZER,
+        regularizer=DEFAULT_KERNEL_REGULARIZER,
         channels_index: int = DEFAULT_CHANNEL_INDEX):
     """
     Build a resnet block
@@ -797,7 +799,6 @@ def resnet_block(
     if dropout_ratio is not None:
         if dropout_ratio > 1.0 or dropout_ratio < 0.0:
             raise ValueError("Dropout ration must be [0, 1]")
-    strides = (1, 1)
 
     # --- build block
     previous_no_filters = K.int_shape(input_layer)[channels_index]
@@ -805,7 +806,7 @@ def resnet_block(
     x = keras.layers.Conv2D(
         filters=filters,
         kernel_size=kernel_size,
-        strides=strides,
+        strides=(1, 1),
         padding="same",
         activation=activation,
         name=prefix + "conv0",
@@ -815,13 +816,22 @@ def resnet_block(
     x = keras.layers.Conv2D(
         filters=filters,
         kernel_size=kernel_size,
-        strides=(1, 1),
+        strides=strides,
         padding="same",
         activation="linear",
         name=prefix + "conv1",
         kernel_regularizer=regularizer,
         kernel_initializer=initializer)(x)
 
+    # adjust strides
+    if strides != (1, 1):
+        input_layer = \
+            keras.layers.AveragePooling2D(
+                pool_size=tuple(s + 1 for s in strides),
+                padding="same",
+                strides=strides)(input_layer)
+
+    # --- build skip layer and main
     if previous_no_filters == filters:
         tmp_layer = \
             keras.layers.Layer(
@@ -837,11 +847,8 @@ def resnet_block(
             kernel_regularizer=regularizer,
             kernel_initializer=initializer)(input_layer)
 
-    # --- build skip layer and main
-    x = keras.layers.Add(name=prefix + "add")([
-        x,
-        tmp_layer
-    ])
+    x = \
+        keras.layers.Add(name=prefix + "add")([x, tmp_layer])
 
     x = keras.layers.Activation(
         activation,
@@ -997,8 +1004,8 @@ def gaussian_filter_block(
         kernel = np.zeros(shape)
         single_channel_kernel = \
             gaussian_kernel(
-                    [shape[0], shape[1]],
-                    xy_max)
+                [shape[0], shape[1]],
+                xy_max)
         for i in range(shape[2]):
             kernel[:, :, i, 0] = single_channel_kernel
         return kernel
@@ -1015,5 +1022,100 @@ def gaussian_filter_block(
             trainable=False,
             depthwise_initializer=kernel_init,
             kernel_initializer=kernel_init)(input_layer)
+
+
+# ==============================================================================
+
+
+def tensor_to_target_encoding_thinning(
+        input_layer,
+        target_encoding_size: int,
+        kernel_regularizer: str = DEFAULT_KERNEL_REGULARIZER,
+        kernel_initializer: str = DEFAULT_KERNEL_INITIALIZER,
+        prefix: str = "encoding_thinning"):
+    # --- argument checking
+    input_shape = K.int_shape(input_layer)
+    if len(input_shape) != 4:
+        raise ValueError("input_layer must be 4d tensor")
+
+    # --- setup variables
+    x = input_layer
+    _, height, width, channels = input_shape
+
+    # --- iteratively thin the tensor
+    while height >= 3 and width >= 3:
+        channels = channels * 2
+
+        x = \
+            resnet_block(
+                x,
+                filters=channels,
+                strides=(2, 2),
+                kernel_size=(3, 3),
+                prefix=f"{prefix}_{channels}",
+                initializer=kernel_initializer,
+                regularizer=kernel_regularizer)
+        _, height, width, channels = K.int_shape(x)
+
+    # target output number of channels
+    if target_encoding_size > 0:
+        x = \
+            resnet_block(
+                x,
+                filters=target_encoding_size,
+                strides=(1, 1),
+                kernel_size=(1, 1),
+                prefix=f"{prefix}_{1}",
+                initializer=kernel_initializer,
+                regularizer=kernel_regularizer)
+
+    shape_before_flattening = K.int_shape(x)
+    x = keras.layers.GlobalAveragePooling2D()(x)
+
+    return x, shape_before_flattening
+
+
+# ==============================================================================
+
+
+def decoding_tensor_to_target_fattening(
+        input_layer,
+        target_decoding_size: tuple,
+        kernel_regularizer: str = DEFAULT_KERNEL_REGULARIZER,
+        kernel_initializer: str = DEFAULT_KERNEL_INITIALIZER,
+        prefix: str = "decoding_fattening"):
+    # --- argument checking
+    input_shape = K.int_shape(input_layer)
+    if len(input_shape) != 2:
+        raise ValueError("input_layer must be 2d tensor")
+
+    # --- setup variables
+    _, channels = input_shape
+    target_channels = target_decoding_size[2]
+    x = keras.layers.Dense(
+        units=target_channels,
+        activation="linear",
+        kernel_regularizer=kernel_regularizer,
+        kernel_initializer=kernel_initializer)(input_layer)
+    height = 1
+    width = 1
+    x = keras.layers.Reshape(target_shape=(1, 1, target_channels))(x)
+
+    # --- iteratively thin the tensor
+    while height <= 3 and width <= 3:
+        channels = channels * 2
+
+        x = \
+            resnet_block(
+                x,
+                filters=channels,
+                strides=(2, 2),
+                kernel_size=(3, 3),
+                prefix=f"{prefix}_{channels}",
+                initializer=kernel_initializer,
+                regularizer=kernel_regularizer)
+        _, height, width, channels = K.int_shape(x)
+
+    return x
 
 # ==============================================================================
