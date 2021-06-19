@@ -61,14 +61,35 @@ class SaveIntermediateResultsCallback(Callback):
             reconstructions = self.vae.model_trainable.predict(self.images)
             reconstructions = self.vae.normalize(reconstructions)
             reconstructions = np.clip(reconstructions, a_min=0.0, a_max=1.0)
+
             # --- create collage of the reconstructions
             x = collage(reconstructions)
+
             # --- resize to output size
             x = resize(x, self._resize_shape, order=0)
             filepath_x = os.path.join(
                 self.run_folder,
                 "images",
                 "img_" + str(self.epoch).zfill(3) +
+                "_" + str(batch) + ".png")
+            if len(x.shape) == 2:
+                plt.imsave(filepath_x, x, cmap="gray_r")
+            else:
+                plt.imsave(filepath_x, x)
+
+            samples = self.vae.model_sample.predict(np.random.normal(size=[16, self.vae.z_dim]))
+            samples = self.vae.normalize(samples)
+            samples = np.clip(samples, a_min=0.0, a_max=1.0)
+
+            # --- create collage of the reconstructions
+            x = collage(samples)
+
+            # --- resize to output size
+            x = resize(x, self._resize_shape, order=0)
+            filepath_x = os.path.join(
+                self.run_folder,
+                "images",
+                "samples_" + str(self.epoch).zfill(3) +
                 "_" + str(batch) + ".png")
             if len(x.shape) == 2:
                 plt.imsave(filepath_x, x, cmap="gray_r")

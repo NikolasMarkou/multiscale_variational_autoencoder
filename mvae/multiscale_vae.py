@@ -16,7 +16,7 @@ class MultiscaleVAE:
     def __init__(
             self,
             input_dims,
-            z_dims,
+            z_dims: list,
             compress_output: bool = False,
             encoder={
                 "filters": [32],
@@ -32,7 +32,6 @@ class MultiscaleVAE:
         Encoder that compresses a signal
         into a latent space of normally distributed variables
         :param input_dims: HxWxC
-        :param levels:
         :param z_dims:
         """
         # --- argument checking
@@ -534,6 +533,14 @@ class MultiscaleVAE:
 
     @property
     def decoder(self):
+        return self._model_decoder
+
+    @property
+    def z_dim(self) -> int:
+        return sum(self._z_latent_dims)
+
+    @property
+    def model_sample(self):
         return self._model_decoder
 
     @property
