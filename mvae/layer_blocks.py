@@ -108,9 +108,7 @@ def laplacian_transform_merge(
         levels: int,
         name: str = None,
         min_value: float = 0.0,
-        max_value: float = 255.0,
-        gaussian_xy_max: tuple = DEFAULT_GAUSSIAN_XY_MAX,
-        gaussian_kernel_size: tuple = DEFAULT_GAUSSIAN_KERNEL_SIZE):
+        max_value: float = 255.0):
     """
     Merge laplacian pyramid stages and then denormalize
     """
@@ -379,8 +377,7 @@ def excite_inhibit_block(
             kernel_initializer=kernel_initializer)(x)
 
     # --- mask output
-    x = \
-        keras.layers.Multiply()([spatial_mask, x])
+    x = keras.layers.Multiply()([spatial_mask, x])
 
     return x
 
@@ -997,13 +994,13 @@ def gaussian_filter_block(
 
     # --- initialise to set kernel to required value
     def kernel_init(shape, dtype):
-        logger.info(">>>>> shape:{0}".format(shape))
         kernel = np.zeros(shape)
-        for i in range(shape[2]):
-            kernel[:, :, i, 0] = \
-                gaussian_kernel(
+        single_channel_kernel = \
+            gaussian_kernel(
                     [shape[0], shape[1]],
                     xy_max)
+        for i in range(shape[2]):
+            kernel[:, :, i, 0] = single_channel_kernel
         return kernel
 
     return \

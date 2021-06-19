@@ -53,7 +53,7 @@ class MultiscaleVAE:
         # --- Variable initialization
         self._name = "mvae"
         self._levels = levels
-        self._dense_encoding = True
+        self._dense_encoding = False
         self._conv_base_filters = 32
         self._conv_activation = "relu"
         self._z_latent_dims = z_dims
@@ -140,6 +140,7 @@ class MultiscaleVAE:
             shapes_before_flattening.append(shape)
             encoders.append(
                 keras.Model(
+                    name=f"encoder_{i}",
                     inputs=encoder_input,
                     outputs=[encoder_output, mu_log[0], mu_log[1]]))
 
@@ -159,6 +160,7 @@ class MultiscaleVAE:
                     prefix=f"decoder_{i}_")
             decoders.append(
                 keras.Model(
+                    name=f"decoder_{i}",
                     inputs=decoder_input,
                     outputs=decoder_output))
 
@@ -170,7 +172,8 @@ class MultiscaleVAE:
                 input_dims=scales,
                 levels=self._levels,
                 min_value=self._min_value,
-                max_value=self._max_value)
+                max_value=self._max_value,
+                name="laplacian_transform_merge")
 
         # --- build encoder model
         logger.info("Building encoder model")
@@ -187,7 +190,7 @@ class MultiscaleVAE:
                 input_dims=self._inputs_dims,
                 gaussian_xy_max=self._gaussian_nsig,
                 gaussian_kernel_size=self._gaussian_kernel,
-                name="input_multiscale_transform")
+                name="laplacian_transform_split")
         model_encoder_input_multiscale = \
             input_transform_encoder(model_encoder_input)
         model_encoder_scale = [
@@ -232,17 +235,8 @@ class MultiscaleVAE:
             keras.Input(
                 shape=self._inputs_dims,
                 name="input")
-        model_input_transform = \
-            layer_blocks.laplacian_transform_split(
-                levels=self._levels,
-                min_value=self._min_value,
-                max_value=self._max_value,
-                input_dims=self._inputs_dims,
-                gaussian_xy_max=self._gaussian_nsig,
-                gaussian_kernel_size=self._gaussian_kernel,
-                name="laplacian_transform_split")
         model_input_multiscale = \
-            model_input_transform(model_input)
+            input_transform_encoder(model_input)
 
         for i in range(self._levels):
             encode, mu, log_var = \
@@ -270,10 +264,6 @@ class MultiscaleVAE:
         # --- save intermediate levels
         self._output_multiscale = model_encode_decode
         self._input_multiscale = model_input_multiscale
-
-        for i in range(self._levels):
-            logger.info("input_multiscale[{0}]: {1}".format(i, K.int_shape(self._input_multiscale[i])))
-            logger.info("output_multiscale[{0}]: {1}".format(i, K.int_shape(self._output_multiscale[i])))
 
     # ===============================================================================
 
