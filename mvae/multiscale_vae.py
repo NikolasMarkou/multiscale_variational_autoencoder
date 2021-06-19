@@ -265,8 +265,8 @@ class MultiscaleVAE:
             keras.layers.Concatenate(axis=-1, name="log_var")(log_var_s)
 
         # --- save intermediate levels
-        self._input_multiscale = model_input_multiscale
         self._output_multiscale = model_encode_decode
+        self._input_multiscale = model_input_multiscale
 
         for i in range(self._levels):
             logger.info("input_multiscale[{0}]: {1}".format(i, K.int_shape(self._input_multiscale[i])))
@@ -457,7 +457,7 @@ class MultiscaleVAE:
             return \
                 r_loss * r_loss_factor + \
                 kl_loss * kl_loss_factor + \
-                multi_r_loss * r_loss_factor * (self._max_value - self._min_value)
+                multi_r_loss * r_loss_factor
 
         optimizer = \
             keras.optimizers.Adagrad(
