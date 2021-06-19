@@ -79,17 +79,11 @@ logger.info("Creating model")
 
 multiscale_vae = mvae.MultiscaleVAE(
     input_dims=(32, 32, 3),
-    z_dims=[16, 32, 64],
+    z_dims=[128, 128, 128, 128],
     encoder={
-        "filters": [
-            32, 32, 32
-        ],
-        "kernel_size": [
-            (3, 3), (3, 3), (3, 3)
-        ],
-        "strides": [
-            (1, 1), (1, 1), (1, 1)
-        ]
+        "filters": [32, 64, 32],
+        "kernel_size": [(3, 3), (3, 3), (3, 3)],
+        "strides": [(1, 1), (2, 2), (1, 1)]
     },
     min_value=0.0,
     max_value=255.0)
