@@ -411,7 +411,7 @@ class MultiscaleVAE:
 
         # --- define VAE reconstruction loss
         def vae_r_loss(y_true, y_pred):
-            tmp_pixels = K.abs(y_true - y_pred)
+            tmp_pixels = K.abs(y_true - y_pred) / (self._max_value - self._min_value)
             return K.mean(tmp_pixels)
 
         # --- define VAE reconstruction loss per scale
@@ -420,16 +420,14 @@ class MultiscaleVAE:
             for i in range(self._levels):
                 tmp_pixels = \
                     K.abs(self._input_multiscale[i] - self._output_multiscale[i])
-                # adjust loss based on level (lower are more important)
-                result += K.mean(tmp_pixels) / (2.0 ** (float(i) - float(self._levels-1)))
-            return result / self._levels
+                result += K.mean(tmp_pixels)
+            return result
 
         # --- define KL loss for the latent space
         # (difference from normally distributed m=0, var=1)
         def vae_kl_loss(y_true, y_pred):
             x = 1.0 + self._log_var - K.square(self._mu) - K.exp(self._log_var)
-            x = -0.5 * K.sum(x, axis=1)
-            return K.mean(x)
+            return -0.5 * K.sum(x)
 
         # --- Define combined loss
         def vae_loss(y_true, y_pred):
@@ -439,7 +437,7 @@ class MultiscaleVAE:
             return \
                 r_loss * r_loss_factor + \
                 kl_loss * kl_loss_factor + \
-                multi_r_loss * r_loss_factor * (self._max_value - self._min_value)
+                multi_r_loss * r_loss_factor
 
         optimizer = \
             keras.optimizers.Adagrad(

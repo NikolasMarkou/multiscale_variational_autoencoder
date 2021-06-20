@@ -52,50 +52,49 @@ class SaveIntermediateResultsCallback(Callback):
         self.run_folder = run_folder
         self._resize_shape = resize_shape
         self.print_every_n_batches = print_every_n_batches
-        self._noise = np.random.normal(size=[16, self.vae.z_dim])
+        self._noise = np.random.normal(loc=0.0, scale=0.5, size=[16, self.vae.z_dim])
         images_path = os.path.join(self.run_folder, "images")
         if not os.path.exists(images_path):
             os.mkdir(images_path)
 
     def on_batch_end(self, batch, logs={}):  
-        if batch % self.print_every_n_batches == 0:
-            reconstructions = self.vae.model_trainable.predict(self.images)
-            reconstructions = self.vae.normalize(reconstructions)
-            reconstructions = np.clip(reconstructions, a_min=0.0, a_max=1.0)
+        if batch % self.print_every_n_batches != 0:
+            return
+        reconstructions = self.vae.model_trainable.predict(self.images)
+        reconstructions = self.vae.normalize(reconstructions)
 
-            # --- create collage of the reconstructions
-            x = collage(reconstructions)
+        # --- create collage of the reconstructions
+        x = collage(reconstructions)
 
-            # --- resize to output size
-            x = resize(x, self._resize_shape, order=0)
-            filepath_x = os.path.join(
-                self.run_folder,
-                "images",
-                "img_" + str(self.epoch).zfill(3) +
-                "_" + str(batch) + ".png")
-            if len(x.shape) == 2:
-                plt.imsave(filepath_x, x, cmap="gray_r")
-            else:
-                plt.imsave(filepath_x, x)
+        # --- resize to output size
+        x = resize(x, self._resize_shape, order=0)
+        filepath_x = os.path.join(
+            self.run_folder,
+            "images",
+            "img_" + str(self.epoch).zfill(3) +
+            "_" + str(batch) + ".png")
+        if len(x.shape) == 2:
+            plt.imsave(filepath_x, x, cmap="gray_r")
+        else:
+            plt.imsave(filepath_x, x)
 
-            samples = self.vae.model_sample.predict(self._noise)
-            samples = self.vae.normalize(samples)
-            samples = np.clip(samples, a_min=0.0, a_max=1.0)
+        samples = self.vae.model_sample.predict(self._noise)
+        samples = self.vae.normalize(samples)
 
-            # --- create collage of the reconstructions
-            x = collage(samples)
+        # --- create collage of the reconstructions
+        x = collage(samples)
 
-            # --- resize to output size
-            x = resize(x, self._resize_shape, order=0)
-            filepath_x = os.path.join(
-                self.run_folder,
-                "images",
-                "samples_" + str(self.epoch).zfill(3) +
-                "_" + str(batch) + ".png")
-            if len(x.shape) == 2:
-                plt.imsave(filepath_x, x, cmap="gray_r")
-            else:
-                plt.imsave(filepath_x, x)
+        # --- resize to output size
+        x = resize(x, self._resize_shape, order=0)
+        filepath_x = os.path.join(
+            self.run_folder,
+            "images",
+            "samples_" + str(self.epoch).zfill(3) +
+            "_" + str(batch) + ".png")
+        if len(x.shape) == 2:
+            plt.imsave(filepath_x, x, cmap="gray_r")
+        else:
+            plt.imsave(filepath_x, x)
 
     def on_epoch_begin(self, epoch, logs={}):
         self.epoch += 1
