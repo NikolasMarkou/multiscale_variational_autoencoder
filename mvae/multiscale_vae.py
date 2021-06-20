@@ -130,6 +130,8 @@ class MultiscaleVAE:
                 keras.Input(
                     shape=scales[i],
                     name=f"encoder_{i}_input")
+            encoder_input = \
+                keras.layers.BatchNormalization()(encoder_input)
             encoder_output, mu_log, shape = \
                 self._build_encoder(
                     encoder_input,
@@ -152,6 +154,8 @@ class MultiscaleVAE:
                 keras.Input(
                     shape=(self._z_latent_dims[i],),
                     name=f"decoder_{i}_input")
+            decoder_input = \
+                keras.layers.BatchNormalization()(decoder_input)
             decoder_output = \
                 self._build_decoder(
                     decoder_input,
