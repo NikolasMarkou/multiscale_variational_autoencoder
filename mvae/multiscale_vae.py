@@ -420,8 +420,9 @@ class MultiscaleVAE:
             for i in range(self._levels):
                 tmp_pixels = \
                     K.abs(self._input_multiscale[i] - self._output_multiscale[i])
-                result += K.mean(tmp_pixels)
-            return result
+                # adjust loss based on level (lower are more important)
+                result += K.mean(tmp_pixels) / (2.0 ** (float(i) - float(self._levels-1)))
+            return result / self._levels
 
         # --- define KL loss for the latent space
         # (difference from normally distributed m=0, var=1)
