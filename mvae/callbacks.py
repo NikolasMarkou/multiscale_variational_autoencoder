@@ -52,6 +52,7 @@ class SaveIntermediateResultsCallback(Callback):
         self.run_folder = run_folder
         self._resize_shape = resize_shape
         self.print_every_n_batches = print_every_n_batches
+        self._noise = np.random.normal(size=[16, self.vae.z_dim])
         images_path = os.path.join(self.run_folder, "images")
         if not os.path.exists(images_path):
             os.mkdir(images_path)
@@ -77,7 +78,7 @@ class SaveIntermediateResultsCallback(Callback):
             else:
                 plt.imsave(filepath_x, x)
 
-            samples = self.vae.model_sample.predict(np.random.normal(size=[16, self.vae.z_dim]))
+            samples = self.vae.model_sample.predict(self._noise)
             samples = self.vae.normalize(samples)
             samples = np.clip(samples, a_min=0.0, a_max=1.0)
 
