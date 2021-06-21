@@ -185,7 +185,7 @@ class MultiscaleVAE:
                 shape=self._inputs_dims,
                 name="input")
 
-        input_transform_encoder = \
+        model_laplacian_split = \
             layer_blocks.laplacian_transform_split(
                 levels=self._levels,
                 min_value=self._min_value,
@@ -194,10 +194,10 @@ class MultiscaleVAE:
                 gaussian_xy_max=self._gaussian_nsig,
                 gaussian_kernel_size=self._gaussian_kernel,
                 name="laplacian_transform_split")
-        model_encoder_input_multiscale = \
-            input_transform_encoder(model_encoder_input)
+        encoder_input_multiscale = \
+            model_laplacian_split(model_encoder_input)
         model_encoder_scale = [
-            encoders[i](model_encoder_input_multiscale[i])[0]
+            encoders[i](encoder_input_multiscale[i])[0]
             for i in range(self._levels)
         ]
         model_encoder_output = \
@@ -239,7 +239,7 @@ class MultiscaleVAE:
                 shape=self._inputs_dims,
                 name="input")
         model_input_multiscale = \
-            input_transform_encoder(model_input)
+            model_laplacian_split(model_input)
 
         for i in range(self._levels):
             encode, mu, log_var = \
@@ -415,16 +415,23 @@ class MultiscaleVAE:
 
         # --- define VAE reconstruction loss
         def vae_r_loss(y_true, y_pred):
-            tmp_pixels = K.abs(y_true - y_pred) / (self._max_value - self._min_value)
-            return K.mean(tmp_pixels)
+            tmp_pixels = K.abs(y_true - y_pred)
+            tmp_pixels = K.sum(tmp_pixels, axis=[1, 2, 3])
+            return K.mean(tmp_pixels, axis=-1)
 
         # --- define VAE reconstruction loss per scale
         def vae_multi_r_loss(y_true, y_pred):
             result = 0.0
             for i in range(self._levels):
-                tmp_pixels = \
-                    K.abs(self._input_multiscale[i] - self._output_multiscale[i])
-                result += K.mean(tmp_pixels)
+                if i == self._levels - 1:
+                    tmp_pixels = \
+                        K.abs(self._input_multiscale[i] - self._output_multiscale[i]) * \
+                        (self._max_value - self._min_value)
+                else:
+                    tmp_pixels = \
+                        K.abs(self._input_multiscale[i] - self._output_multiscale[i])
+                tmp_pixels = K.sum(tmp_pixels, axis=[1, 2, 3])
+                result += K.mean(tmp_pixels, axis=-1)
             return result
 
         # --- define KL loss for the latent space
