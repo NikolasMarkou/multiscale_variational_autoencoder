@@ -154,11 +154,11 @@ class MultiscaleVAE:
                 keras.Input(
                     shape=(self._z_latent_dims[i],),
                     name=f"decoder_{i}_input")
-            decoder_input_bn = \
-                keras.layers.BatchNormalization()(decoder_input)
+            # decoder_input_bn = \
+            #     keras.layers.BatchNormalization()(decoder_input)
             decoder_output = \
                 self._build_decoder(
-                    decoder_input_bn,
+                    decoder_input,
                     target_shape=shapes_before_flattening[i],
                     prefix=f"decoder_{i}_")
             decoders.append(
