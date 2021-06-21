@@ -438,7 +438,8 @@ class MultiscaleVAE:
         # (difference from normally distributed m=0, var=1)
         def vae_kl_loss(y_true, y_pred):
             x = 1.0 + self._log_var - K.square(self._mu) - K.exp(self._log_var)
-            return -0.5 * K.sum(x)
+            x = -0.5 * K.sum(x, axis=[1])
+            return K.mean(x)
 
         # --- Define combined loss
         def vae_loss(y_true, y_pred):
