@@ -61,43 +61,45 @@ class SaveIntermediateResultsCallback(Callback):
         if not os.path.exists(self._images_path):
             os.mkdir(self._images_path)
 
-    def on_batch_end(self, batch, logs={}):  
-        if batch % self._print_every_n_batches != 0:
-            return
-        reconstructions = self._vae.model_trainable.predict(self._images)
-        reconstructions = self._vae.normalize(reconstructions)
-
-        # --- create collage of the reconstructions
-        x = collage(reconstructions)
-
-        # --- resize to output size
+    def save_collage(
+            self,
+            samples: np.ndarray,
+            batch: int,
+            prefix: str):
+        # normalize to [0, 1]
+        x = self._vae.normalize(samples)
+        # create collage
+        x = collage(x)
+        # resize to output size
         x = resize(x, self._resize_shape, order=0)
         filepath_x = os.path.join(
             self._images_path,
-            "img_" + str(self._epoch).zfill(3) +
+            f"{prefix}_" + str(self._epoch).zfill(3) +
             "_" + str(batch) + ".png")
         if len(x.shape) == 2:
             plt.imsave(filepath_x, x, cmap="gray_r")
         else:
             plt.imsave(filepath_x, x)
 
-        samples = self._vae.model_sample.predict(self._noise)
-        samples = self._vae.normalize(samples)
+    def on_batch_end(self, batch, logs={}):  
+        if batch % self._print_every_n_batches != 0:
+            return
+        # --- encode decode
+        encodings = self._vae.model_encode.predict(self._images)
+        decodings = self._vae.model_decode.predict(encodings)
+        # create and save collage of the reconstructions
+        self.save_collage(
+            samples=decodings,
+            batch=batch,
+            prefix="img")
 
-        # --- create collage of the reconstructions
-        x = collage(samples)
-
-        # --- resize to output size
-        x = resize(x, self._resize_shape, order=0)
-        filepath_x = os.path.join(
-            self._run_folder,
-            "images",
-            "samples_" + str(self._epoch).zfill(3) +
-            "_" + str(batch) + ".png")
-        if len(x.shape) == 2:
-            plt.imsave(filepath_x, x, cmap="gray_r")
-        else:
-            plt.imsave(filepath_x, x)
+        # --- random z-dim decoding
+        samples = self._vae.model_decode.predict(self._noise)
+        # create and save collage of the samples
+        self.save_collage(
+            samples=samples,
+            batch=batch,
+            prefix="samples")
 
     def on_epoch_begin(self, epoch, logs={}):
         self._epoch += 1

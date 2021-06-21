@@ -549,6 +549,14 @@ class MultiscaleVAE:
         return sum(self._z_latent_dims)
 
     @property
+    def model_encode(self):
+        return self._model_encoder
+
+    @property
+    def model_decode(self):
+        return self._model_decoder
+
+    @property
     def model_sample(self):
         return self._model_decoder
 
