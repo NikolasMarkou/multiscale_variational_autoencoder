@@ -477,14 +477,12 @@ class MultiscaleVAE:
             initial_epoch: int = 0,
             print_every_n_batches: int = 100,
             save_checkpoint_weights: bool = False):
-        """
 
-        """
         custom_callback = callbacks.SaveIntermediateResultsCallback(
             run_folder,
             print_every_n_batches,
             initial_epoch,
-            x_train[0:16, :, :, :],
+            x_train[0:64, :, :, :],
             self)
         lr_schedule = schedule.step_decay_schedule(
             initial_lr=self._learning_rate,
