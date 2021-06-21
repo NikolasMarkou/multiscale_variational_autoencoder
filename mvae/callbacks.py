@@ -81,9 +81,14 @@ class SaveIntermediateResultsCallback(Callback):
         else:
             plt.imsave(filepath_x, x)
 
-    def on_batch_end(self, batch, logs={}):  
+    def on_batch_end(self, batch, logs={}):
+        # --- do this only so many batches
         if batch % self._print_every_n_batches != 0:
             return
+
+        # --- setup parameters
+        no_samples = self._images.shape[0]
+
         # --- encode decode
         encodings = self._vae.model_encode.predict(self._images)
         decodings = self._vae.model_decode.predict(encodings)
@@ -100,6 +105,24 @@ class SaveIntermediateResultsCallback(Callback):
             samples=samples,
             batch=batch,
             prefix="samples")
+
+        # --- interpolation z-dim decoding
+        start_sample = encodings[0, :]
+        end_sample = encodings[1, :]
+        interpolations = np.zeros_like(encodings)
+        for i in range(no_samples):
+            mix_coeff = float(i) / float(no_samples)
+            interpolations[i, :] = \
+                start_sample * (1.0 - mix_coeff) + \
+                end_sample * mix_coeff
+        interpolations[0, :] = start_sample
+        interpolations[-1, :] = end_sample
+        interpolations = self._vae.model_decode.predict(interpolations)
+        # create and save collage of the samples
+        self.save_collage(
+            samples=interpolations,
+            batch=batch,
+            prefix="interpolations")
 
     def on_epoch_begin(self, epoch, logs={}):
         self._epoch += 1
