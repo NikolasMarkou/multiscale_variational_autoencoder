@@ -18,9 +18,10 @@ EPOCHS = 150
 STEP_SIZE = 30
 LR_DECAY = 0.5
 BATCH_SIZE = 32
+SAMPLE_STD = 0.1
 INITIAL_EPOCH = 0
-KL_LOSS_FACTOR = 0.1
 R_LOSS_FACTOR = 1
+KL_LOSS_FACTOR = 0.1
 LEARNING_RATE = 0.01
 EXPAND_DATASET = False
 PRINT_EVERY_N_BATCHES = 2000
@@ -80,13 +81,14 @@ logger.info("Creating model")
 multiscale_vae = mvae.MultiscaleVAE(
     input_dims=(32, 32, 3),
     z_dims=[128, 128],
+    min_value=0.0,
+    max_value=255.0,
+    sample_std=SAMPLE_STD,
     encoder={
         "filters": [32, 32, 32],
         "kernel_size": [(3, 3), (3, 3), (3, 3)],
         "strides": [(2, 2), (2, 2), (1, 1)]
-    },
-    min_value=0.0,
-    max_value=255.0)
+    })
 
 # ==============================================================================
 

@@ -402,7 +402,7 @@ def squeeze_excite_block(
         raise ValueError("works only on 4d tensors")
     channels = shape[channels_index]
     if squeeze_units is None or squeeze_units <= 0:
-        squeeze_units = channels * 2
+        squeeze_units = channels
 
     # --- squeeze
     x = keras.layers.GlobalAveragePooling2D(
@@ -572,10 +572,6 @@ def mobilenetV3_block(
         kernel_regularizer=regularizer,
         kernel_initializer=initializer)(input_layer)
 
-    if use_batchnorm:
-        x = keras.layers.BatchNormalization(
-            name=prefix + "batchnorm0")(x)
-
     x = keras.layers.DepthwiseConv2D(
         depth_multiplier=1,
         kernel_size=(3, 3),
@@ -596,10 +592,6 @@ def mobilenetV3_block(
             initializer=initializer,
             use_batchnorm=True,
             prefix=prefix + "squeeze_excite_")
-
-    if use_batchnorm:
-        x = keras.layers.BatchNormalization(
-            name=prefix + "batchnorm1")(x)
 
     x = \
         keras.layers.Conv2D(
@@ -931,23 +923,23 @@ def basic_block(
             else:
                 raise ValueError("don't know how to parse {0}".format(block_type))
 
-        # x = \
-        #     mobilenetV3_block(
-        #         x,
-        #         filters=filters[i],
-        #         initializer=initializer,
-        #         regularizer=regularizer,
-        #         use_batchnorm=use_batchnorm,
-        #         prefix=prefix_i + "mobilenetV3_")
+        x = \
+            mobilenetV3_block(
+                x,
+                filters=filters[i],
+                initializer=initializer,
+                regularizer=regularizer,
+                use_batchnorm=use_batchnorm,
+                prefix=prefix_i + "mobilenetV3_")
 
-        x = keras.layers.Conv2D(
-            padding="same",
-            strides=(1, 1),
-            filters=filters[i],
-            activation="relu",
-            kernel_size=(3, 3),
-            kernel_initializer=initializer,
-            kernel_regularizer=regularizer)(x)
+        # x = keras.layers.Conv2D(
+        #     padding="same",
+        #     strides=(1, 1),
+        #     filters=filters[i],
+        #     activation="relu",
+        #     kernel_size=(3, 3),
+        #     kernel_initializer=initializer,
+        #     kernel_regularizer=regularizer)(x)
 
         if use_dropout:
             x = keras.layers.Dropout(
