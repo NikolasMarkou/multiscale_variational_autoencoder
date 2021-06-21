@@ -1,3 +1,4 @@
+import math
 import os
 import numpy as np
 import matplotlib.pyplot as plt
@@ -107,16 +108,19 @@ class SaveIntermediateResultsCallback(Callback):
             prefix="samples")
 
         # --- interpolation z-dim decoding
-        start_sample = encodings[0, :]
-        end_sample = encodings[1, :]
         interpolations = np.zeros_like(encodings)
-        for i in range(no_samples):
-            mix_coeff = float(i) / float(no_samples)
-            interpolations[i, :] = \
-                start_sample * (1.0 - mix_coeff) + \
-                end_sample * mix_coeff
-        interpolations[0, :] = start_sample
-        interpolations[-1, :] = end_sample
+        sqrt_no_samples = int(round(math.sqrt(no_samples)))
+        for j in range(sqrt_no_samples):
+            start_sample = encodings[j, :]
+            end_sample = encodings[j+1, :]
+            for i in range(sqrt_no_samples):
+                counter = j * sqrt_no_samples + i
+                if counter >= no_samples:
+                    continue
+                mix_coeff = float(i) / float(sqrt_no_samples-1)
+                interpolations[counter, :] = \
+                    start_sample * (1.0 - mix_coeff) + \
+                    end_sample * mix_coeff
         interpolations = self._vae.model_decode.predict(interpolations)
         # create and save collage of the samples
         self.save_collage(
