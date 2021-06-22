@@ -315,12 +315,14 @@ class MultiscaleVAE:
 
         mu = keras.layers.Dense(
             units=z_dim,
+            use_bias=False,
             name=prefix + "mu",
-            activation="linear",
+            activation="tanh",
             kernel_regularizer=self._dense_regularizer,
             kernel_initializer=self._initialization_scheme)(x)
         log_var = keras.layers.Dense(
             units=z_dim,
+            use_bias=False,
             activation="linear",
             name=prefix + "log_var",
             kernel_regularizer=self._dense_regularizer,
@@ -379,6 +381,7 @@ class MultiscaleVAE:
         x = keras.layers.Conv2D(
             strides=(1, 1),
             padding="same",
+            use_bias=False,
             kernel_size=(1, 1),
             activation="tanh",
             filters=self._output_channels,
@@ -406,49 +409,48 @@ class MultiscaleVAE:
         self.learning_rate = learning_rate
 
         # --- define VAE reconstruction loss
-        def vae_r_loss(y_true, y_pred):
+        def r_loss(y_true, y_pred):
             tmp_pixels = K.abs(y_true - y_pred)
-            tmp_pixels = K.sum(tmp_pixels, axis=[1, 2, 3])
+            tmp_pixels = K.mean(tmp_pixels, axis=[1, 2, 3])
             return K.mean(tmp_pixels, axis=-1)
 
         # --- define VAE reconstruction loss per scale
-        def vae_multi_r_loss(y_true, y_pred):
+        def multi_r_loss(y_true, y_pred):
             result = 0.0
             for i in range(self._levels):
                 tmp_pixels = \
                     K.abs(self._input_multiscale[i] - self._output_multiscale[i])
-                tmp_pixels = K.sum(tmp_pixels, axis=[1, 2, 3])
+                tmp_pixels = K.mean(tmp_pixels, axis=[1, 2, 3])
                 result += K.mean(tmp_pixels, axis=-1)
-            return result
+            return result / float(self._levels)
 
         # --- define KL loss for the latent space
         # (difference from normally distributed m=0, var=1)
-        def vae_kl_loss(y_true, y_pred):
+        def kl_loss(y_true, y_pred):
             x = 1.0 + \
                 self._log_var - \
                 K.square(self._mu) - \
                 K.exp(self._log_var)
             x = -0.5 * K.sum(x, axis=[0])
             x = K.abs(x)
-            return K.sum(x)
+            return K.mean(x)
 
         # --- define spring loss for minimizing mu (per dimensions)
-        def vae_spring_loss(y_true, y_pred):
+        def spring_loss(y_true, y_pred):
             x = K.mean(self._mu, axis=[0])
             x = K.abs(x)
-            return K.sum(x)
+            return K.mean(x)
 
-        # --- Define combined loss
-        def vae_loss(y_true, y_pred):
-            r_loss = vae_r_loss(y_true, y_pred)
-            kl_loss = vae_kl_loss(y_true, y_pred)
-            spring_loss = vae_spring_loss(y_true, y_pred)
-            multi_r_loss = vae_multi_r_loss(y_true, y_pred)
+        # --- define combined loss
+        def loss(y_true, y_pred):
+            tmp_r_loss = r_loss(y_true, y_pred)
+            tmp_kl_loss = kl_loss(y_true, y_pred)
+            tmp_spring_loss = spring_loss(y_true, y_pred)
+            tmp_multi_r_loss = multi_r_loss(y_true, y_pred)
             return \
-                spring_loss + \
-                r_loss * r_loss_factor + \
-                kl_loss * kl_loss_factor + \
-                multi_r_loss * r_loss_factor
+                tmp_spring_loss * kl_loss_factor + \
+                tmp_kl_loss * kl_loss_factor + \
+                tmp_multi_r_loss * r_loss_factor * (self._max_value - self._min_value)
 
         optimizer = \
             keras.optimizers.Adagrad(
@@ -457,12 +459,12 @@ class MultiscaleVAE:
 
         self._model_trainable.compile(
             optimizer=optimizer,
-            loss=vae_loss,
+            loss=loss,
             metrics=[
-                vae_r_loss,
-                vae_kl_loss,
-                vae_spring_loss,
-                vae_multi_r_loss
+                r_loss,
+                kl_loss,
+                spring_loss,
+                multi_r_loss
             ])
 
     # ==========================================================================
