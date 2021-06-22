@@ -437,16 +437,27 @@ class MultiscaleVAE:
         # --- define KL loss for the latent space
         # (difference from normally distributed m=0, var=1)
         def vae_kl_loss(y_true, y_pred):
-            x = 1.0 + self._log_var - K.square(self._mu) - K.exp(self._log_var)
+            x = 1.0 + \
+                self._log_var - \
+                K.square(self._mu) - \
+                K.exp(self._log_var)
             x = -0.5 * K.sum(x, axis=[1])
+            return K.mean(x)
+
+        # --- define spring loss for minimizing mu
+        def vae_spring_loss(y_true, y_pred):
+            x = K.square(K.pow(self._mu, 2.0))
+            x = K.sum(x, axis=[1])
             return K.mean(x)
 
         # --- Define combined loss
         def vae_loss(y_true, y_pred):
             r_loss = vae_r_loss(y_true, y_pred)
             kl_loss = vae_kl_loss(y_true, y_pred)
+            spring_loss = vae_spring_loss(y_true, y_pred)
             multi_r_loss = vae_multi_r_loss(y_true, y_pred)
             return \
+                vae_spring_loss + \
                 r_loss * r_loss_factor + \
                 kl_loss * kl_loss_factor + \
                 multi_r_loss * r_loss_factor
@@ -462,6 +473,7 @@ class MultiscaleVAE:
             metrics=[
                 vae_r_loss,
                 vae_kl_loss,
+                vae_spring_loss,
                 vae_multi_r_loss
             ])
 
