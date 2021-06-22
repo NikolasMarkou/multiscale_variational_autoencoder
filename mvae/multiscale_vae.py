@@ -311,14 +311,6 @@ class MultiscaleVAE:
         shape_before_flattening = shape[1:]
 
         # --- flatten and convert to z_dim dimensions
-        # x, _ = \
-        #     layer_blocks.tensor_to_target_encoding_thinning(
-        #         x,
-        #         prefix=prefix + "thinning",
-        #         target_encoding_size=z_dim,
-        #         kernel_initializer=self._initialization_scheme,
-        #         kernel_regularizer=self._kernel_regularizer)
-
         x = keras.layers.Flatten()(x)
 
         mu = keras.layers.Dense(
@@ -388,7 +380,7 @@ class MultiscaleVAE:
             strides=(1, 1),
             padding="same",
             kernel_size=(1, 1),
-            activation="linear",
+            activation="tanh",
             filters=self._output_channels,
             kernel_regularizer=self._kernel_regularizer,
             kernel_initializer=self._initialization_scheme)(x)
