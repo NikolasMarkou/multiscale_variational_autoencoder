@@ -457,7 +457,7 @@ class MultiscaleVAE:
             spring_loss = vae_spring_loss(y_true, y_pred)
             multi_r_loss = vae_multi_r_loss(y_true, y_pred)
             return \
-                vae_spring_loss + \
+                spring_loss + \
                 r_loss * r_loss_factor + \
                 kl_loss * kl_loss_factor + \
                 multi_r_loss * r_loss_factor
