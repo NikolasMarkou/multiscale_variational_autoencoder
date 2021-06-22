@@ -446,9 +446,8 @@ class MultiscaleVAE:
 
         # --- define spring loss for minimizing mu
         def vae_spring_loss(y_true, y_pred):
-            x = K.abs(self._mu)
-            x = K.sum(x, axis=[1])
-            return K.mean(x)
+            x = K.sum(self._mu, axis=[1])
+            return K.mean(x, axis=-1)
 
         # --- Define combined loss
         def vae_loss(y_true, y_pred):
