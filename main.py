@@ -80,7 +80,7 @@ logger.info("Creating model")
 
 multiscale_vae = mvae.MultiscaleVAE(
     input_dims=(32, 32, 3),
-    z_dims=[128, 128],
+    z_dims=[16, 32, 128],
     min_value=0.0,
     max_value=255.0,
     sample_std=SAMPLE_STD,
