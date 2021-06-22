@@ -436,8 +436,9 @@ class MultiscaleVAE:
                 self._log_var - \
                 K.square(self._mu) - \
                 K.exp(self._log_var)
-            x = -0.5 * K.sum(x, axis=[1])
-            return K.mean(x)
+            x = -0.5 * K.sum(x, axis=[0])
+            x = K.abs(x)
+            return K.sum(x)
 
         # --- define spring loss for minimizing mu (per dimensions)
         def vae_spring_loss(y_true, y_pred):
