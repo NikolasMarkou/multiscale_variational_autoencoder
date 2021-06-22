@@ -423,13 +423,8 @@ class MultiscaleVAE:
         def vae_multi_r_loss(y_true, y_pred):
             result = 0.0
             for i in range(self._levels):
-                if i == self._levels - 1:
-                    tmp_pixels = \
-                        K.abs(self._input_multiscale[i] - self._output_multiscale[i]) * \
-                        (self._max_value - self._min_value)
-                else:
-                    tmp_pixels = \
-                        K.abs(self._input_multiscale[i] - self._output_multiscale[i])
+                tmp_pixels = \
+                    K.abs(self._input_multiscale[i] - self._output_multiscale[i])
                 tmp_pixels = K.sum(tmp_pixels, axis=[1, 2, 3])
                 result += K.mean(tmp_pixels, axis=-1)
             return result
@@ -444,11 +439,11 @@ class MultiscaleVAE:
             x = -0.5 * K.sum(x, axis=[1])
             return K.mean(x)
 
-        # --- define spring loss for minimizing mu
+        # --- define spring loss for minimizing mu (per dimensions)
         def vae_spring_loss(y_true, y_pred):
-            x = K.mean(self._mu, axis=[1])
+            x = K.mean(self._mu, axis=[0])
             x = K.abs(x)
-            return K.mean(x, axis=-1)
+            return K.sum(x)
 
         # --- Define combined loss
         def vae_loss(y_true, y_pred):
