@@ -144,7 +144,7 @@ def laplacian_transform_merge(
             if trainable:
                 # add conditional
                 x = keras.layers.Concatenate()(
-                    [K.stop_gradient(x), input_layers[i]])
+                    [x, input_layers[i]])
                 x = keras.layers.Conv2D(
                     filters=32,
                     kernel_size=(3, 3),
