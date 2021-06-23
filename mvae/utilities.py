@@ -39,14 +39,14 @@ def noisy_image_data_generator(
         batch_size: int = 32,
         min_value: float = 0.0,
         max_value: float = 255.0,
-        min_noise_std: float = 0.0,
-        max_noise_std: float = 1.0,
+        min_noise_std: float = 0.01,
+        max_noise_std: float = 10.0,
         random_invert: bool = False,
         random_brightness: bool = False,
         zoom_range: float = 0.25,
         rotation_range: int = 90,
-        width_shift_range: float = 0.0,
-        height_shift_range: float = 0.0,
+        width_shift_range: float = 0.1,
+        height_shift_range: float = 0.1,
         vertical_flip: bool = True,
         horizontal_flip: bool = True):
     """
@@ -131,11 +131,7 @@ def noisy_image_data_generator(
                     np.random.normal(0.0, std, x_batch.shape)
 
         # clip all to be between min and max value
-        x_batch = \
-            np.clip(
-                x_batch,
-                a_min=min_value,
-                a_max=max_value)
+        x_batch = np.clip(x_batch, a_min=min_value, a_max=max_value)
 
         # return input, target
         yield x_batch, x_batch

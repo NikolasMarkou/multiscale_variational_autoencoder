@@ -12,10 +12,6 @@ from . import schedule, layer_blocks, callbacks, utilities
 
 # ==============================================================================
 
-DEFAULT_BN_MOMENTUM = 0.999
-
-# ==============================================================================
-
 
 class MultiscaleVAE:
     def __init__(
@@ -136,8 +132,7 @@ class MultiscaleVAE:
                     shape=scales[i],
                     name=f"encoder_{i}_input")
             encoder_input_bn = \
-                keras.layers.BatchNormalization(
-                    momentum=DEFAULT_BN_MOMENTUM)(encoder_input)
+                keras.layers.BatchNormalization()(encoder_input)
             encoder_output, mu_log, shape = \
                 self._build_encoder(
                     encoder_input_bn,
@@ -154,55 +149,24 @@ class MultiscaleVAE:
         # --- decoders
         logger.info("Building decoder")
         decoders = []
-
-        for i in range(self._levels - 1, -1, -1):
+        for i in range(self._levels):
             logger.info(f"Decoder scale [{i}]")
-
-            if i == self._levels -1:
-                decoder_input = \
-                    keras.Input(
-                        shape=(self._z_latent_dims[i],),
-                        name=f"decoder_{i}_input")
-                # normalize with mean = 0.0, variance = 1.0
-                decoder_input_bn = \
-                    keras.layers.BatchNormalization(
-                        momentum=DEFAULT_BN_MOMENTUM)(decoder_input)
-                decoder_output = \
-                    self._build_decoder(
-                        decoder_input_bn,
-                        conditional_input=None,
-                        target_shape=shapes_before_flattening[i],
-                        prefix=f"decoder_{i}_")
-                decoders.append(
-                    keras.Model(
-                        name=f"decoder_{i}",
-                        inputs=decoder_input,
-                        outputs=decoder_output))
-            else:
-                decoder_input_0 = \
-                    keras.Input(
-                        shape=scales[i+1],
-                        name=f"decoder_{i}_input_0")
-                decoder_input_1 = \
-                    keras.Input(
-                        shape=(self._z_latent_dims[i],),
-                        name=f"decoder_{i}_input_1")
-                # normalize with mean = 0.0, variance = 1.0
-                decoder_input_bn = \
-                    keras.layers.BatchNormalization(
-                        momentum=DEFAULT_BN_MOMENTUM)(decoder_input_1)
-                decoder_output = \
-                    self._build_decoder(
-                        decoder_input_bn,
-                        conditional_input=decoder_input_0,
-                        target_shape=shapes_before_flattening[i],
-                        prefix=f"decoder_{i}_")
-                decoders.append(
-                    keras.Model(
-                        name=f"decoder_{i}",
-                        inputs=[decoder_input_0, decoder_input_1],
-                        outputs=decoder_output))
-        decoders.reverse()
+            decoder_input = \
+                keras.Input(
+                    shape=(self._z_latent_dims[i],),
+                    name=f"decoder_{i}_input")
+            decoder_input_bn = \
+                keras.layers.BatchNormalization()(decoder_input)
+            decoder_output = \
+                self._build_decoder(
+                    decoder_input_bn,
+                    target_shape=shapes_before_flattening[i],
+                    prefix=f"decoder_{i}_")
+            decoders.append(
+                keras.Model(
+                    name=f"decoder_{i}",
+                    inputs=decoder_input,
+                    outputs=decoder_output))
 
         # --- upsample and merge decoder outputs
         logger.info("Building decoder merge")
@@ -254,18 +218,10 @@ class MultiscaleVAE:
         model_decoder_split = \
             keras.layers.Lambda(split, name="split")(
                 [model_decoder_input, self._z_latent_dims])
-
-        previous_output = None
         model_decoder_decode = []
-        for i in range(self._levels - 1, -1, -1):
-            if i == self._levels - 1:
-                decode = decoders[i](model_decoder_split[i])
-            else:
-                decode = decoders[i]([previous_output, model_decoder_split[i]])
-            previous_output = decode
+        for i in range(self._levels):
+            decode = decoders[i](model_decoder_split[i])
             model_decoder_decode.append(decode)
-        model_decoder_decode.reverse()
-
         model_decoder_output = \
             model_decoder_merge(model_decoder_decode)
         self._model_decoder = \
@@ -286,30 +242,13 @@ class MultiscaleVAE:
         model_input_multiscale = \
             model_laplacian_split(model_input)
 
-        previous_output = None
-        for i in range(self._levels - 1, -1, -1):
+        for i in range(self._levels):
             encode, mu, log_var = \
                 encoders[i](model_input_multiscale[i])
-
-            if i == self._levels - 1:
-                decode = decoders[i](encode)
-            else:
-                decode = decoders[i]([previous_output, encode])
-            previous_output = decode
             mu_s.append(mu)
             log_var_s.append(log_var)
+            decode = decoders[i](encode)
             model_encode_decode.append(decode)
-        mu_s.reverse()
-        log_var_s.reverse()
-        model_encode_decode.reverse()
-
-        # for i in range(self._levels):
-        #     encode, mu, log_var = \
-        #         encoders[i](model_input_multiscale[i])
-        #     mu_s.append(mu)
-        #     log_var_s.append(log_var)
-        #     decode = decoders[i](encode)
-        #     model_encode_decode.append(decode)
 
         # merge multiple outputs in a single output
         model_output = model_decoder_merge(model_encode_decode)
@@ -346,7 +285,7 @@ class MultiscaleVAE:
         :param prefix:
         :return:
         """
-        # --- transforming here
+        # --- Transforming here
         x = keras.layers.Conv2D(
             filters=self._conv_base_filters,
             kernel_size=(3, 3),
@@ -357,7 +296,7 @@ class MultiscaleVAE:
             kernel_regularizer=self._kernel_regularizer,
             kernel_initializer=self._initialization_scheme)(encoder_input)
 
-        # --- transforming here
+        # --- Transforming here
         x = layer_blocks.basic_block(
             input_layer=x,
             prefix=prefix,
@@ -378,16 +317,15 @@ class MultiscaleVAE:
         mu = keras.layers.Dense(
             units=z_dim,
             use_bias=False,
-            name=f"{prefix}mu",
+            name=prefix + "mu",
             activation="tanh",
             kernel_regularizer=self._dense_regularizer,
             kernel_initializer=self._initialization_scheme)(x)
-
         log_var = keras.layers.Dense(
             units=z_dim,
             use_bias=False,
             activation="linear",
-            name=f"{prefix}log_var",
+            name=prefix + "log_var",
             kernel_regularizer=self._dense_regularizer,
             kernel_initializer=self._initialization_scheme)(x)
 
@@ -401,7 +339,7 @@ class MultiscaleVAE:
 
         return \
             keras.layers.Lambda(
-                sample, name=f"{prefix}sample_output")(
+                sample, name=prefix + "_sample_output")(
                 [mu, log_var, sample_stddev]), \
             [mu, log_var], \
             shape_before_flattening
@@ -412,7 +350,6 @@ class MultiscaleVAE:
             self,
             input_layer,
             target_shape,
-            conditional_input=None,
             prefix: str = "decoder_"):
         """
         Creates a decoder block
@@ -441,25 +378,13 @@ class MultiscaleVAE:
             strides=self._decoder_config["strides"],
             kernel_size=self._decoder_config["kernel_size"])
 
-        # --- mix with conditional
-        if conditional_input is not None:
-            conditional_input = \
-                K.stop_gradient(conditional_input)
-            conditional_input = \
-                keras.layers.BatchNormalization()(conditional_input)
-            conditional_input_x2 = \
-                keras.layers.UpSampling2D(
-                    interpolation="bilinear")(conditional_input)
-            x = \
-                keras.layers.Concatenate()([x, conditional_input_x2])
-
         # --- match target channels
         x = keras.layers.Conv2D(
             strides=(1, 1),
             padding="same",
             use_bias=False,
-            activation="tanh",
             kernel_size=(1, 1),
+            activation="tanh",
             filters=self._output_channels,
             kernel_regularizer=self._kernel_regularizer,
             kernel_initializer=self._initialization_scheme)(x)
@@ -574,18 +499,16 @@ class MultiscaleVAE:
         checkpoint_filepath = os.path.join(
             run_folder,
             "weights/weights-{epoch:03d}-{loss:.2f}.h5")
-        checkpoint1 = \
-            keras.callbacks.ModelCheckpoint(
-                checkpoint_filepath,
-                save_weights_only=True,
-                verbose=1)
-        checkpoint2 = \
-            keras.callbacks.ModelCheckpoint(
-                os.path.join(
-                    run_folder,
-                    "weights/weights.h5"),
-                save_weights_only=True,
-                verbose=1)
+        checkpoint1 = keras.callbacks.ModelCheckpoint(
+            checkpoint_filepath,
+            save_weights_only=True,
+            verbose=1)
+        checkpoint2 = keras.callbacks.ModelCheckpoint(
+            os.path.join(
+                run_folder,
+                "weights/weights.h5"),
+            save_weights_only=True,
+            verbose=1)
         tb_callback = \
             tf.keras.callbacks.TensorBoard(
                 log_dir=os.path.join(run_folder, "logs"),
@@ -601,8 +524,7 @@ class MultiscaleVAE:
         if save_checkpoint_weights:
             callbacks_fns += [checkpoint1, checkpoint2]
 
-        batches_per_epoch = \
-            4 * int(math.ceil(len(x_train) / batch_size))
+        batches_per_epoch = 4 * int(math.ceil(len(x_train) / batch_size))
 
         self._model_trainable.fit(
             utilities.noisy_image_data_generator(
