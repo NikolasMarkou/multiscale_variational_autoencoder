@@ -143,8 +143,8 @@ def laplacian_transform_merge(
                     interpolation="bilinear")(output_layer)
             if trainable:
                 # add conditional
-                x = K.stop_gradient(x)
-                x = keras.layers.Concatenate()([x, input_layers[i]])
+                x = keras.layers.Concatenate()(
+                    [K.stop_gradient(x), input_layers[i]])
                 x = keras.layers.Conv2D(
                     filters=32,
                     kernel_size=(3, 3),
