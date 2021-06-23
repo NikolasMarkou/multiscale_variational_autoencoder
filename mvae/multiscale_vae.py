@@ -173,6 +173,7 @@ class MultiscaleVAE:
 
         model_decoder_merge = \
             layer_blocks.laplacian_transform_merge(
+                trainable=True,
                 input_dims=scales,
                 levels=self._levels,
                 min_value=self._min_value,

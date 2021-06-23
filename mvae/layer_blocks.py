@@ -109,7 +109,8 @@ def laplacian_transform_merge(
         levels: int,
         name: str = None,
         min_value: float = 0.0,
-        max_value: float = 255.0):
+        max_value: float = 255.0,
+        trainable: bool = False):
     """
     Merge laplacian pyramid stages and then denormalize
     """
@@ -140,7 +141,29 @@ def laplacian_transform_merge(
                 keras.layers.UpSampling2D(
                     size=(2, 2),
                     interpolation="bilinear")(output_layer)
-            output_layer = keras.layers.Add()([x, input_layers[i]])
+            if trainable:
+                # add conditional
+                x = K.stop_gradient(x)
+                x = keras.layers.Concatenate()([x, input_layers[i]])
+                x = keras.layers.Conv2D(
+                    filters=32,
+                    kernel_size=(3, 3),
+                    strides=(1, 1),
+                    padding="same",
+                    activation="linear",
+                    kernel_regularizer=DEFAULT_KERNEL_REGULARIZER,
+                    kernel_initializer=DEFAULT_KERNEL_INITIALIZER)(x)
+                x = keras.layers.BatchNormalization()(x)
+                x = keras.layers.Conv2D(
+                    filters=input_dims[i][-1],
+                    kernel_size=(1, 1),
+                    strides=(1, 1),
+                    padding="same",
+                    activation="tanh",
+                    kernel_regularizer=DEFAULT_KERNEL_REGULARIZER,
+                    kernel_initializer=DEFAULT_KERNEL_INITIALIZER)(x)
+            output_layer = \
+                keras.layers.Add()([x, input_layers[i]])
 
     # bring bang to initial value range
     output_denormalize_layer = \
