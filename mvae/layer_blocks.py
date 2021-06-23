@@ -110,7 +110,11 @@ def laplacian_transform_merge(
         name: str = None,
         min_value: float = 0.0,
         max_value: float = 255.0,
-        trainable: bool = False):
+        trainable: bool = False,
+        filters: int = 32,
+        activation: str = "relu",
+        kernel_regularizer: str = DEFAULT_KERNEL_REGULARIZER,
+        kernel_initializer: str = DEFAULT_KERNEL_INITIALIZER):
     """
     Merge laplacian pyramid stages and then denormalize
     """
@@ -145,23 +149,26 @@ def laplacian_transform_merge(
                 # add conditional
                 x = keras.layers.Concatenate()(
                     [x, input_layers[i]])
+                # mixing
                 x = keras.layers.Conv2D(
-                    filters=32,
+                    filters=filters,
+                    strides=(1, 1),
+                    padding="same",
                     kernel_size=(3, 3),
-                    strides=(1, 1),
-                    padding="same",
-                    activation="linear",
-                    kernel_regularizer=DEFAULT_KERNEL_REGULARIZER,
-                    kernel_initializer=DEFAULT_KERNEL_INITIALIZER)(x)
+                    activation=activation,
+                    kernel_regularizer=kernel_regularizer,
+                    kernel_initializer=kernel_initializer)(x)
                 x = keras.layers.BatchNormalization()(x)
+                # retargeting
                 x = keras.layers.Conv2D(
-                    filters=input_dims[i][-1],
-                    kernel_size=(1, 1),
+                    use_bias=False,
                     strides=(1, 1),
                     padding="same",
+                    kernel_size=(1, 1),
                     activation="tanh",
-                    kernel_regularizer=DEFAULT_KERNEL_REGULARIZER,
-                    kernel_initializer=DEFAULT_KERNEL_INITIALIZER)(x)
+                    filters=input_dims[i][-1],
+                    kernel_regularizer=kernel_regularizer,
+                    kernel_initializer=kernel_initializer)(x)
             output_layer = \
                 keras.layers.Add()([x, input_layers[i]])
 

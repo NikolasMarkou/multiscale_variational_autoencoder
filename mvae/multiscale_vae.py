@@ -178,6 +178,8 @@ class MultiscaleVAE:
                 levels=self._levels,
                 min_value=self._min_value,
                 max_value=self._max_value,
+                filters=self._conv_base_filters,
+                activation=self._conv_activation,
                 name="laplacian_transform_merge")
 
         # --- build encoder model
