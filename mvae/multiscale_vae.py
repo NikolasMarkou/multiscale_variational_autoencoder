@@ -450,6 +450,7 @@ class MultiscaleVAE:
             return \
                 tmp_spring_loss * kl_loss_factor + \
                 tmp_kl_loss * kl_loss_factor + \
+                tmp_r_loss * r_loss_factor + \
                 tmp_multi_r_loss * r_loss_factor * (self._max_value - self._min_value)
 
         optimizer = \
