@@ -99,15 +99,15 @@ multiscale_vae.compile(
 )
 
 # serialize model to JSON
-with open("model_trainable.json", "w") as json_file:
+with open(os.path.join(BASE_DIR_SECTION, "model_trainable.json"), "w") as json_file:
     json_file.write(multiscale_vae.model_trainable.to_json())
 
 # serialize model to JSON
-with open("model_encoder.json", "w") as json_file:
+with open(os.path.join(BASE_DIR_SECTION, "model_encoder.json"), "w") as json_file:
     json_file.write(multiscale_vae.encoder.to_json())
 
 # serialize model to JSON
-with open("model_decoder.json", "w") as json_file:
+with open(os.path.join(BASE_DIR_SECTION, "model_decoder.json"), "w") as json_file:
     json_file.write(multiscale_vae.decoder.to_json())
 
 # ==============================================================================

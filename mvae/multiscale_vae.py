@@ -2,6 +2,7 @@ import os
 import math
 import keras
 import numpy as np
+import tensorflow as tf
 from keras import backend as K
 
 # ==============================================================================
@@ -508,8 +509,17 @@ class MultiscaleVAE:
                 "weights/weights.h5"),
             save_weights_only=True,
             verbose=1)
+        tb_callback = \
+            tf.keras.callbacks.TensorBoard(
+                log_dir=os.path.join(run_folder, "logs"),
+                update_freq=100,
+                histogram_freq=100)
 
-        callbacks_fns = [lr_schedule, custom_callback]
+        callbacks_fns = [
+            lr_schedule,
+            tb_callback,
+            custom_callback
+        ]
 
         if save_checkpoint_weights:
             callbacks_fns += [checkpoint1, checkpoint2]
