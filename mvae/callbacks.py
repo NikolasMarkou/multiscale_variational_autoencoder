@@ -1,5 +1,5 @@
-import math
 import os
+import math
 import numpy as np
 import matplotlib.pyplot as plt
 from skimage.transform import resize
@@ -7,26 +7,10 @@ from keras.callbacks import Callback
 
 # ==============================================================================
 
+from .utilities import collage
+from .custom_logger import logger
 
-def collage(images_batch):
-    shape = images_batch.shape
-    no_images = shape[0]
-    images = []
-    result = None
-    width = np.ceil(np.sqrt(no_images))
-    height = no_images / width
-
-    for i in range(no_images):
-        images.append(images_batch[i, :, :, :])
-
-        if len(images) % width == 0:
-            if result is None:
-                result = np.hstack(images)
-            else:
-                tmp = np.hstack(images)
-                result = np.vstack([result, tmp])
-            images.clear()
-    return result
+# ==============================================================================
 
 
 class SaveIntermediateResultsCallback(Callback):
@@ -53,14 +37,11 @@ class SaveIntermediateResultsCallback(Callback):
         self._run_folder = run_folder
         self._resize_shape = resize_shape
         self._print_every_n_batches = print_every_n_batches
-        self._noise = \
-            np.random.normal(
-                loc=0.0,
-                scale=1.0,
-                size=(images.shape[0], self._vae.z_dim))
         self._images_path = os.path.join(self._run_folder, "images")
         if not os.path.exists(self._images_path):
             os.mkdir(self._images_path)
+
+    # ===============================================================================
 
     def save_collage(
             self,
@@ -82,6 +63,8 @@ class SaveIntermediateResultsCallback(Callback):
         else:
             plt.imsave(filepath_x, x)
 
+    # ===============================================================================
+
     def on_batch_end(self, batch, logs={}):
         # --- do this only so many batches
         if batch % self._print_every_n_batches != 0:
@@ -100,7 +83,20 @@ class SaveIntermediateResultsCallback(Callback):
             prefix="img")
 
         # --- random z-dim decoding
-        samples = self._vae.model_decode.predict(self._noise)
+        # calculate mean variance per dimension
+        encodings = self._vae.model_encode.predict(self._images)
+        mean_encodings = np.mean(encodings, axis=0, keepdims=False)
+        mean_variance = np.var(encodings, axis=0, keepdims=False)
+
+        z_dim_noise = \
+            np.random.normal(
+                loc=mean_encodings,
+                scale=mean_variance,
+                size=encodings.shape)
+        logger.info("mean_encodings:\n{0}".format(mean_encodings))
+        logger.info("mean_variance:\n{0}".format(mean_variance))
+
+        samples = self._vae.model_decode.predict(z_dim_noise)
         # create and save collage of the samples
         self.save_collage(
             samples=samples,
@@ -127,6 +123,8 @@ class SaveIntermediateResultsCallback(Callback):
             samples=interpolations,
             batch=batch,
             prefix="interpolations")
+
+    # ===============================================================================
 
     def on_epoch_begin(self, epoch, logs={}):
         self._epoch += 1

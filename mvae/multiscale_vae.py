@@ -144,7 +144,13 @@ class MultiscaleVAE:
                 keras.Model(
                     name=f"encoder_{i}",
                     inputs=encoder_input,
-                    outputs=[encoder_output, mu_log[0], mu_log[1]]))
+                    outputs=[
+                        encoder_output,
+                        mu_log[0],
+                        mu_log[1]
+                    ]
+                )
+            )
 
         # --- decoders
         logger.info("Building decoder")
@@ -183,7 +189,7 @@ class MultiscaleVAE:
                 max_value=self._max_value,
                 filters=self._conv_base_filters,
                 activation=self._conv_activation,
-                name="laplacian_transform_merge")
+                name="laplacian_merge")
 
         # --- build encoder model
         logger.info("Building encoder model")
@@ -200,7 +206,8 @@ class MultiscaleVAE:
                 input_dims=self._inputs_dims,
                 gaussian_xy_max=self._gaussian_nsig,
                 gaussian_kernel_size=self._gaussian_kernel,
-                name="laplacian_transform_split")
+                name="laplacian_split")
+
         encoder_input_multiscale = \
             model_laplacian_split(model_encoder_input)
         model_encoder_scale = [
@@ -323,15 +330,15 @@ class MultiscaleVAE:
         mu = keras.layers.Dense(
             units=z_dim,
             use_bias=False,
-            name=prefix + "mu",
-            activation="tanh",
+            activation="linear",
+            name=f"{prefix}mu",
             kernel_regularizer=self._dense_regularizer,
             kernel_initializer=self._initialization_scheme)(x)
         log_var = keras.layers.Dense(
             units=z_dim,
             use_bias=False,
             activation="linear",
-            name=prefix + "log_var",
+            name=f"{prefix}log_var",
             kernel_regularizer=self._dense_regularizer,
             kernel_initializer=self._initialization_scheme)(x)
 
