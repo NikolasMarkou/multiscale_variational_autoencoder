@@ -155,8 +155,11 @@ class MultiscaleVAE:
                 keras.Input(
                     shape=(self._z_latent_dims[i],),
                     name=f"decoder_{i}_input")
+            decoder_input_squeezed = \
+                keras.activations.tanh(decoder_input)
             decoder_input_bn = \
-                keras.layers.BatchNormalization()(decoder_input)
+                keras.layers.BatchNormalization()(
+                    decoder_input_squeezed)
             decoder_output = \
                 self._build_decoder(
                     decoder_input_bn,
