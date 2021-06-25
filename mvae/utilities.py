@@ -6,17 +6,18 @@ from keras.preprocessing.image import ImageDataGenerator
 # ==============================================================================
 
 
-def collage(images_batch):
+def collage(
+        images_batch):
     """
     Create a collage of image from a batch
 
     :param images_batch:
     :return:
     """
-    shape = images_batch.shape
-    no_images = shape[0]
     images = []
     result = None
+    shape = images_batch.shape
+    no_images = shape[0]
     width = np.ceil(np.sqrt(no_images))
 
     for i in range(no_images):

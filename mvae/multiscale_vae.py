@@ -161,11 +161,9 @@ class MultiscaleVAE:
                 keras.Input(
                     shape=(self._z_latent_dims[i],),
                     name=f"decoder_{i}_input")
-            decoder_input_squeezed = \
-                keras.activations.tanh(decoder_input)
             decoder_input_bn = \
                 keras.layers.BatchNormalization()(
-                    decoder_input_squeezed)
+                    decoder_input)
             decoder_output = \
                 self._build_decoder(
                     decoder_input_bn,
@@ -348,7 +346,7 @@ class MultiscaleVAE:
                 mean=0.0,
                 stddev=tmp_stddev,
                 shape=K.shape(tmp_mu))
-            return tmp_mu + K.exp(tmp_log_var) * epsilon
+            return tmp_mu + 0.5 * K.exp(tmp_log_var) * epsilon
 
         return \
             keras.layers.Lambda(
@@ -424,8 +422,8 @@ class MultiscaleVAE:
 
         # --- define VAE reconstruction loss
         def r_loss(y_true, y_pred):
-            tmp_pixels = K.abs(y_true - y_pred)
-            tmp_pixels = K.mean(tmp_pixels, axis=[1, 2, 3])
+            tmp_diff = K.abs(y_true - y_pred)
+            tmp_pixels = K.mean(tmp_diff, axis=[1, 2, 3])
             return K.mean(tmp_pixels, axis=-1)
 
         # --- define VAE reconstruction loss per scale
@@ -438,31 +436,22 @@ class MultiscaleVAE:
                 result += K.mean(tmp_pixels, axis=-1)
             return result / float(self._levels)
 
-        # --- define KL loss for the latent space
-        # (difference from normally distributed m=0, var=1)
+        # --- define KL divergence loss for the latent space
+        # (difference from isotropic normal distribution m=0, var=1)
         def kl_loss(y_true, y_pred):
             x = 1.0 + \
                 self._log_var - \
                 K.square(self._mu) - \
                 K.exp(self._log_var)
-            x = -0.5 * K.sum(x, axis=[0])
-            x = K.abs(x)
-            return K.mean(x)
-
-        # --- define spring loss for minimizing mu (per dimensions)
-        def spring_loss(y_true, y_pred):
-            x = K.mean(self._mu, axis=[0])
-            x = K.abs(x)
+            x = -0.5 * K.sum(x, axis=-1)
             return K.mean(x)
 
         # --- define combined loss
         def loss(y_true, y_pred):
             tmp_r_loss = r_loss(y_true, y_pred)
             tmp_kl_loss = kl_loss(y_true, y_pred)
-            tmp_spring_loss = spring_loss(y_true, y_pred)
             tmp_multi_r_loss = multi_r_loss(y_true, y_pred)
             return \
-                tmp_spring_loss * kl_loss_factor + \
                 tmp_kl_loss * kl_loss_factor + \
                 tmp_r_loss * r_loss_factor + \
                 tmp_multi_r_loss * r_loss_factor * (self._max_value - self._min_value)
@@ -478,7 +467,6 @@ class MultiscaleVAE:
             metrics=[
                 r_loss,
                 kl_loss,
-                spring_loss,
                 multi_r_loss
             ])
 

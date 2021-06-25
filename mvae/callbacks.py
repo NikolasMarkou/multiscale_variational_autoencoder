@@ -91,7 +91,7 @@ class SaveIntermediateResultsCallback(Callback):
         z_dim_noise = \
             np.random.normal(
                 loc=mean_encodings,
-                scale=mean_variance,
+                scale=np.square(mean_variance),
                 size=encodings.shape)
         logger.info("mean_encodings:\n{0}".format(mean_encodings))
         logger.info("mean_variance:\n{0}".format(mean_variance))
