@@ -85,15 +85,13 @@ class SaveIntermediateResultsCallback(Callback):
         # --- random z-dim decoding
         # calculate mean variance per dimension
         encodings = self._vae.model_encode.predict(self._images)
-        mean_encodings = np.mean(encodings, axis=0, keepdims=False)
         mean_variance = np.var(encodings, axis=0, keepdims=False)
 
         z_dim_noise = \
             np.random.normal(
-                loc=mean_encodings,
-                scale=np.square(mean_variance),
+                loc=0.0,
+                scale=0.1,
                 size=encodings.shape)
-        logger.info("mean_encodings:\n{0}".format(mean_encodings))
         logger.info("mean_variance:\n{0}".format(mean_variance))
 
         samples = self._vae.model_decode.predict(z_dim_noise)
