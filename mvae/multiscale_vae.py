@@ -191,7 +191,7 @@ class MultiscaleVAE:
 
         # --- build encoder model
         logger.info("Building encoder model")
-        model_encoder_input = \
+        encoder_input = \
             keras.Input(
                 shape=self._inputs_dims,
                 name="input")
@@ -207,67 +207,68 @@ class MultiscaleVAE:
                 name="laplacian_split")
 
         encoder_input_multiscale = \
-            model_laplacian_split(model_encoder_input)
-        model_encoder_scale = [
+            model_laplacian_split(encoder_input)
+        encoder_per_level = [
             encoders[i](encoder_input_multiscale[i])[0]
             for i in range(self._levels)
         ]
-        model_encoder_output = \
-            keras.layers.Concatenate()(model_encoder_scale)
+        encoder_output = \
+            keras.layers.Concatenate()(encoder_per_level)
         self._model_encoder = \
             keras.Model(
                 name="encoder",
-                inputs=model_encoder_input,
-                outputs=model_encoder_output)
+                inputs=encoder_input,
+                outputs=encoder_output)
 
         # --- build decoder model
         logger.info("Building decoder model")
-        model_decoder_input = \
+        decoder_input = \
             keras.Input(
                 shape=(np.sum(self._z_latent_dims),),
                 name="input")
-        model_decoder_split = \
+        decoder_input_split = \
             keras.layers.Lambda(split, name="split")(
-                [model_decoder_input, self._z_latent_dims])
-        model_decoder_decode = []
-        for i in range(self._levels):
-            decode = decoders[i](model_decoder_split[i])
-            model_decoder_decode.append(decode)
-        model_decoder_output = \
-            model_decoder_merge(model_decoder_decode)
+                [decoder_input, self._z_latent_dims])
+        decoder_decode = [
+            decoders[i](decoder_input_split[i])
+            for i in range(self._levels)
+        ]
+        decoder_output = \
+            model_decoder_merge(decoder_decode)
         self._model_decoder = \
             keras.Model(
                 name="decoder",
-                inputs=model_decoder_input,
-                outputs=model_decoder_output)
+                inputs=decoder_input,
+                outputs=decoder_output)
 
         # --- build end-to-end trainable model
         logger.info("Building end-to-end trainable model")
         mu_s = []
         log_var_s = []
-        model_encode_decode = []
-        model_input = \
+        vae_encode_decode = []
+        vae_input = \
             keras.Input(
                 shape=self._inputs_dims,
                 name="input")
-        model_input_multiscale = \
-            model_laplacian_split(model_input)
+        vae_input_multiscale = \
+            model_laplacian_split(vae_input)
 
         for i in range(self._levels):
             encode, mu, log_var = \
-                encoders[i](model_input_multiscale[i])
+                encoders[i](vae_input_multiscale[i])
             mu_s.append(mu)
             log_var_s.append(log_var)
             decode = decoders[i](encode)
-            model_encode_decode.append(decode)
+            vae_encode_decode.append(decode)
 
         # merge multiple outputs in a single output
-        model_output = model_decoder_merge(model_encode_decode)
+        vae_output = \
+            model_decoder_merge(vae_encode_decode)
 
         self._model_trainable = \
             keras.Model(
-                inputs=model_input,
-                outputs=model_output,
+                inputs=vae_input,
+                outputs=vae_output,
                 name="trainable_vae")
 
         # --- concat all z-latent layers
@@ -277,8 +278,8 @@ class MultiscaleVAE:
             keras.layers.Concatenate(axis=-1, name="log_var")(log_var_s)
 
         # --- save intermediate levels
-        self._output_multiscale = model_encode_decode
-        self._input_multiscale = model_input_multiscale
+        self._output_multiscale = vae_encode_decode
+        self._input_multiscale = vae_input_multiscale
 
     # ===============================================================================
 
@@ -389,7 +390,7 @@ class MultiscaleVAE:
             strides=self._decoder_config["strides"],
             kernel_size=self._decoder_config["kernel_size"])
 
-        # --- match target channels
+        # --- match target channels to [-1, +1]
         x = keras.layers.Conv2D(
             strides=(1, 1),
             padding="same",
