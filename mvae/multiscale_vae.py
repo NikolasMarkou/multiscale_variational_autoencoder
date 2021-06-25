@@ -27,7 +27,7 @@ class MultiscaleVAE:
             decoder=None,
             min_value: float = 0.0,
             max_value: float = 255.0,
-            sample_std: float = 0.01,
+            sample_std: float = 1.0,
             channels_index: int = 2):
         """
         Encoder that compresses a signal
@@ -287,7 +287,7 @@ class MultiscaleVAE:
             self,
             encoder_input,
             z_dim: int,
-            sample_stddev: float = 0.01,
+            sample_stddev: float = 1.0,
             prefix: str = "encoder_"):
         """
         Creates an encoder block
