@@ -149,18 +149,17 @@ def laplacian_transform_merge(
                 # add conditional
                 x = keras.layers.Concatenate()(
                     [x, input_layers[i]])
-                x = keras.layers.BatchNormalization()(x)
                 # mixing
-                # x1 = keras.layers.Conv2D(
-                #     use_bias=False,
-                #     filters=filters,
-                #     strides=(1, 1),
-                #     padding="same",
-                #     kernel_size=(1, 1),
-                #     activation=activation,
-                #     kernel_regularizer=kernel_regularizer,
-                #     kernel_initializer=kernel_initializer)(x)
-                x = keras.layers.Conv2D(
+                x1 = keras.layers.Conv2D(
+                    use_bias=False,
+                    filters=filters,
+                    strides=(1, 1),
+                    padding="same",
+                    kernel_size=(1, 1),
+                    activation=activation,
+                    kernel_regularizer=kernel_regularizer,
+                    kernel_initializer=kernel_initializer)(x)
+                x3 = keras.layers.Conv2D(
                     use_bias=False,
                     filters=filters,
                     strides=(1, 1),
@@ -169,17 +168,17 @@ def laplacian_transform_merge(
                     activation=activation,
                     kernel_regularizer=kernel_regularizer,
                     kernel_initializer=kernel_initializer)(x)
-                # x5 = keras.layers.Conv2D(
-                #     use_bias=False,
-                #     filters=filters,
-                #     strides=(1, 1),
-                #     padding="same",
-                #     kernel_size=(5, 5),
-                #     activation=activation,
-                #     kernel_regularizer=kernel_regularizer,
-                #     kernel_initializer=kernel_initializer)(x)
-                # x = keras.layers.Concatenate()(
-                #     [x1, x3, x5])
+                x5 = keras.layers.Conv2D(
+                    use_bias=False,
+                    filters=filters,
+                    strides=(1, 1),
+                    padding="same",
+                    kernel_size=(5, 5),
+                    activation=activation,
+                    kernel_regularizer=kernel_regularizer,
+                    kernel_initializer=kernel_initializer)(x)
+                x = keras.layers.Concatenate()(
+                    [x1, x3, x5])
                 x = keras.layers.BatchNormalization()(x)
                 # retargeting
                 x = keras.layers.Conv2D(

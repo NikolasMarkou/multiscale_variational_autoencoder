@@ -161,9 +161,11 @@ class MultiscaleVAE:
                 keras.Input(
                     shape=(self._z_latent_dims[i],),
                     name=f"decoder_{i}_input")
+            decoder_input_bn = \
+                keras.layers.BatchNormalization()(decoder_input)
             decoder_output = \
                 self._build_decoder(
-                    decoder_input,
+                    decoder_input_bn,
                     target_shape=shapes_before_flattening[i],
                     prefix=f"decoder_{i}_")
             decoders.append(
@@ -346,7 +348,7 @@ class MultiscaleVAE:
                 mean=0.0,
                 stddev=tmp_stddev,
                 shape=K.shape(tmp_mu))
-            return tmp_mu + 0.5 * K.exp(tmp_log_var) * epsilon
+            return tmp_mu + K.exp(0.5 * tmp_log_var) * epsilon
 
         return \
             keras.layers.Lambda(
@@ -371,13 +373,11 @@ class MultiscaleVAE:
         :return:
         """
         # --- Decoding here
-        x = keras.layers.BatchNormalization()(input_layer)
-
         x = keras.layers.Dense(
             units=np.prod(target_shape),
             activation="linear",
             kernel_initializer=self._initialization_scheme,
-            kernel_regularizer=self._dense_regularizer)(x)
+            kernel_regularizer=self._dense_regularizer)(input_layer)
 
         x = keras.layers.Reshape(target_shape)(x)
         x = keras.layers.BatchNormalization()(x)
@@ -442,11 +442,9 @@ class MultiscaleVAE:
         # --- define KL divergence loss for the latent space
         # (difference from isotropic normal distribution m=0, var=1)
         def kl_loss(y_true, y_pred):
-            x = 1.0 + \
-                self._log_var - \
-                K.square(self._mu) - \
-                K.exp(self._log_var)
-            x = -0.5 * K.sum(x, axis=-1)
+            x = K.sum(
+                -0.5 * (1 + self._log_var - K.square(self._mu) - K.exp(self._log_var)),
+                axis=1)
             return K.mean(x)
 
         # --- define combined loss
