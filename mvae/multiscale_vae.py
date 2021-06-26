@@ -67,8 +67,8 @@ class MultiscaleVAE:
         self._compress_output = compress_output
         self._initialization_scheme = "glorot_normal"
         self._output_channels = input_dims[channels_index]
-        self._kernel_regularizer = "l2"
-        self._dense_regularizer = "l2"
+        self._kernel_regularizer = "l1"
+        self._dense_regularizer = "l1"
         self._min_value = min_value
         self._max_value = max_value
         self._sample_std = sample_std
@@ -161,12 +161,9 @@ class MultiscaleVAE:
                 keras.Input(
                     shape=(self._z_latent_dims[i],),
                     name=f"decoder_{i}_input")
-            decoder_input_bn = \
-                keras.layers.BatchNormalization()(
-                    decoder_input)
             decoder_output = \
                 self._build_decoder(
-                    decoder_input_bn,
+                    decoder_input,
                     target_shape=shapes_before_flattening[i],
                     prefix=f"decoder_{i}_")
             decoders.append(
@@ -315,6 +312,8 @@ class MultiscaleVAE:
             use_dropout=False,
             use_batchnorm=True,
             block_type="encoder",
+            regularizer=self._kernel_regularizer,
+            initializer=self._initialization_scheme,
             strides=self._encoder_config["strides"],
             filters=self._encoder_config["filters"],
             kernel_size=self._encoder_config["kernel_size"])
