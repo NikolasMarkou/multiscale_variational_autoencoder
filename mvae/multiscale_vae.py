@@ -131,11 +131,9 @@ class MultiscaleVAE:
                 keras.Input(
                     shape=scales[i],
                     name=f"encoder_{i}_input")
-            encoder_input_bn = \
-                keras.layers.BatchNormalization()(encoder_input)
             encoder_output, mu_log, shape = \
                 self._build_encoder(
-                    encoder_input_bn,
+                    encoder_input,
                     sample_stddev=self._sample_std,
                     z_dim=self._z_latent_dims[i],
                     prefix=f"encoder_{i}_")
@@ -161,11 +159,9 @@ class MultiscaleVAE:
                 keras.Input(
                     shape=(self._z_latent_dims[i],),
                     name=f"decoder_{i}_input")
-            decoder_input_bn = \
-                keras.layers.BatchNormalization()(decoder_input)
             decoder_output = \
                 self._build_decoder(
-                    decoder_input_bn,
+                    decoder_input,
                     target_shape=shapes_before_flattening[i],
                     prefix=f"decoder_{i}_")
             decoders.append(
@@ -243,6 +239,7 @@ class MultiscaleVAE:
         # --- build end-to-end trainable model
         logger.info("Building end-to-end trainable model")
         mu_s = []
+        encode_s = []
         log_var_s = []
         vae_encode_decode = []
         vae_input = \
@@ -257,6 +254,7 @@ class MultiscaleVAE:
                 encoders[i](vae_input_multiscale[i])
             mu_s.append(mu)
             log_var_s.append(log_var)
+            encode_s.append(encode)
             decode = decoders[i](encode)
             vae_encode_decode.append(decode)
 
@@ -275,6 +273,10 @@ class MultiscaleVAE:
             keras.layers.Concatenate(axis=-1, name="mu")(mu_s)
         self._log_var = \
             keras.layers.Concatenate(axis=-1, name="log_var")(log_var_s)
+
+        # --- concat z-dim
+        self._encode = \
+            keras.layers.Concatenate(axis=-1, name="z_dim")(encode_s)
 
         # --- save intermediate levels
         self._output_multiscale = vae_encode_decode
@@ -380,7 +382,6 @@ class MultiscaleVAE:
             kernel_regularizer=self._dense_regularizer)(input_layer)
 
         x = keras.layers.Reshape(target_shape)(x)
-        x = keras.layers.BatchNormalization()(x)
 
         # --- transforming here
         x = layer_blocks.basic_block(
@@ -412,16 +413,34 @@ class MultiscaleVAE:
             learning_rate,
             r_loss_factor: float = 1.0,
             kl_loss_factor: float = 1.0,
+            z_dim_encoding_factor: float = 0.001,
             clip_norm: float = 1.0):
         """
 
         :param learning_rate:
         :param r_loss_factor:
         :param kl_loss_factor:
+        :param z_dim_encoding_factor:
         :param clip_norm:
         :return:
         """
         self.learning_rate = learning_rate
+
+        # --- define encoding distance
+        def z_dim_pairwise_distance_loss(y_true, y_pred):
+            batch = K.shape(self._encode)[0]
+            x = tf.expand_dims(self._encode, 1)
+            x_t = tf.expand_dims(self._encode, 0)
+            x_tile = tf.tile(x, [1, batch, 1])
+            x_t_tile = tf.tile(x_t, [batch, 1, 1])
+            delta_x = x_tile - x_t_tile
+            delta_x_2 = delta_x * delta_x
+            d2x = tf.reduce_sum(delta_x_2, 2)
+            return d2x
+
+        # pulls encodings towards the origin 0
+        def z_dim_encoding_loss(y_true, y_pred):
+            return K.mean(K.square(K.sum(K.pow(self._encode, 2.0), axis=1)), axis=0)
 
         # --- define VAE reconstruction loss
         def r_loss(y_true, y_pred):
@@ -452,9 +471,12 @@ class MultiscaleVAE:
             tmp_r_loss = r_loss(y_true, y_pred)
             tmp_kl_loss = kl_loss(y_true, y_pred)
             tmp_multi_r_loss = multi_r_loss(y_true, y_pred)
+            tmp_z_encoding = z_dim_encoding_loss(y_true, y_pred)
+            tmp_z_encoding_pairwise = z_dim_pairwise_distance_loss(y_true, y_pred)
             return \
                 tmp_kl_loss * kl_loss_factor + \
                 tmp_r_loss * r_loss_factor + \
+                K.abs(tmp_z_encoding - tmp_z_encoding_pairwise) * z_dim_encoding_factor + \
                 tmp_multi_r_loss * r_loss_factor * (self._max_value - self._min_value)
 
         optimizer = \
@@ -468,7 +490,9 @@ class MultiscaleVAE:
             metrics=[
                 r_loss,
                 kl_loss,
-                multi_r_loss
+                multi_r_loss,
+                z_dim_encoding_loss,
+                z_dim_pairwise_distance_loss
             ])
 
     # ==========================================================================

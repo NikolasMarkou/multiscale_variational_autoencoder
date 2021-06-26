@@ -150,17 +150,7 @@ def laplacian_transform_merge(
                 x = keras.layers.Concatenate()(
                     [x, input_layers[i]])
                 # mixing
-                x1 = keras.layers.Conv2D(
-                    use_bias=False,
-                    filters=filters,
-                    strides=(1, 1),
-                    padding="same",
-                    kernel_size=(1, 1),
-                    activation=activation,
-                    kernel_regularizer=kernel_regularizer,
-                    kernel_initializer=kernel_initializer)(x)
-                x3 = keras.layers.Conv2D(
-                    use_bias=False,
+                x = keras.layers.Conv2D(
                     filters=filters,
                     strides=(1, 1),
                     padding="same",
@@ -168,18 +158,6 @@ def laplacian_transform_merge(
                     activation=activation,
                     kernel_regularizer=kernel_regularizer,
                     kernel_initializer=kernel_initializer)(x)
-                x5 = keras.layers.Conv2D(
-                    use_bias=False,
-                    filters=filters,
-                    strides=(1, 1),
-                    padding="same",
-                    kernel_size=(5, 5),
-                    activation=activation,
-                    kernel_regularizer=kernel_regularizer,
-                    kernel_initializer=kernel_initializer)(x)
-                x = keras.layers.Concatenate()(
-                    [x1, x3, x5])
-                x = keras.layers.BatchNormalization()(x)
                 # retargeting
                 x = keras.layers.Conv2D(
                     use_bias=False,
@@ -982,15 +960,6 @@ def basic_block(
                 regularizer=regularizer,
                 use_batchnorm=use_batchnorm,
                 prefix=prefix_i + "mobilenetV3_")
-
-        # x = keras.layers.Conv2D(
-        #     padding="same",
-        #     strides=(1, 1),
-        #     filters=filters[i],
-        #     activation="relu",
-        #     kernel_size=(3, 3),
-        #     kernel_initializer=initializer,
-        #     kernel_regularizer=regularizer)(x)
 
         if use_dropout:
             x = keras.layers.Dropout(
