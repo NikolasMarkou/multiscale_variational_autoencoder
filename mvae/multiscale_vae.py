@@ -371,13 +371,16 @@ class MultiscaleVAE:
         :return:
         """
         # --- Decoding here
+        x = keras.layers.BatchNormalization()(input_layer)
+
         x = keras.layers.Dense(
             units=np.prod(target_shape),
             activation="linear",
             kernel_initializer=self._initialization_scheme,
-            kernel_regularizer=self._dense_regularizer)(input_layer)
+            kernel_regularizer=self._dense_regularizer)(x)
 
         x = keras.layers.Reshape(target_shape)(x)
+        x = keras.layers.BatchNormalization()(x)
 
         # --- transforming here
         x = layer_blocks.basic_block(
