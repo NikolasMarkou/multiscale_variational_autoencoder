@@ -31,12 +31,12 @@ class MultiscaleVAE:
         :param levels:
         :param z_dims:
         """
-        # --------- Argument checking
+        # --- argument checking
         if encoder is None:
             raise ValueError("encoder cannot be None")
         if not all(i > 0 for i in z_dims):
             raise ValueError("z_dims elements should be > 0")
-        # --------- decoder is reverse encoder
+        # --- decoder is reverse encoder
         if decoder is None:
             decoder = {
                 "filters": encoder["filters"][::-1],
@@ -44,7 +44,7 @@ class MultiscaleVAE:
                 "kernel_size": encoder["kernel_size"][::-1]
             }
         levels = len(z_dims)
-        # --------- Variable initialization
+        # --- Variable initialization
         self._name = "mvae"
         self._levels = levels
         self._conv_base_filters = 32
