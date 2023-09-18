@@ -1,4 +1,5 @@
 import os
+import math
 import numpy as np
 import matplotlib.pyplot as plt
 from skimage.transform import resize
@@ -6,26 +7,10 @@ from keras.callbacks import Callback
 
 # ==============================================================================
 
+from .utilities import collage
+from .custom_logger import logger
 
-def collage(images_batch):
-    shape = images_batch.shape
-    no_images = shape[0]
-    images = []
-    result = None
-    width = np.ceil(np.sqrt(no_images))
-    height = no_images / width
-
-    for i in range(no_images):
-        images.append(images_batch[i, :, :, :])
-
-        if len(images) % width == 0:
-            if result is None:
-                result = np.hstack(images)
-            else:
-                tmp = np.hstack(images)
-                result = np.vstack([result, tmp])
-            images.clear()
-    return result
+# ==============================================================================
 
 
 class SaveIntermediateResultsCallback(Callback):
@@ -46,37 +31,111 @@ class SaveIntermediateResultsCallback(Callback):
         :param vae:
         :param resize_shape:
         """
-        self.vae = vae
-        self.images = images
-        self.epoch = initial_epoch
-        self.run_folder = run_folder
+        self._vae = vae
+        self._images = images
+        self._epoch = initial_epoch
+        self._run_folder = run_folder
         self._resize_shape = resize_shape
-        self.print_every_n_batches = print_every_n_batches
-        images_path = os.path.join(self.run_folder, "images")
-        if not os.path.exists(images_path):
-            os.mkdir(images_path)
+        self._print_every_n_batches = print_every_n_batches
+        self._images_path = os.path.join(self._run_folder, "images")
+        if not os.path.exists(self._images_path):
+            os.mkdir(self._images_path)
 
-    def on_batch_end(self, batch, logs={}):  
-        if batch % self.print_every_n_batches == 0:
-            reconstructions = self.vae.model_trainable.predict(self.images)
-            reconstructions = self.vae.normalize(reconstructions)
-            reconstructions = np.clip(reconstructions, a_min=0.0, a_max=1.0)
-            # --- create collage of the reconstructions
-            x = collage(reconstructions)
-            # --- resize to output size
-            x = resize(x, self._resize_shape, order=0)
-            filepath_x = os.path.join(
-                self.run_folder,
-                "images",
-                "img_" + str(self.epoch).zfill(3) +
-                "_" + str(batch) + ".png")
-            if len(x.shape) == 2:
-                plt.imsave(filepath_x, x, cmap="gray_r")
-            else:
-                plt.imsave(filepath_x, x)
+    # ===============================================================================
+
+    def save_collage(
+            self,
+            samples: np.ndarray,
+            batch: int,
+            prefix: str):
+        # normalize to [0, 1]
+        x = self._vae.normalize(samples)
+        # create collage
+        x = collage(x)
+        # resize to output size
+        x = resize(x, self._resize_shape, order=0)
+        filepath_x = os.path.join(
+            self._images_path,
+            f"{prefix}_" + str(self._epoch).zfill(3) +
+            "_" + str(batch) + ".png")
+        if len(x.shape) == 2:
+            plt.imsave(filepath_x, x, cmap="gray_r")
+        else:
+            plt.imsave(filepath_x, x)
+
+    # ===============================================================================
+
+    def on_batch_end(self, batch, logs={}):
+        # --- do this only so many batches
+        if batch % self._print_every_n_batches != 0:
+            return
+
+        # --- setup parameters
+        no_samples = self._images.shape[0]
+
+        # --- encode decode
+        encodings = self._vae.model_encode.predict(self._images)
+        decodings = self._vae.model_decode.predict(encodings)
+        # create and save collage of the reconstructions
+        self.save_collage(
+            samples=decodings,
+            batch=batch,
+            prefix="img")
+
+        # --- random z-dim decoding
+        # calculate mean variance per dimension
+        encodings_mean = \
+            np.mean(
+                encodings,
+                axis=(0, 1),
+                keepdims=False)
+        encodings_std = \
+            np.std(
+                encodings,
+                axis=(0, 1),
+                keepdims=False)
+        logger.info(
+            "encodings_mean: {0:.4g}, encodings_std: {1:.4g}".format(
+                encodings_mean,
+                encodings_std))
+        z_dim = \
+            np.random.normal(
+                loc=encodings_mean,
+                scale=encodings_std,
+                size=encodings.shape)
+        samples = self._vae.model_decode.predict(z_dim)
+
+        # create and save collage of the samples
+        self.save_collage(
+            samples=samples,
+            batch=batch,
+            prefix="samples")
+
+        # --- interpolation z-dim decoding
+        interpolations = np.zeros_like(encodings)
+        sqrt_no_samples = int(round(math.sqrt(no_samples)))
+        for j in range(sqrt_no_samples):
+            start_sample = encodings[j, :]
+            end_sample = encodings[j+1, :]
+            for i in range(sqrt_no_samples):
+                counter = j * sqrt_no_samples + i
+                if counter >= no_samples:
+                    continue
+                mix_coeff = float(i) / float(sqrt_no_samples-1)
+                interpolations[counter, :] = \
+                    start_sample * (1.0 - mix_coeff) + \
+                    end_sample * mix_coeff
+        interpolations = self._vae.model_decode.predict(interpolations)
+        # create and save collage of the samples
+        self.save_collage(
+            samples=interpolations,
+            batch=batch,
+            prefix="interpolations")
+
+    # ===============================================================================
 
     def on_epoch_begin(self, epoch, logs={}):
-        self.epoch += 1
+        self._epoch += 1
 
 
 # ==============================================================================

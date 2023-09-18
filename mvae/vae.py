@@ -53,7 +53,7 @@ class VAE(abc.ABC):
 
     @property
     @abc.abstractmethod
-    def model_sample(self) -> keras.models.Model:
+    def model_decode(self) -> keras.models.Model:
         """
         Returns the model that can be used for sampling the latent z space and
         return a initial shape
@@ -63,7 +63,7 @@ class VAE(abc.ABC):
 
     @property
     @abc.abstractmethod
-    def model_predict(self) -> keras.models.Model:
+    def model_encode(self) -> keras.models.Model:
         """
         Returns the model that can take an input
         and project it into the latent z space

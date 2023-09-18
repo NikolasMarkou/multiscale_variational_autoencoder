@@ -1,5 +1,4 @@
 import os
-import sys
 import mvae
 import numpy as np
 import tensorflow as tf
@@ -15,16 +14,17 @@ tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)
 
 # ==============================================================================
 
-EPOCHS = 150
-STEP_SIZE = 30
-LR_DECAY = 0.5
+EPOCHS = 100
+STEP_SIZE = 20
+LR_DECAY = 0.75
 BATCH_SIZE = 32
+SAMPLE_STD = 0.5
 INITIAL_EPOCH = 0
-KL_LOSS_FACTOR = 1
-R_LOSS_FACTOR = 100
+R_LOSS_FACTOR = 1
+KL_LOSS_FACTOR = 0.1
 LEARNING_RATE = 0.01
 EXPAND_DATASET = False
-PRINT_EVERY_N_BATCHES = 1000
+PRINT_EVERY_N_BATCHES = 2000
 
 # run params
 SECTION = "vae"
@@ -80,14 +80,15 @@ logger.info("Creating model")
 
 multiscale_vae = mvae.MultiscaleVAE(
     input_dims=(32, 32, 3),
-    z_dims=[128, 128, 128, 128],
-    encoder={
-        "filters": [32, 64, 32],
-        "kernel_size": [(3, 3), (3, 3), (3, 3)],
-        "strides": [(1, 1), (2, 2), (1, 1)]
-    },
+    z_dims=[128, 64, 32],
     min_value=0.0,
-    max_value=255.0)
+    max_value=255.0,
+    sample_std=SAMPLE_STD,
+    encoder={
+        "filters": [32, 32, 32],
+        "kernel_size": [(3, 3), (3, 3), (3, 3)],
+        "strides": [(2, 2), (2, 2), (1, 1)]
+    })
 
 # ==============================================================================
 
@@ -98,29 +99,31 @@ multiscale_vae.compile(
 )
 
 # serialize model to JSON
-with open("model_trainable.json", "w") as json_file:
+with open(os.path.join(BASE_DIR_SECTION, "model_trainable.json"), "w") as json_file:
     json_file.write(multiscale_vae.model_trainable.to_json())
 
 # serialize model to JSON
-with open("model_encoder.json", "w") as json_file:
+with open(os.path.join(BASE_DIR_SECTION, "model_encoder.json"), "w") as json_file:
     json_file.write(multiscale_vae.encoder.to_json())
 
 # serialize model to JSON
-with open("model_decoder.json", "w") as json_file:
+with open(os.path.join(BASE_DIR_SECTION, "model_decoder.json"), "w") as json_file:
     json_file.write(multiscale_vae.decoder.to_json())
 
 # ==============================================================================
 
 logger.info("Training model")
 
+multiscale_vae.model_trainable.summary()
+
 multiscale_vae.train(
     x_train,
-    batch_size=BATCH_SIZE,
     epochs=EPOCHS,
-    run_folder=RUN_FOLDER,
-    print_every_n_batches=PRINT_EVERY_N_BATCHES,
-    initial_epoch=INITIAL_EPOCH,
+    lr_decay=LR_DECAY,
     step_size=STEP_SIZE,
-    lr_decay=LR_DECAY)
+    run_folder=RUN_FOLDER,
+    batch_size=BATCH_SIZE,
+    initial_epoch=INITIAL_EPOCH,
+    print_every_n_batches=PRINT_EVERY_N_BATCHES)
 
 # ==============================================================================
