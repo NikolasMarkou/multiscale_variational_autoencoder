@@ -12,7 +12,6 @@
 				"filters": 16,
 				"filters_level_multiplier": 2.0,
 				"activation": "leaky_relu",
-				"second_activation": "leaky_relu",
 				"upsample_type": "google_conv2d_transpose",
 				"downsample_type": "maxpool",
 				"use_bn": false,
@@ -21,15 +20,11 @@
 				"use_prior": false,
 				"use_noise_regularization": true,
 				"use_distance_from_center": false,
-				"use_rotational_invariance": true,
-				"use_soft_orthonormal_regularization": true,
-				"use_attention_block": true,
 				"multiple_scale_outputs": true,
 				"kernel_regularizer": "l2",
 				"kernel_initializer": "glorot_normal",
 				"dropout_rate": 0.5,
-				"spatial_dropout_rate": -1.0,
-				"attention_block_passes": 1
+				"spatial_dropout_rate": -1.0
 			}
 		},
 		"denoiser": {
@@ -91,8 +86,11 @@
 		"random_left_right": true,
 		"input_shape": [256, 256, 3],
 		"multiplicative_noise": [0.05, 0.1],
-		"additional_noise": [5, 10, 20, 30, 40],
+		"additional_noise": [1, 5, 10, 20, 30],
 		"inputs": [
+			{
+				"directory": "/media/data1_4tb/datasets/div2k/train"
+			},
 			{
 				"directory": "/media/data1_4tb/datasets/KITTI/data/depth/raw_image_values/"
 			},

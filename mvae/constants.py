@@ -50,7 +50,6 @@ REGULARIZATION_LOSS_STR = "regularization_loss"
 
 MODEL_LOSS_FN_STR = "model"
 DENOISER_LOSS_FN_STR = "denoiser"
-SEGMENTATION_LOSS_FN_STR = "segmentation"
 
 # ---------------------------------------------------------------------
 
@@ -66,8 +65,8 @@ DEFAULT_NON_SYMMETRIC_FIGSIZE = (18, 6)
 MODEL_HYDRA_STR = "model_hydra"
 MODEL_DENOISER_STR = "model_denoiser"
 
-MODEL_HYDRA_DEFAULT_NAME_STR = f"{MODEL_HYDRA_STR}.h5"
-MODEL_DENOISER_DEFAULT_NAME_STR = f"{MODEL_DENOISER_STR}.h5"
+MODEL_HYDRA_DEFAULT_NAME_STR = f"{MODEL_HYDRA_STR}.keras"
+MODEL_DENOISER_DEFAULT_NAME_STR = f"{MODEL_DENOISER_STR}.keras"
 
 # ---------------------------------------------------------------------
 
