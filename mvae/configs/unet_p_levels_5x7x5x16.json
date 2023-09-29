@@ -7,17 +7,15 @@
 			"parameters": {
 				"levels": 5,
 				"backbone_kernel_size": 7,
-				"kernel_size": 5,
+				"kernel_size": 3,
 				"filters": 16,
 				"filters_level_multiplier": 2.0,
 				"activation": "leaky_relu",
-				"upsample_type": "google_conv2d_transpose",
 				"downsample_type": "maxpool",
 				"use_bn": false,
 				"use_ln": true,
 				"use_bias": false,
 				"use_prior": false,
-				"use_noise_regularization": true,
 				"use_distance_from_center": false,
 				"multiple_scale_outputs": true,
 				"kernel_regularizer": "l2",
@@ -69,7 +67,7 @@
 			"hinge": 0.5,
 			"cutoff": 255.0,
 			"mae_multiplier": 1.0,
-			"ssim_multiplier": 1.0
+			"ssim_multiplier": 10.0
 		}
 	},
 	"dataset": {
