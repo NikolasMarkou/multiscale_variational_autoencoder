@@ -171,8 +171,7 @@ def loss_function_builder(
                         input_batch,
                         predicted_batch,
                         max_val=255.0,
-                        filter_size=7,
-                        filter_sigma=1.0))
+                        filter_size=7))
             ssim_loss = 1.0 - ssim_loss
 
         # --- loss prediction on mse
