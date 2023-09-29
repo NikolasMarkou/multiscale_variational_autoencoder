@@ -91,8 +91,8 @@ def train_loop(
         tf.function(
             func=loss_fn_map[DENOISER_LOSS_FN_STR],
             input_signature=[
-                tf.TensorSpec(shape=[batch_size, None, None, 1], dtype=tf.float32),
-                tf.TensorSpec(shape=[batch_size, None, None, 1], dtype=tf.float32),
+                tf.TensorSpec(shape=[batch_size, None, None, input_shape[-1]], dtype=tf.float32),
+                tf.TensorSpec(shape=[batch_size, None, None, input_shape[-1]], dtype=tf.float32),
             ],
             reduce_retracing=True)
 
@@ -238,8 +238,7 @@ def train_loop(
 
         @tf.function(reduce_retracing=True, jit_compile=False)
         def train_denoiser_step(n: tf.Tensor) -> List[tf.Tensor]:
-            results = ckpt.hydra(n, training=True)
-            return results
+            return ckpt.hydra(n, training=True)
 
         @tf.function(reduce_retracing=True, jit_compile=False)
         def test_denoiser_step(n: tf.Tensor) -> tf.Tensor:
@@ -333,7 +332,7 @@ def train_loop(
                         tmp_gt_image = \
                             tf.nn.avg_pool2d(
                                 input=tmp_gt_image,
-                                ksize=(3, 3),
+                                ksize=(2, 2),
                                 strides=(2, 2),
                                 padding="SAME")
                         scale_gt_image_batch.append(tmp_gt_image)
