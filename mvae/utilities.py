@@ -7,7 +7,6 @@ import numpy as np
 from enum import Enum
 import tensorflow as tf
 from pathlib import Path
-import tensorflow_addons as tfa
 from typing import List, Tuple, Union, Dict, Iterable
 
 # ---------------------------------------------------------------------
@@ -482,27 +481,6 @@ def crop_from_middle(
 # ---------------------------------------------------------------------
 
 
-def downsample(
-        input_batch: tf.Tensor,
-        sigma: float = 1.0,
-        filter_shape: Tuple[int, int] = (5, 5),
-        strides: Tuple[int, int] = (2, 2)) -> tf.Tensor:
-    x = \
-        tfa.image.gaussian_filter2d(
-            sigma=sigma,
-            image=input_batch,
-            filter_shape=filter_shape)
-    return \
-        tf.nn.max_pool2d(
-            input=x,
-            ksize=(1, 1),
-            strides=strides,
-            padding="SAME")
-
-
-# ---------------------------------------------------------------------
-
-
 def clean_image(
         t: tf.Tensor,
         threshold_band: Tuple[float, float] = (247.0, 255.0),
@@ -715,18 +693,5 @@ def subsample(
             ksize=(1, 1),
             strides=(2, 2),
             padding="SAME")
-
-# ---------------------------------------------------------------------
-
-
-def downsample(
-        input_batch: tf.Tensor,
-        kernel_size: Tuple[int, int] = (3, 3)) -> tf.Tensor:
-    x = \
-        tfa.image.gaussian_filter2d(
-            sigma=1,
-            image=input_batch,
-            filter_shape=kernel_size)
-    return subsample(input_batch=x)
 
 # ---------------------------------------------------------------------
