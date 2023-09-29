@@ -1,4 +1,4 @@
-r"""train an image segmentation model model"""
+r"""train an image multiscale variational autoencoder model"""
 
 __author__ = "Nikolas Markou"
 __version__ = "1.0.0"
@@ -17,7 +17,7 @@ import subprocess
 CUDA_DEVICE = 0
 CURRENT_DIR = pathlib.Path(__file__).parent.resolve()
 SRC_DIR = CURRENT_DIR.parent.resolve() / "src"
-CONFIGS_DIR = SRC_DIR / "comkardia_segmentation" / "configs"
+CONFIGS_DIR = SRC_DIR / "mvae" / "configs"
 CHECKPOINT_DIRECTORY = "/media/arxwn/external/Training"
 
 CONFIGS = {
@@ -72,7 +72,7 @@ def main(args):
 
     process_args = [
         sys.executable,
-        "-m", "comkardia_segmentation.train",
+        "-m", "mvae.train",
         "--model-directory",
         os.path.join(
             args.checkpoint_directory,
