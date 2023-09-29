@@ -5,8 +5,7 @@
 			"input_shape": ["?", "?", 3],
 			"value_range": [0, 255],
 			"parameters": {
-				"width": -1,
-				"depth": 5,
+				"levels": 5,
 				"backbone_kernel_size": 7,
 				"kernel_size": 5,
 				"filters": 16,

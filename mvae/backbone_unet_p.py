@@ -28,7 +28,6 @@ def builder(
         use_bn: bool = True,
         use_ln: bool = False,
         use_bias: bool = False,
-        use_noise_regularization: bool = False,
         kernel_regularizer="l2",
         kernel_initializer="glorot_normal",
         dropout_rate: float = -1,
@@ -58,7 +57,6 @@ def builder(
     :param use_bn: use batch normalization
     :param use_ln: use layer normalization
     :param use_bias: use bias (bias free means this should be off)
-    :param use_noise_regularization:
     :param kernel_regularizer: Kernel weight regularizer
     :param kernel_initializer: Kernel weight initializer
     :param multiple_scale_outputs:
@@ -193,6 +191,7 @@ def builder(
     # all the down sampling, backbone
     for i in range(levels):
         if i == 0:
+            # first ever
             params = copy.deepcopy(base_conv_params)
             params["filters"] = max(32, filters)
             x = \
@@ -202,6 +201,7 @@ def builder(
                     ln_post_params=ln_params,
                     conv_params=params)
         else:
+            # new level
             x = \
                 tf.keras.layers.MaxPooling2D(
                     pool_size=(2, 2), padding="same", strides=(2, 2))(x)
@@ -210,7 +210,7 @@ def builder(
                     input_layer=x,
                     bn_post_params=bn_params,
                     ln_post_params=ln_params,
-                    conv_params=params)
+                    conv_params=conv_params_res_1[i])
         x = \
             conv2d_wrapper(
                 input_layer=x,
