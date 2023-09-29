@@ -1,7 +1,6 @@
 r"""Constructs the loss function for the denoiser task and variational autoencoder task"""
 
 import tensorflow as tf
-import tensorflow_addons as tfa
 from typing import List, Dict, Callable
 
 # ---------------------------------------------------------------------
