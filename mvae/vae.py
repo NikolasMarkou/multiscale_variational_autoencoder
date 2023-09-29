@@ -57,15 +57,15 @@ def builder_scales_splitter(
     input_layer = tf.keras.Input(
             name=f"input_tensor",
             shape=(None, None, sum(filters_per_level)))
-
-    start_index = 0
-    output_layers = []
+    output_layers = tf.split(input_layer, filters_per_level, axis=-1)
 
     for i in range(levels):
-        end_index = start_index + filters_per_level[i]
-        # fix the spatial domain
-        output_layers.append(input_layer[:, :, :, start_index:end_index])
-        start_index += filters_per_level[i]
+        s = int(i ** 2)
+        if s == 1:
+            continue
+        output_layers[i] = (
+            tf.keras.layers.MaxPooling2D(
+                pool_size=(1, 1), strides=(s, s))(output_layers[i]))
 
     return (
         tf.keras.Model(
