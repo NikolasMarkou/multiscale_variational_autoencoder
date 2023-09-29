@@ -26,8 +26,6 @@ BuilderResults = namedtuple(
         # this is the end to end model with multiple heads
         # (backbone, ssl and segmentation)
         HYDRA_STR,
-        # this is the common backbone for all the heads to use
-        BACKBONE_STR,
         # converts input values to correct range
         NORMALIZER_STR,
         # converts output values to correct range
@@ -87,7 +85,7 @@ def model_builder(
     # --- build denoiser and other networks
     model_denoiser = model_denoiser_builder(config=config_denoiser)
 
-    input_shape = tf.keras.backend.int_shape(backbone_results.decoder.inputs[0])[1:]
+    input_shape = tf.keras.backend.int_shape(backbone_results.encoder.inputs[0])[1:]
     logger.info("input_shape: [{0}]".format(input_shape))
 
     # --- build hydra combined model
@@ -100,21 +98,24 @@ def model_builder(
             batch_size=batch_size,
             name=INPUT_TENSOR_STR)
 
+    logger.info(f"input_layer: {input_layer}")
     input_normalized_layer = \
         backbone_results.normalizer(
             input_layer, training=False)
 
+    logger.info(f"input_normalized_layer: {input_normalized_layer}")
+
     # common backbone low level
-    encoding_backbone = \
+    encoding_results = \
         backbone_results.encoder(input_normalized_layer)
-    decoding_backbone = \
-        backbone_results.decoder(encoding_backbone)
+    decoding_results = \
+        backbone_results.decoder(encoding_results)
 
     config_denoisers = []
 
     for i in range(decoder_no_outputs):
         input_channels = \
-            tf.keras.backend.int_shape(decoding_backbone.outputs[i])[-1]
+            tf.keras.backend.int_shape(decoding_results[i])[-1]
         shape = copy.deepcopy(config_backbone[INPUT_SHAPE_STR])
         shape[-1] = input_channels
 
@@ -131,11 +132,15 @@ def model_builder(
     ]
     denoisers_mid = [
         backbone_results.denormalizer(
-            model_denoisers[i](decoding_backbone[i]), training=False)
+            model_denoisers[i](decoding_results[i]), training=False)
         for i in range(decoder_no_outputs)
     ]
 
-    output_layers = denoisers_mid
+    output_layers = (
+            [encoding_results] +
+            [decoding_results] +
+            denoisers_mid +
+            [denoisers_mid[0]])
 
     # create model
     model_hydra = \

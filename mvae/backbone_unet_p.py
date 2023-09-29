@@ -184,11 +184,11 @@ def builder(
 
     # --- build model
     # set input
-    input_layer = \
+    encoder_input_layer = \
         keras.Input(
             name="input_tensor",
             shape=input_dims)
-    x = input_layer
+    x = encoder_input_layer
 
     # all the down sampling, backbone
     for i in range(levels):
@@ -248,7 +248,7 @@ def builder(
     model_encoder = tf.keras.Model(
         name=f"{name}_encoder",
         trainable=True,
-        inputs=input_layer,
+        inputs=encoder_input_layer,
         outputs=[
             nodes_output[(i, 0)]
             for i in range(levels)

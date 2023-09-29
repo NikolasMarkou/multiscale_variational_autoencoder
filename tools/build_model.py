@@ -58,10 +58,10 @@ def main(args):
     models = mvae.model_builder(config=config[mvae.constants.MODEL_STR])
 
     if len(args.output) <= 0:
-        models.hydra.save(f"{model}.h5")
+        models.hydra.save(f"hydra_{model}.h5")
     else:
         if os.path.isdir(args.output):
-            models.hydra.save(os.path.join(args.output, f"{model}.h5"))
+            models.hydra.save(os.path.join(args.output, f"hydra_{model}.h5"))
         else:
             models.hydra.save(args.output)
 
