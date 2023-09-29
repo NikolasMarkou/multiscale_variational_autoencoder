@@ -268,7 +268,7 @@ def train_loop(
 
         # ---
         finished_training = False
-        trainable_variables = ckpt.model.trainable_variables
+        trainable_variables = ckpt.hydra.trainable_variables
 
         while not finished_training and \
                 (total_epochs == -1 or ckpt.epoch < total_epochs):
@@ -365,7 +365,7 @@ def train_loop(
                             total_denoiser_multiplier += depth_weight
 
                         # combine losses
-                        model_loss = model_loss_fn(model=ckpt.model)
+                        model_loss = model_loss_fn(model=ckpt.hydra)
                         total_loss = total_denoiser_loss + model_loss[TOTAL_LOSS_STR]
 
                         gradient = \
