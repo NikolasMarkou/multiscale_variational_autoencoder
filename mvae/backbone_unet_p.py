@@ -254,6 +254,17 @@ def builder(
             for i in range(levels)
         ])
 
+    decoder_inputs = [
+        tf.keras.Input(
+            name=f"input_tensor_{i}",
+            shape=(None, None, conv_params_res_3[i]["filters"]))
+        for i in range(levels)
+    ]
+
+    for i in range(levels):
+        nodes_output[(i, 0)] = decoder_inputs[i]
+    nodes_output[(levels - 1, 1)] = nodes_output[(levels - 1, 0)]
+
     # --- move up
     while len(nodes_to_visit) > 0:
         node = nodes_to_visit.pop(0)
@@ -287,26 +298,26 @@ def builder(
         logger.debug(f"node: [{node}], dependencies: {dependencies}")
         for d in dependencies:
             logger.debug(f"processing dependency: {d}")
-            y = nodes_output[d]
+            x = nodes_output[d]
             if d[0] == node[0]:
                 # same level
                 pass
             elif d[0] > node[0]:
                 # lower level, upscale
-                y = tf.keras.layers.UpSampling2D(
-                    size=(2, 2), interpolation="nearest")(y)
-                y = conv2d_wrapper(
-                    input_layer=y,
+                x = tf.keras.layers.UpSampling2D(
+                    size=(2, 2), interpolation="nearest")(x)
+                x = conv2d_wrapper(
+                    input_layer=x,
                     bn_post_params=None,
                     ln_post_params=None,
                     conv_params=conv_params_up[node[0]])
             else:
                 raise ValueError(f"node: {node}, dependencies: {dependencies}, "
                                  f"should not supposed to be here")
-            x_input.append(y)
+            x_input.append(x)
 
         if len(x_input) == 1:
-            x = x[0]
+            x = x_input[0]
         elif len(x_input) > 0:
             x = tf.keras.layers.Concatenate()(x_input)
         else:
@@ -368,12 +379,7 @@ def builder(
     model_decoder = tf.keras.Model(
         name=f"{name}_decoder",
         trainable=True,
-        inputs=[
-            keras.Input(
-                name=f"input_tensor_{i}",
-                shape=(None, None, conv_params_res_3[i]["filters"]))
-            for i in range(levels)
-        ],
+        inputs=decoder_inputs,
         outputs=output_layers)
 
     return model_encoder, model_decoder

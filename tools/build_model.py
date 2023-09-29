@@ -14,7 +14,7 @@ import argparse
 
 
 CURRENT_DIR = pathlib.Path(__file__).parent.resolve()
-SRC_DIR = CURRENT_DIR.parent.resolve() / "src"
+SRC_DIR = CURRENT_DIR.parent.resolve()
 sys.path.append(str(SRC_DIR))
 
 # ---------------------------------------------------------------------
@@ -38,9 +38,16 @@ import mvae
 
 
 def main(args):
-    model = args.model.lower()
+    # --- argument checking
+    model = args.model
+    if model is None or len(model) <= 0:
+        raise ValueError("you have not selected a model, available options [{0}]".format(
+            list(mvae.configs_dict.keys())
+        ))
 
     # --- check if model in configs
+    model = args.model.strip().lower()
+
     if model not in mvae.configs_dict:
         raise ValueError(
             "could not find model [{0}], available options [{1}]".format(

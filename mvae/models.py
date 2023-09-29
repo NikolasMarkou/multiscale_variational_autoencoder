@@ -79,7 +79,7 @@ def model_builder(
 
     denoiser_input_channels = \
         tf.keras.backend.int_shape(
-            backbone_results.decoder.outputs.outputs[0])[-1]
+            backbone_results.decoder.outputs[0])[-1]
     denoiser_shape = copy.deepcopy(config_backbone[INPUT_SHAPE_STR])
     denoiser_shape[-1] = denoiser_input_channels
     config_denoiser[INPUT_SHAPE_STR] = denoiser_shape
@@ -87,7 +87,7 @@ def model_builder(
     # --- build denoiser and other networks
     model_denoiser = model_denoiser_builder(config=config_denoiser)
 
-    input_shape = tf.keras.backend.int_shape(backbone_results.decoder.outputs.inputs[0])[1:]
+    input_shape = tf.keras.backend.int_shape(backbone_results.decoder.inputs[0])[1:]
     logger.info("input_shape: [{0}]".format(input_shape))
 
     # --- build hydra combined model

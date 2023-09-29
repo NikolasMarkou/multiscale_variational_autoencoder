@@ -1,4 +1,4 @@
-r"""train a multiscale variatiational autoencoder"""
+r"""train a multiscale variational autoencoder"""
 
 import os
 import sys

@@ -14,12 +14,12 @@ import tensorflow as tf
 # local imports
 # ---------------------------------------------------------------------
 
-from .vae import VAE
-from . import layer_blocks
+#from .vae import VAE
+#from . import layer_blocks
 from . import constants
-from .multiscale_vae import MultiscaleVAE
+#from .multiscale_vae import MultiscaleVAE
 from .utilities import logger, load_config
-
+from .models import model_builder
 # ---------------------------------------------------------------------
 
 current_dir = pathlib.Path(__file__).parent.resolve()
@@ -44,6 +44,7 @@ __all__ = [
     configs,
     configs_dict,
     constants,
-    VAE,
-    MultiscaleVAE
+    model_builder,
+    #VAE,
+    #MultiscaleVAE
 ]
