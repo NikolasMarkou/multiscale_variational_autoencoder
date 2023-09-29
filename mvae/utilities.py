@@ -1,5 +1,4 @@
 import os
-import PIL
 import json
 import copy
 import pathlib
@@ -395,7 +394,7 @@ def build_normalize_model(
         input_dims,
         min_value: float = 0.0,
         max_value: float = 255.0,
-        name: str = "normalize") -> keras.Model:
+        name: str = "normalize") -> tf.keras.Model:
     """
     Wrap a normalize layer in a model
 
@@ -548,261 +547,6 @@ def clean_image(
 
     return tf.cast(result, dtype=t.dtype)
 
-
-# ---------------------------------------------------------------------
-
-
-def fix_broken_png(
-        input_filename: Union[str, pathlib.Path],
-        output_filename: Union[str, pathlib.Path] = None,
-        verbose: bool = False) -> bool:
-    """
-    load a png file and fix its structure so it can be read by tensorflow
-
-    :param input_filename: input filename of image
-    :param output_filename: optional output filename, if None save to original
-    :param verbose: if True show extra messages
-    :return: True if operation success, False otherwise
-    """
-    try:
-        # --- argument check
-        if input_filename is None:
-            raise ValueError("input_filename cannot be None")
-
-        if verbose:
-            logger.info(f"processing [{str(input_filename)}]")
-
-        # open the file
-        x = PIL.Image.open(str(input_filename))
-
-        # convert to np array
-        x = np.array(x)
-
-        # convert back to Image
-        x = PIL.Image.fromarray(np.uint8(x))
-
-        # save
-        if output_filename is None:
-            x.save(input_filename)
-        else:
-            if verbose:
-                logger.info(f"saving to [{str(output_filename)}]")
-            # create directory if required
-            directory = os.path.split(str(output_filename))[0]
-            if not os.path.isdir(directory):
-                p = pathlib.Path(directory)
-                p.mkdir(parents=True, exist_ok=True)
-            # save file
-            x.save(str(output_filename))
-        return True
-    except Exception as e:
-        logger.error(f"failed to fix [{input_filename}] -> {e}")
-    return False
-
-
-# ---------------------------------------------------------------------
-
-
-def one_hot_to_color(
-        t: tf.Tensor,
-        normalize_probabilities: bool = True,
-        normalize: bool = False) -> tf.Tensor:
-    """
-    convert one hot tensor to colored tensor image for better visualization
-    assumes that all numbers are positive
-
-    :param t: [B, H, W, Classes]
-    :param normalize_probabilities: if True normalize probabilities for each xy so it adds up to 1
-    :param normalize: if True scale from 0..255 to 0..1
-    :return:  [B, H, W, 3]
-    """
-    # --- assertions
-    tf.assert_rank(x=t,
-                   rank=4,
-                   message=f"t [{tf.shape(t)}] must be 4d")
-
-    # tf.assert_equal(
-    #     x=tf.shape(t)[-1],
-    #     y=len(MATERIAL_COLORS2LABEL),
-    #     message=f"t [{tf.shape(t)}] must have as many channels as materials")
-
-    # --- normalize probabilities
-    if normalize_probabilities:
-        t_sum = tf.reduce_sum(t, axis=-1, keepdims=True)
-        t = tf.divide(t, t_sum + DEFAULT_EPSILON)
-
-    # --- set variables
-    shape = t.shape[0:3] + (3,)
-    result = tf.zeros(shape=shape, dtype=tf.float32)
-
-    # --- iterate input
-    items = tf.unstack(t, axis=3)
-    for i, item in enumerate(items):
-        x = tf.stack([item, item, item], axis=3)
-        result += x * MATERIAL_LABEL2COLORS[i]
-    if normalize:
-        result = result / 255
-    return result
-
-
-# ---------------------------------------------------------------------
-
-
-def colorize_tensor_hard(
-        t: tf.Tensor,
-        normalize: bool = False) -> tf.Tensor:
-    """
-    convert one hot tensor to colored tensor image for better visualization
-
-    :param t: tensor of shape [B, H, W, Classes]
-    :param normalize: if True scale from 0..255 to 0..1
-    :return:  [B, H, W, 3]
-    """
-    # --- assertions
-    # tf.assert_equal(
-    #     x=tf.shape(t)[-1],
-    #     y=len(MATERIAL_COLORS2LABEL),
-    #     message=f"t [{tf.shape(t)}] must have as many channels as materials")
-
-    t = class_prob_to_one_hot(t)
-    return one_hot_to_color(t, normalize=normalize)
-
-
-# ---------------------------------------------------------------------
-
-
-def class_prob_to_one_hot(
-        t: tf.Tensor) -> tf.Tensor:
-    """
-    replaces the top value in last dim with 1 and the rest with 0
-
-    :param t: one hot tensor to operator on
-    :return: tensor same shape x but with only zeros and ones
-    """
-    # --- get maximum value on the channels axis
-    max_val = tf.math.reduce_max(t, axis=-1, keepdims=True)
-
-    # --- set to True and the cast to float
-    return tf.cast(tf.greater_equal(t, max_val), tf.float32)
-
-
-# ---------------------------------------------------------------------
-
-
-def gray_to_one_hot(
-        t: tf.Tensor,
-        round_vales: bool = True,
-        out_dtype: tf.dtypes = tf.float32,
-        class_values: Iterable[int] = MATERIAL_COLORS2LABEL.values()) -> tf.Tensor:
-    """
-    converts a 4d [B,W,H,1] color tensor
-    to a 4d [B,W,H,classes] one hot tensor,
-
-    :param t: categorical tensor to operate on
-    :param round_vales:
-    :param out_dtype:
-    :param class_values: list of available classes (defaults to all)
-
-    :return: one hot tensor
-    """
-    # --- assertions
-    tf.assert_rank(x=t,
-                   rank=4,
-                   message=f"t [{tf.shape(t)}] must be 4d")
-    tf.assert_equal(
-        x=tf.shape(t)[-1],
-        y=1,
-        message=f"t [{tf.shape(t)}] must have a single channel")
-
-    if round_vales:
-        # round so they become integers
-        t = tf.round(t)
-
-    results = [
-        tf.cast(tf.equal(t, tf.constant(i, dtype=t.dtype)), dtype=out_dtype)
-        for i in class_values
-    ]
-
-    return tf.concat(values=results, axis=3)
-
-
-# ---------------------------------------------------------------------
-
-
-def one_hot_to_gray(
-        t: tf.Tensor,
-        out_dtype: tf.dtypes = tf.float32) -> tf.Tensor:
-    """
-    converts a 4d [B,W,H,classes] one hot tensor
-    to a 4d [B,W,H,1] image segmentation,
-
-    :param t: one hot tensor to operator on
-    :param out_dtype:
-    :return: single channel tensor
-    """
-    # --- assertions
-    tf.assert_rank(x=t,
-                   rank=4,
-                   message="categorical tensor must be 4d")
-    tf.assert_equal(
-        x=tf.shape(t)[-1],
-        y=len(MATERIAL_COLORS2LABEL),
-        message=f"tensor must have as many channels [{tf.shape(t)[-1]}] "
-                f"as materials [{len(MATERIAL_COLORS2LABEL)}]")
-
-    result = \
-        tf.math.argmax(
-            t,
-            axis=3,
-            output_type=tf.dtypes.int32,
-            name=None
-        )
-
-    return tf.cast(result, dtype=out_dtype)
-
-
-# ---------------------------------------------------------------------
-
-
-def pixel_differences(
-        y_true_one_hot: tf.Tensor,
-        y_pred_one_hot: tf.Tensor,
-        keepdims: bool = True,
-        output_type: tf.DType = tf.dtypes.float32) -> tf.Tensor:
-    """
-    highlight differences in the 2 two tensors
-
-    :param y_true_one_hot: 4d one hot tensor
-    :param y_pred_one_hot: 4d one hot tensor
-    :param keepdims: if True keep dims in the reduction
-    :param output_type: output data type
-    :return: tensor with the differences
-    """
-    # --- argument checking
-    tf.assert_rank(x=y_true_one_hot,
-                   rank=4,
-                   message="y_true_one_hot tensor must be 4d")
-    tf.assert_rank(x=y_pred_one_hot,
-                   rank=4,
-                   message="y_pred_one_hot tensor must be 4d")
-
-    # --- keep only highest prob and set it to one
-    y_true_one_hot = class_prob_to_one_hot(y_true_one_hot)
-    y_pred_one_hot = class_prob_to_one_hot(y_pred_one_hot)
-
-    # --- highlight pixels that differ
-    return tf.reduce_max(
-        tf.cast(
-            tf.math.logical_xor(
-                tf.cast(y_true_one_hot, dtype=tf.bool),
-                tf.cast(y_pred_one_hot, dtype=tf.bool)
-            ),
-            dtype=output_type),
-        axis=3,
-        keepdims=keepdims
-    )
-
-
 # ---------------------------------------------------------------------
 
 
@@ -842,143 +586,6 @@ def reduce_mean_above_threshold(
 # ---------------------------------------------------------------------
 
 
-def compute_border(
-        input_tensor: tf.Tensor) -> tf.Tensor:
-    """
-    computes the hard borders for each channel
-
-    :param input_tensor: 4d dim tensor, one hot encoding of image segmentation
-    :return: 4d tensor, with border/contour on each channel, tf.bool
-    """
-    # --- argument checking
-    tf.assert_rank(x=input_tensor,
-                   rank=4,
-                   message="input_tensor tensor must be 4d")
-
-    input_tensor = \
-        tf.cast(input_tensor, dtype=tf.float16)
-
-    # 4-D with shape
-    # [filter_height, filter_width, in_channels, channel_multiplier]
-    kernel = \
-        np.array([
-            [0, 1, 0],
-            [1, 0, 1],
-            [0, 1, 0]
-        ], dtype=np.float16)
-    kernel = \
-        tf.repeat(
-            input=np.reshape(kernel, newshape=(3, 3, 1, 1)),
-            repeats=tf.shape(input_tensor)[3],
-            axis=2)
-    result = \
-        tf.nn.depthwise_conv2d(
-            input=input_tensor,
-            filter=kernel,
-            strides=[1, 1, 1, 1],
-            padding="SAME")
-    result = \
-        tf.logical_and(
-            tf.greater(input_tensor, 0),
-            tf.less(result, 4))
-    return result
-
-
-# ---------------------------------------------------------------------
-
-
-def soft_border(
-        input_tensor: tf.Tensor,
-        pool_size: Tuple[int, int] = (3, 3),
-        multiplier: float = 1.0) -> tf.Tensor:
-    """
-    computes the borders for each channel
-
-    :param input_tensor: 4d dim tensor, one hot encoding of image segmentation
-    :param pool_size: integer, pool size
-    :param multiplier:
-    :return: 4d tensor, one hot encoding
-    """
-    # --- argument checking
-    if len(pool_size) != 2:
-        raise ValueError(f"pool_size [{pool_size}] should be > 0")
-
-    # --- build
-    x = input_tensor
-    x_avg = tf.nn.avg_pool2d(
-        input=x,
-        padding="SAME",
-        ksize=pool_size,
-        strides=(1, 1))
-    return \
-        tf.clip_by_value(
-            tf.abs(x - x_avg) * float(multiplier),
-            clip_value_min=0.0,
-            clip_value_max=1.0)
-
-# ---------------------------------------------------------------------
-
-
-def internal_border_fast(
-        input_tensor: tf.Tensor,
-        pool_size: Tuple[int, int] = (3, 3)) -> tf.Tensor:
-    """
-    computes the borders for each channel
-
-    :param input_tensor: 4d dim tensor, one hot encoding of image segmentation
-    :param pool_size: integer, pool size
-    :return: 4d tensor, one hot encoding
-    """
-    x = \
-        soft_border(
-            input_tensor=input_tensor,
-            pool_size=pool_size,
-            multiplier=float(pool_size[0] * pool_size[1]))
-    return x * input_tensor
-
-# ---------------------------------------------------------------------
-
-
-def smooth_borders(
-        input_tensor: tf.Tensor,
-        iterations: int = 3,
-        kernel_size: Tuple[int, int] = (3, 3)) -> tf.Tensor:
-    x = input_tensor
-
-    for i in range(iterations):
-        x = \
-            tf.keras.layers.AveragePooling2D(
-                pool_size=kernel_size,
-                strides=(2, 2),
-                padding="same")(x)
-        x = \
-            tf.keras.layers.UpSampling2D(
-                size=(2, 2),
-                interpolation="bilinear")(x)
-        x = x / (tf.reduce_sum(x, axis=-1, keepdims=True) + DEFAULT_EPSILON)
-
-    return x
-
-# ---------------------------------------------------------------------
-
-
-def edge_magnitude(
-        input_tensor: tf.Tensor) -> tf.Tensor:
-    y_pred_max = \
-        tf.reduce_max(input_tensor, axis=-1, keepdims=True)
-    y_pred_max = \
-        tf.cast(tf.greater_equal(input_tensor, y_pred_max), tf.float32)
-    dx, dy = \
-        tf.image.image_gradients(y_pred_max)
-    return \
-        tf.sqrt(
-            tf.math.square(dx) +
-            tf.math.square(dy) +
-            DEFAULT_EPSILON)
-
-# ---------------------------------------------------------------------
-
-
 def normalize_local(
         input_tensor: tf.Tensor,
         kernel_size: Tuple[int, int] = (9, 9)) -> tf.Tensor:
@@ -1010,37 +617,116 @@ def normalize_local(
 # ---------------------------------------------------------------------
 
 
-def logit_norm(
-        input_tensor: tf.Tensor,
-        t: tf.Tensor = tf.constant(1.0),
-        axis: Union[int, Tuple[int, int]] = -1) -> tf.Tensor:
+def random_crops(
+        input_batch: tf.Tensor,
+        no_crops_per_image: int = 16,
+        crop_size: Tuple[int, int] = (64, 64),
+        x_range: Tuple[float, float] = None,
+        y_range: Tuple[float, float] = None,
+        extrapolation_value: float = 0.0,
+        interpolation_method: str = "bilinear") -> tf.Tensor:
     """
-    implementation of logit_norm based on
+    random crop from each image in the batch
 
-    Mitigating Neural Network Overconfidence with Logit Normalization
+    :param input_batch: 4D tensor
+    :param no_crops_per_image: number of crops per image in batch
+    :param crop_size: final crop size output
+    :param x_range: manually set x_range
+    :param y_range: manually set y_range
+    :param extrapolation_value: value set to beyond the image crop
+    :param interpolation_method: interpolation method
+    :return: tensor with shape
+        [input_batch[0] * no_crops_per_image,
+         crop_size[0],
+         crop_size[1],
+         input_batch[3]]
     """
-    x = input_tensor
-    x_denominator = tf.square(x)
-    x_denominator = tf.reduce_sum(x_denominator, axis=axis, keepdims=True)
-    x_denominator = tf.sqrt(x_denominator + DEFAULT_EPSILON) + DEFAULT_EPSILON
-    return x / (x_denominator * t)
+    shape = tf.shape(input_batch)
+    original_dtype = input_batch.dtype
+    batch_size = shape[0]
+
+    if shape[1] <= 0 or shape[2] <= 0:
+        return \
+            tf.zeros(
+                shape=(no_crops_per_image, crop_size[0], crop_size[1], shape[3]),
+                dtype=original_dtype)
+
+    # computer the total number of crops
+    total_crops = no_crops_per_image * batch_size
+
+    # fill y_range, x_range based on crop size and input batch size
+    if y_range is None:
+        y_range = (float(crop_size[0] / shape[1]),
+                   float(crop_size[0] / shape[1]))
+
+    if x_range is None:
+        x_range = (float(crop_size[1] / shape[2]),
+                   float(crop_size[1] / shape[2]))
+
+    #
+    y1 = tf.random.uniform(
+        shape=(total_crops, 1), minval=0.0, maxval=1.0 - y_range[0])
+    y2 = y1 + y_range[1]
+    #
+    x1 = tf.random.uniform(
+        shape=(total_crops, 1), minval=0.0, maxval=1.0 - x_range[0])
+    x2 = x1 + x_range[1]
+    # limit the crops to the end of image
+    y1 = tf.maximum(y1, 0.0)
+    y2 = tf.minimum(y2, 1.0)
+    x1 = tf.maximum(x1, 0.0)
+    x2 = tf.minimum(x2, 1.0)
+    # concat the dimensions to create [total_crops, 4] boxes
+    boxes = tf.concat([y1, x1, y2, x2], axis=1)
+
+    # --- randomly choose the image to crop inside the batch
+    box_indices = \
+        tf.random.uniform(
+            shape=(total_crops,),
+            minval=0,
+            maxval=batch_size,
+            dtype=tf.int32)
+
+    result = \
+        tf.image.crop_and_resize(
+            image=input_batch,
+            boxes=boxes,
+            box_indices=box_indices,
+            crop_size=crop_size,
+            method=interpolation_method,
+            extrapolation_value=extrapolation_value)
+
+    del boxes
+    del box_indices
+    del x1, y1, x2, y2
+    del y_range, x_range
+
+    # --- cast to original img dtype (no surprises principle)
+    return tf.cast(result, dtype=original_dtype)
 
 # ---------------------------------------------------------------------
 
 
-def norm_softmax(
-        input_tensor: tf.Tensor) -> tf.Tensor:
-    """
-    implementation of normsoftmax
+def subsample(
+        input_batch: tf.Tensor) -> tf.Tensor:
+    return \
+        tf.nn.max_pool2d(
+            input=input_batch,
+            ksize=(1, 1),
+            strides=(2, 2),
+            padding="SAME")
 
-    NORM SOFTMAX : NORMALIZE THE INPUT
-    OF SOFTMAX TO ACCELERATE AND STABILIZE TRAINING
-    """
-    x = input_tensor
-    x_ones = x * 0.0 + 1.0
-    x_sum_dims = tf.reduce_sum(x_ones, axis=-1, keepdims=True)
-    x_sum_dims = tf.pow(x_sum_dims, -0.5)
-    x_mean = tf.reduce_mean(x, axis=-1, keepdims=True)
-    return logit_norm(x - x_mean, x_sum_dims)
+# ---------------------------------------------------------------------
+
+
+def downsample(
+        input_batch: tf.Tensor,
+        kernel_size: Tuple[int, int] = (3, 3)) -> tf.Tensor:
+    x = \
+        tfa.image.gaussian_filter2d(
+            sigma=1,
+            image=input_batch,
+            filter_shape=kernel_size)
+    return subsample(input_batch=x)
 
 # ---------------------------------------------------------------------

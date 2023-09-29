@@ -1,8 +1,6 @@
 import os
-import json
-import copy
 import time
-import math
+import json
 import numpy as np
 import tensorflow as tf
 from pathlib import Path
@@ -12,32 +10,26 @@ from typing import Union, Dict, Tuple
 # local imports
 # ---------------------------------------------------------------------
 
-from .constants import *
-from .custom_logger import logger
-from .loss import \
-    loss_function_builder
-from .optimizer import optimizer_builder
-from .models import model_builder, model_output_indices
-from .utilities import \
-    save_config, \
-    load_config
 from .dataset import *
-from .metrics import metrics
-from .visualize import \
-    visualize_weights_boxplot, \
-    visualize_confusion_matrix, \
-    visualize_weights_heatmap, \
-    visualize_gradient_boxplot
+from .constants import *
+
+from .custom_logger import logger
+from .file_operations import load_image
+from .optimizer import optimizer_builder
+from .loss import loss_function_builder
 from .utilities_checkpoints import \
     create_checkpoint, \
     model_weights_from_checkpoint
+from .models import model_builder, model_output_indices
+from .utilities import load_config, save_config
+from .visualize import \
+    visualize_weights_boxplot, \
+    visualize_weights_heatmap, \
+    visualize_gradient_boxplot
 
 # ---------------------------------------------------------------------
 
 CURRENT_DIRECTORY = os.path.realpath(os.path.dirname(__file__))
-
-tf.get_logger().setLevel("WARNING")
-tf.autograph.set_verbosity(2)
 
 
 # ---------------------------------------------------------------------
@@ -48,7 +40,7 @@ def train_loop(
         model_dir: Union[str, Path],
         weights_dir: Union[str, Path] = None):
     """
-    Trains a multiscale variational autoencoder
+    Trains a blind image denoiser
 
     This method:
         1. Processes the pipeline configs
@@ -85,13 +77,9 @@ def train_loop(
     # --- build dataset
     dataset = dataset_builder(config[DATASET_STR])
 
-    dataset_eval = dataset.evaluate
-    dataset_training_materials = dataset.training_materials
-    dataset_testing_materials = dataset.testing_materials
-    dataset_training_bg_lumen_wall = dataset.training_bg_lumen_wall
-    dataset_testing_bg_lumen_wall = dataset.testing_bg_lumen_wall
     batch_size = dataset.batch_size
     input_shape = dataset.input_shape
+    dataset_training = dataset.training
 
     # --- build loss function
     loss_fn_map = loss_function_builder(config=config["loss"])
@@ -134,8 +122,6 @@ def train_loop(
     ssl_epochs = train_config.get("ssl_epochs", -1)
     epochs = train_config["epochs"]
     gpu_batches_per_step = int(train_config.get("gpu_batches_per_step", 1))
-    use_rotational_invariance = train_config.get("use_rotational_invariance", False)
-
     if gpu_batches_per_step <= 0:
         raise ValueError("gpu_batches_per_step must be > 0")
 
@@ -158,7 +144,7 @@ def train_loop(
     visualization_number = train_config.get("visualization_number", 5)
 
     # --- train the model
-    with tf.summary.create_file_writer(model_dir).as_default():
+    with (tf.summary.create_file_writer(model_dir).as_default()):
         # --- write configuration in tensorboard
         tf.summary.text("config", json.dumps(config, indent=4), step=0)
 
@@ -173,11 +159,13 @@ def train_loop(
         models = model_builder(config=config[MODEL_STR])
         ckpt = \
             create_checkpoint(
-                model=models.hydra,
+                hydra=models.hydra,
+                encoder=models.encoder,
+                decoder=models.decoder,
                 path=None)
         # summary of model and save model, so we can inspect with netron
-        ckpt.model.summary(print_fn=logger.info)
-        ckpt.model.save(
+        ckpt.hydra.summary(print_fn=logger.info)
+        ckpt.hydra.save(
             os.path.join(model_dir, MODEL_HYDRA_DEFAULT_NAME_STR))
 
         manager = \
@@ -216,14 +204,18 @@ def train_loop(
                     if not loaded_weights:
                         try:
                             logger.info(f"loading weights from [{d}]")
-                            tmp_model = tf.keras.models.clone_model(ckpt.model)
+                            tmp_hydra = tf.keras.models.clone_model(ckpt.hydra)
                             # restore checkpoint
-                            tmp_checkpoint = create_checkpoint(model=tf.keras.models.clone_model(ckpt.model), path=d)
-                            tmp_model.set_weights(tmp_checkpoint.model.get_weights())
-                            ckpt.model = tmp_model
+                            tmp_checkpoint = create_checkpoint(
+                                encoder=tf.keras.models.clone_model(ckpt.encoder),
+                                decoder=tf.keras.models.clone_model(ckpt.decoder),
+                                hydra=tf.keras.models.clone_model(ckpt.hydra),
+                                path=d)
+                            tmp_hydra.set_weights(tmp_checkpoint.hydra.get_weights())
+                            ckpt.hydra = tmp_hydra
                             ckpt.step.assign(0)
                             ckpt.epoch.assign(0)
-                            del tmp_model
+                            del tmp_hydra
                             del tmp_checkpoint
                             loaded_weights = True
                             logger.info("successfully loaded weights")
@@ -237,39 +229,31 @@ def train_loop(
 
             save_checkpoint_model_fn()
 
-        # find indices of denoiser, materials segmentation, bg lumen wall segmentation
-        # first third is denoiser, second third is materials, last third is bg_lumen_wall
-        model_no_outputs = len(ckpt.model.outputs)
-        model_indices = model_output_indices(no_outputs=model_no_outputs)
-        denoiser_index = model_indices[DENOISER_STR]
-        bg_fg_index = model_indices[SEGMENTATION_BG_FG_STR]
-        lumen_wall_index = model_indices[SEGMENTATION_LUMEN_WALL_STR]
-        materials_index = model_indices[SEGMENTATION_MATERIALS_STR]
+        # find indices of denoiser,
+        model_no_outputs = model_output_indices(len(ckpt.hydra.outputs))
+        denoiser_index = model_no_outputs[DENOISER_STR]
 
         logger.info(f"model number of outputs: [{model_no_outputs}]")
         logger.info(f"model denoiser_index: {denoiser_index}")
-        logger.info(f"model bg_fg_index: {bg_fg_index}")
-        logger.info(f"model bg_lumen_wall_index: {lumen_wall_index}")
-        logger.info(f"model materials_index: {materials_index}")
 
         @tf.function(reduce_retracing=True, jit_compile=False)
-        def train_step(n: tf.Tensor) -> List[tf.Tensor]:
-            return ckpt.model(n, training=True)
+        def train_denoiser_step(n: tf.Tensor) -> List[tf.Tensor]:
+            results = ckpt.hydra(n, training=True)
+            return [
+                results[index]
+                for index in denoiser_index
+            ]
 
         @tf.function(reduce_retracing=True, jit_compile=False)
-        def test_step(n: tf.Tensor) -> Tuple[tf.Tensor, tf.Tensor, tf.Tensor, tf.Tensor]:
-            results = ckpt.model(n, training=False)
-            return \
-                results[denoiser_index[0]], \
-                results[bg_fg_index[0]], \
-                results[lumen_wall_index[0]], \
-                results[materials_index[0]]
+        def test_denoiser_step(n: tf.Tensor) -> tf.Tensor:
+            results = ckpt.hydra(n, training=False)
+            return results[denoiser_index[0]]
 
         if ckpt.step == 0:
             tf.summary.trace_on(graph=True, profiler=False)
 
             # run a single step
-            _ = train_step(iter(dataset_training_materials).get_next()[0])
+            _ = train_denoiser_step(iter(dataset_training).get_next()[0])
 
             tf.summary.trace_export(
                 step=ckpt.step,
@@ -279,40 +263,12 @@ def train_loop(
 
         sizes = [
             (int(input_shape[0] / (2 ** i)), int(input_shape[1] / (2 ** i)))
-            for i in range(len(materials_index))
-        ]
-
-        segmentation_loss_fn_list = [
-            tf.function(
-                func=copy.deepcopy(loss_fn_map[SEGMENTATION_LOSS_FN_STR]),
-                input_signature=[
-                    tf.TensorSpec(shape=[batch_size, sizes[i][0], sizes[i][1], NUMBER_OF_BG_FG_CLASSES], dtype=tf.float32),
-                    tf.TensorSpec(shape=[batch_size, sizes[i][0], sizes[i][1], NUMBER_OF_BG_FG_CLASSES], dtype=tf.float32),
-                    tf.TensorSpec(shape=[batch_size, sizes[i][0], sizes[i][1], NUMBER_OF_LUMEN_WALL_CLASSES], dtype=tf.float32),
-                    tf.TensorSpec(shape=[batch_size, sizes[i][0], sizes[i][1], NUMBER_OF_LUMEN_WALL_CLASSES], dtype=tf.float32),
-                    tf.TensorSpec(shape=[batch_size, sizes[i][0], sizes[i][1], NUMBER_OF_MATERIALS_CLASSES], dtype=tf.float32),
-                    tf.TensorSpec(shape=[batch_size, sizes[i][0], sizes[i][1], NUMBER_OF_MATERIALS_CLASSES], dtype=tf.float32),
-                ],
-                reduce_retracing=True)
-            for i in range(len(materials_index))
+            for i in range(len(denoiser_index))
         ]
 
         # ---
         finished_training = False
-        ssl_multiplier = tf.constant(1.0, dtype=tf.float32)
-        task_multiplier = tf.constant(1.0, dtype=tf.float32)
-        dataset_training_bg_lumen_wall_iter = iter(dataset_training_bg_lumen_wall)
         trainable_variables = ckpt.model.trainable_variables
-
-        if use_rotational_invariance:
-            transforms = [
-                lambda x: x,
-                lambda x: tf.image.flip_up_down(x),
-                lambda x: tf.image.flip_left_right(x),
-                lambda x: tf.image.flip_up_down(tf.image.flip_left_right(x)),
-            ]
-        else:
-            transforms = [lambda x: x]
 
         while not finished_training and \
                 (total_epochs == -1 or ckpt.epoch < total_epochs):
@@ -331,7 +287,7 @@ def train_loop(
 
             depth_weight_str = [
                 "{0:.2f}".format(output_discount_factor ** (float(i) * percentage_done))
-                for i in range(len(materials_index))
+                for i in range(len(denoiser_index))
             ]
 
             logger.info("percentage done [{:.2f}]".format(float(percentage_done)))
@@ -339,9 +295,7 @@ def train_loop(
 
             # --- initialize iterators
             epoch_finished_training = False
-            dataset_eval_iter = iter(dataset_eval)
-            dataset_train_materials_iter = iter(dataset_training_materials)
-            dataset_test_materials_iter = iter(dataset_testing_materials)
+            dataset_train = iter(dataset_training)
             total_loss = tf.constant(0.0, dtype=tf.float32)
             gradients = [
                 tf.constant(0.0, dtype=tf.float32)
@@ -352,19 +306,6 @@ def train_loop(
                 for _ in range(len(trainable_variables))
             ]
 
-            # --- decide on the mixture of learning (ssl, task, or mix)
-            if ssl_epochs > 0:
-                if ckpt.epoch < ssl_epochs:
-                    ssl_multiplier = tf.constant(1.0, dtype=tf.float32)
-                    task_multiplier = tf.constant(1.0, dtype=tf.float32)
-                else:
-                    logger.info("denoiser disabled")
-                    ssl_multiplier = tf.constant(0.0, dtype=tf.float32)
-                    task_multiplier = tf.constant(1.0, dtype=tf.float32)
-            else:
-                task_multiplier = tf.constant(1.0, dtype=tf.float32)
-                ssl_multiplier = tf.constant(1.0, dtype=tf.float32)
-
             # --- check if total steps reached
             if total_steps != -1:
                 if total_steps <= ckpt.step:
@@ -373,8 +314,7 @@ def train_loop(
                     finished_training = True
 
             total_denoiser_loss = tf.constant(0.0, dtype=tf.float32)
-            total_segmentation_multiplier = tf.constant(0.0, dtype=tf.float32)
-            total_segmentation_materials_loss = tf.constant(0.0, dtype=tf.float32)
+            total_denoiser_multiplier = tf.constant(0.0, dtype=tf.float32)
 
             # --- iterate over the batches of the dataset
             while not finished_training and \
@@ -384,141 +324,62 @@ def train_loop(
 
                 for _ in range(gpu_batches_per_step):
                     try:
-                        (input_image_batch,
-                         noisy_image_batch,
-                         gt_all_one_hot_batch,
-                         gt_bg_fg_one_hot_batch,
-                         gt_lumen_wall_one_hot_batch,
-                         gt_materials_one_hot_batch) = \
-                            dataset_train_materials_iter.get_next()
+                        (input_image_batch, noisy_image_batch) = dataset_train.get_next()
                     except tf.errors.OutOfRangeError:
                         epoch_finished_training = True
                         break
 
                     scale_gt_image_batch = [input_image_batch]
-                    scale_gt_bg_fg_one_hot_batch = [gt_bg_fg_one_hot_batch]
-                    scale_gt_lumen_wall_one_hot_batch = [gt_lumen_wall_one_hot_batch]
-                    scale_gt_materials_one_hot_batch = [gt_materials_one_hot_batch]
-
                     tmp_gt_image = input_image_batch
-                    tmp_gt_bg_fg = gt_bg_fg_one_hot_batch + DEFAULT_EPSILON
-                    tmp_gt_lumen_wall = gt_lumen_wall_one_hot_batch + DEFAULT_EPSILON
-                    tmp_gt_materials = gt_materials_one_hot_batch + DEFAULT_EPSILON
 
-                    for i in range(len(materials_index)-1):
+                    for i in range(len(denoiser_index)-1):
                         tmp_gt_image = \
                             tf.nn.avg_pool2d(
                                 input=tmp_gt_image,
-                                ksize=(2, 2),
+                                ksize=(3, 3),
                                 strides=(2, 2),
                                 padding="SAME")
-                        tmp_gt_bg_fg = \
-                            tf.nn.avg_pool2d(
-                                input=tmp_gt_bg_fg,
-                                ksize=(2, 2),
-                                strides=(2, 2),
-                                padding="SAME")
-                        tmp_gt_lumen_wall = \
-                            tf.nn.avg_pool2d(
-                                input=tmp_gt_lumen_wall,
-                                ksize=(2, 2),
-                                strides=(2, 2),
-                                padding="SAME")
-                        tmp_gt_materials = \
-                            tf.nn.avg_pool2d(
-                                input=tmp_gt_materials,
-                                ksize=(2, 2),
-                                strides=(2, 2),
-                                padding="SAME")
-
-                        tmp_gt_bg_fg = \
-                            tmp_gt_bg_fg / \
-                            tf.reduce_sum(tmp_gt_bg_fg, axis=-1, keepdims=True)
-                        tmp_gt_lumen_wall = \
-                            tmp_gt_lumen_wall / \
-                            tf.reduce_sum(tmp_gt_lumen_wall, axis=-1, keepdims=True)
-                        tmp_gt_materials = \
-                            tmp_gt_materials / \
-                            tf.reduce_sum(tmp_gt_materials, axis=-1, keepdims=True)
-
                         scale_gt_image_batch.append(tmp_gt_image)
-                        scale_gt_bg_fg_one_hot_batch.append(tmp_gt_bg_fg)
-                        scale_gt_materials_one_hot_batch.append(tmp_gt_materials)
-                        scale_gt_lumen_wall_one_hot_batch.append(tmp_gt_lumen_wall)
 
-                    # rotational transforms to make it invariant
-                    for transform in transforms:
-                        noisy_image_batch_t = transform(noisy_image_batch)
+                    with tf.GradientTape() as tape:
+                        predictions = \
+                            train_denoiser_step(noisy_image_batch)
 
-                        with tf.GradientTape() as tape:
-                            predictions = \
-                                train_step(noisy_image_batch_t)
+                        prediction_denoiser = [
+                            predictions[i] for i in denoiser_index
+                        ]
 
-                            prediction_denoiser = [
-                                predictions[i] for i in denoiser_index
-                            ]
-                            prediction_materials_one_hot = [
-                                predictions[i] for i in materials_index
-                            ]
-                            prediction_bg_fg_one_hot = [
-                                predictions[i] for i in bg_fg_index
-                            ]
-                            prediction_lumen_wall_one_hot = [
-                                predictions[i] for i in lumen_wall_index
-                            ]
+                        # compute the loss value for this mini-batch
+                        all_denoiser_loss = [
+                            denoiser_loss_fn(
+                                input_batch=scale_gt_image_batch[i],
+                                predicted_batch=prediction_denoiser[i])
+                            for i in range(len(prediction_denoiser))
+                        ]
 
-                            # compute the loss value for this mini-batch
-                            all_denoiser_loss = [
-                                denoiser_loss_fn(
-                                    input_batch=transform(scale_gt_image_batch[i]),
-                                    predicted_batch=prediction_denoiser[i])
-                                for i in range(len(prediction_denoiser))
-                            ]
+                        total_denoiser_loss *= 0.0
+                        total_denoiser_multiplier *= 0.0
+                        for i, s in enumerate(all_denoiser_loss):
+                            depth_weight = float(output_discount_factor ** (float(i) * percentage_done))
+                            total_denoiser_loss += s[TOTAL_LOSS_STR] * depth_weight
+                            total_denoiser_multiplier += depth_weight
 
-                            # get segmentation loss for each depth,
-                            # assumes top performance is the first
-                            all_segmentation_loss = [
-                                segmentation_loss_fn_list[i](
-                                    transform(scale_gt_bg_fg_one_hot_batch[i]),
-                                    prediction_bg_fg_one_hot[i],
-                                    transform(scale_gt_lumen_wall_one_hot_batch[i]),
-                                    prediction_lumen_wall_one_hot[i],
-                                    transform(scale_gt_materials_one_hot_batch[i]),
-                                    prediction_materials_one_hot[i])
-                                for i in range(len(prediction_materials_one_hot))
-                            ]
+                        # combine losses
+                        model_loss = model_loss_fn(model=ckpt.model)
+                        total_loss = total_denoiser_loss + model_loss[TOTAL_LOSS_STR]
 
-                            total_denoiser_loss *= 0.0
-                            total_segmentation_multiplier *= 0.0
-                            total_segmentation_materials_loss *= 0.0
+                        gradient = \
+                            tape.gradient(
+                                target=total_loss,
+                                sources=trainable_variables)
 
-                            for i, s in enumerate(all_denoiser_loss):
-                                total_denoiser_loss += s[TOTAL_LOSS_STR]
-
-                            for i, s in enumerate(all_segmentation_loss):
-                                depth_weight = float(output_discount_factor ** (float(i) * percentage_done))
-                                total_segmentation_materials_loss += s[TOTAL_LOSS_STR] * depth_weight
-                                total_segmentation_multiplier += depth_weight
-
-                            # combine losses
-                            model_loss = model_loss_fn(model=ckpt.model)
-                            total_loss = \
-                                task_multiplier * total_segmentation_materials_loss / total_segmentation_multiplier + \
-                                (1.0 - percentage_done) * ssl_multiplier * total_denoiser_loss + \
-                                model_loss[TOTAL_LOSS_STR]
-
-                            gradient = \
-                                tape.gradient(
-                                    target=total_loss,
-                                    sources=trainable_variables)
-
-                        for i, grad in enumerate(gradient):
-                            gradients[i] += grad
-                        del gradient
+                    for i, grad in enumerate(gradient):
+                        gradients[i] += grad
+                    del gradient
 
                 # average out gradients
                 for i in range(len(gradients)):
-                    gradients[i] /= (float(gpu_batches_per_step) * float(len(transforms)))
+                    gradients[i] /= float(gpu_batches_per_step)
 
                 # apply gradient to change weights
                 optimizer.apply_gradients(
@@ -534,10 +395,6 @@ def train_loop(
                         gradients[i] * 0.01
                     gradients[i] *= 0.0
 
-                # !!! IMPORTANT !!!!
-                # keep first segmentation loss result for visualization
-                segmentation_materials_loss = all_segmentation_loss[0]
-
                 # --- add loss summaries for tensorboard
                 # denoiser
                 for i, d in enumerate(all_denoiser_loss):
@@ -551,23 +408,6 @@ def train_loop(
                                       data=d[TOTAL_LOSS_STR],
                                       step=ckpt.step)
 
-                # segmentation materials
-                tf.summary.scalar(name="loss_segmentation/train/dice",
-                                  data=segmentation_materials_loss[DICE_STR],
-                                  step=ckpt.step)
-                tf.summary.scalar(name="loss_segmentation/train/cce",
-                                  data=segmentation_materials_loss[CCE_STR],
-                                  step=ckpt.step)
-                tf.summary.scalar(name="loss_segmentation/train/sfce",
-                                  data=segmentation_materials_loss[SFCE_STR],
-                                  step=ckpt.step)
-                tf.summary.scalar(name="loss_segmentation/train/edge",
-                                  data=segmentation_materials_loss[EDGE_STR],
-                                  step=ckpt.step)
-                tf.summary.scalar(name="loss_segmentation/train/total",
-                                  data=segmentation_materials_loss[TOTAL_LOSS_STR],
-                                  step=ckpt.step)
-
                 # model
                 tf.summary.scalar(name="loss/regularization",
                                   data=model_loss[REGULARIZATION_LOSS_STR],
@@ -575,32 +415,6 @@ def train_loop(
                 tf.summary.scalar(name="loss/total",
                                   data=total_loss,
                                   step=ckpt.step)
-
-                # --- add train scales to visualization
-                if (ckpt.step % visualization_every) == 0:
-                    # train scales
-                    for i in range(len(materials_index)):
-                        p_bg_fg = prediction_bg_fg_one_hot[i]
-                        p_lumen_wall = prediction_lumen_wall_one_hot[i]
-                        p_materials = prediction_materials_one_hot[i]
-                        p_one_hot = models.postprocessor([p_bg_fg, p_lumen_wall, p_materials])
-
-                        m_i_soft = one_hot_to_color(p_one_hot, normalize=True)
-                        m_i_hard = colorize_tensor_hard(p_one_hot, normalize=True)
-                        b_i_soft = one_hot_to_color(p_bg_fg, normalize=True)
-                        b_i_hard = colorize_tensor_hard(p_bg_fg, normalize=True)
-
-                        tf.summary.image(
-                            name=f"scales/output_{i}",
-                            data=tf.concat(
-                                values=[
-                                    tf.concat(values=[m_i_soft, m_i_hard], axis=1),
-                                    tf.concat(values=[b_i_soft, b_i_hard], axis=1)
-                                ],
-                                axis=2
-                            ),
-                            max_outputs=visualization_number,
-                            step=ckpt.step)
 
                 # --- add image prediction for tensorboard
                 if (ckpt.step % visualization_every) == 0:
@@ -614,59 +428,6 @@ def train_loop(
                     for i, d in enumerate(prediction_denoiser):
                         tf.summary.image(name=f"denoiser/scale_{i}/output", data=d / 255,
                                          max_outputs=visualization_number, step=ckpt.step)
-
-                    # --- test on clean to get clean cut version visualization
-                    _, prediction_bg_fg, prediction_lumen_wall, prediction_materials = \
-                        test_step(input_image_batch)
-                    prediction_one_hot = \
-                        models.postprocessor([
-                            prediction_bg_fg,
-                            prediction_lumen_wall,
-                            prediction_materials])
-
-                    # --- inputs / ground truth
-                    # original gt
-                    tf.summary.image(name="input/gt",
-                                     data=one_hot_to_color(gt_all_one_hot_batch, normalize=True),
-                                     max_outputs=visualization_number, step=ckpt.step)
-
-                    # --- outputs
-                    # predicted segmentation probabilities
-                    tf.summary.image(name="segmentation/soft",
-                                     data=one_hot_to_color(prediction_one_hot, normalize=True),
-                                     max_outputs=visualization_number, step=ckpt.step)
-                    # predicted segmentation classes
-                    tf.summary.image(name="segmentation/hard",
-                                     data=colorize_tensor_hard(prediction_one_hot, normalize=True),
-                                     max_outputs=visualization_number, step=ckpt.step)
-
-                    # --- comparison
-                    # raw input with ground truth overlay
-                    tf.summary.image(name="comparison/raw_gt",
-                                     data=one_hot_to_color(gt_all_one_hot_batch, normalize=True) / 2 +
-                                          (input_image_batch / 255) / 2,
-                                     max_outputs=visualization_number,
-                                     step=ckpt.step,
-                                     description="ground truth labels with raw data")
-                    # raw input with prediction overlay
-                    tf.summary.image(name="comparison/raw_prediction",
-                                     data=colorize_tensor_hard(prediction_one_hot, normalize=True) / 2 +
-                                          (input_image_batch / 255) / 2,
-                                     max_outputs=visualization_number,
-                                     step=ckpt.step,
-                                     description="inference with raw data")
-
-                    gt_prediction_xor = \
-                        pixel_differences(
-                            gt_all_one_hot_batch,
-                            prediction_one_hot)
-
-                    tf.summary.image(name="comparison/xor",
-                                     data=gt_prediction_xor,
-                                     max_outputs=visualization_number,
-                                     step=ckpt.step,
-                                     description="show different pixels between "
-                                                 "ground truth and prediction")
 
                     # --- add gradient activity
                     gradient_activity = \
@@ -696,90 +457,6 @@ def train_loop(
                                      max_outputs=visualization_number,
                                      step=ckpt.step,
                                      description="weights heatmap")
-
-                    # --- eval
-                    eval_done = False
-                    while not eval_done:
-                        try:
-                            (input_image_batch,
-                             _,
-                             gt_all_one_hot_batch,
-                             _,
-                             _,
-                             _) = \
-                                dataset_eval_iter.get_next()
-                            _, prediction_bg_fg, \
-                                prediction_lumen_wall_one_hot, \
-                                prediction_materials_one_hot = test_step(input_image_batch)
-
-                            prediction_one_hot_hard = \
-                                models.postprocessor([prediction_bg_fg,
-                                                      prediction_lumen_wall_one_hot,
-                                                      prediction_materials_one_hot])
-
-                            # original input
-                            tf.summary.image(
-                                name="eval/raw", data=input_image_batch / 255,
-                                max_outputs=visualization_number, step=ckpt.step)
-                            # raw input with ground truth overlay
-                            tf.summary.image(
-                                name="eval/raw_gt",
-                                data=one_hot_to_color(gt_all_one_hot_batch, normalize=True) / 2 +
-                                     (input_image_batch / 255) / 2,
-                                max_outputs=visualization_number, step=ckpt.step)
-                            # raw input with prediction overlay
-                            tf.summary.image(
-                                name="eval/raw_prediction",
-                                data=colorize_tensor_hard(prediction_one_hot_hard, normalize=True) / 2 +
-                                     (input_image_batch / 255) / 2,
-                                max_outputs=visualization_number, step=ckpt.step)
-                            eval_done = True
-                        except tf.errors.OutOfRangeError:
-                            dataset_eval_iter = iter(dataset_eval)
-
-                # --- test
-                test_done = False
-                while not test_done:
-                    try:
-                        (input_image_batch,
-                         _,
-                         _,
-                         gt_bg_fg_one_hot_batch,
-                         gt_lumen_wall_one_hot_batch,
-                         gt_materials_one_hot_batch) = \
-                            dataset_test_materials_iter.get_next()
-                        _, prediction_bg_fg, \
-                            prediction_lumen_wall_one_hot, \
-                            prediction_materials_one_hot = test_step(input_image_batch)
-
-                        segmentation_materials_loss = \
-                            segmentation_loss_fn_list[0](
-                                gt_bg_fg_one_hot_batch,
-                                prediction_bg_fg,
-                                gt_lumen_wall_one_hot_batch,
-                                prediction_lumen_wall_one_hot,
-                                gt_materials_one_hot_batch,
-                                prediction_materials_one_hot)
-
-                        # segmentation
-                        tf.summary.scalar(name="loss_segmentation/test/dice",
-                                          data=segmentation_materials_loss[DICE_STR],
-                                          step=ckpt.step)
-                        tf.summary.scalar(name="loss_segmentation/test/cce",
-                                          data=segmentation_materials_loss[CCE_STR],
-                                          step=ckpt.step)
-                        tf.summary.scalar(name="loss_segmentation/test/sfce",
-                                          data=segmentation_materials_loss[SFCE_STR],
-                                          step=ckpt.step)
-                        tf.summary.scalar(name="loss_segmentation/test/edge",
-                                          data=segmentation_materials_loss[EDGE_STR],
-                                          step=ckpt.step)
-                        tf.summary.scalar(name="loss_segmentation/test/total",
-                                          data=segmentation_materials_loss[TOTAL_LOSS_STR],
-                                          step=ckpt.step)
-                        test_done = True
-                    except tf.errors.OutOfRangeError:
-                        dataset_test_materials_iter = iter(dataset_testing_materials)
 
                 # --- check if it is time to save a checkpoint
                 if checkpoint_every > 0 and ckpt.step > 0 and \
@@ -814,35 +491,6 @@ def train_loop(
 
             end_time_epoch = time.time()
             epoch_time = end_time_epoch - start_time_epoch
-
-            # --- evaluation at the end of the epoch
-            for d, d_str, d_description_str in [
-                (dataset_training_materials.take(count=100), "train", "train: 90% of data with augmentations"),
-                (dataset_testing_materials, "test", "test: 10% dataset without augmentations"),
-                (dataset_eval, "eval", "eval: 100% dataset without augmentations")
-            ]:
-                m = metrics(dataset=d, test_fn=test_step, postprocessor_fn=models.postprocessor)
-                tf.summary.scalar(name=f"metrics/{d_str}/{IOU_STR}",
-                                  data=m[IOU_STR],
-                                  step=ckpt.step,
-                                  description=d_description_str)
-                tf.summary.scalar(name=f"metrics/{d_str}/{CATEGORICAL_ACCURACY_STR}",
-                                  data=m[CATEGORICAL_ACCURACY_STR],
-                                  step=ckpt.step,
-                                  description=d_description_str)
-                tf.summary.scalar(name=f"metrics/{d_str}/{DICE_STR}",
-                                  data=m[DICE_STR],
-                                  step=ckpt.step,
-                                  description=d_description_str)
-                cm = m[CONFUSION_MATRIX_STR]
-
-                tf.summary.image(
-                    name=f"confusion_matrix/{d_str}",
-                    data=visualize_confusion_matrix(
-                        cm=cm, title="Confusion Matrix") / 255,
-                    max_outputs=visualization_number,
-                    description="confusion matrix",
-                    step=ckpt.step)
 
             # --- end of the epoch
             logger.info("end of epoch [{0}], took [{1}] seconds".format(

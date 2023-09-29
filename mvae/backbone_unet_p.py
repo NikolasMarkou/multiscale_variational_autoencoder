@@ -244,6 +244,17 @@ def builder(
             nodes_output[k] = (
                 tf.keras.layers.SpatialDropout2D(rate=dropout_2d_params["rate"])(nodes_output[k]))
 
+    # --- create encoder
+    model_encoder = tf.keras.Model(
+        name=f"{name}_encoder",
+        trainable=True,
+        inputs=input_layer,
+        outputs=[
+            nodes_output[(i, 0)]
+            for i in range(levels)
+        ])
+
+    # --- move up
     while len(nodes_to_visit) > 0:
         node = nodes_to_visit.pop(0)
         logger.info(f"node: [{node}, nodes_visited: {nodes_visited}, nodes_to_visit: {nodes_to_visit}")
@@ -353,19 +364,18 @@ def builder(
     # otherwise we will get the most shallow output
     output_layers = output_layers[::-1]
 
-    for i, o in enumerate(output_layers):
-        if bn_params is not None:
-            output_layers[i] = \
-                tf.keras.layers.BatchNormalization(**bn_params)(output_layers[i])
-        if ln_params is not None:
-            output_layers[i] = \
-                tf.keras.layers.LayerNormalization(**ln_params)(output_layers[i])
+    # --- create decoder
+    model_decoder = tf.keras.Model(
+        name=f"{name}_decoder",
+        trainable=True,
+        inputs=[
+            keras.Input(
+                name=f"input_tensor_{i}",
+                shape=(None, None, conv_params_res_3[i]["filters"]))
+            for i in range(levels)
+        ],
+        outputs=output_layers)
 
-    return \
-        tf.keras.Model(
-            name=name,
-            trainable=True,
-            inputs=input_layer,
-            outputs=output_layers)
+    return model_encoder, model_decoder
 
 # ---------------------------------------------------------------------

@@ -69,17 +69,17 @@ def model_builder(
     config_backbone = config[BACKBONE_STR]
 
     # --- build backbone
-    model_backbone, model_normalizer, model_denormalizer = \
+    backbone_results = \
         model_backbone_builder(config=config_backbone)
 
-    backbone_no_outputs = len(model_backbone.outputs)
+    decoder_no_outputs = len(backbone_results.decoder.outputs)
     logger.warning(
-        f"Backbone model has [{backbone_no_outputs}] outputs, "
+        f"Decoder model has [{decoder_no_outputs}] outputs, "
         f"probably of different scale or depth")
 
     denoiser_input_channels = \
         tf.keras.backend.int_shape(
-            model_backbone.outputs[0])[-1]
+            backbone_results.decoder.outputs.outputs[0])[-1]
     denoiser_shape = copy.deepcopy(config_backbone[INPUT_SHAPE_STR])
     denoiser_shape[-1] = denoiser_input_channels
     config_denoiser[INPUT_SHAPE_STR] = denoiser_shape
@@ -87,7 +87,7 @@ def model_builder(
     # --- build denoiser and other networks
     model_denoiser = model_denoiser_builder(config=config_denoiser)
 
-    input_shape = tf.keras.backend.int_shape(model_backbone.inputs[0])[1:]
+    input_shape = tf.keras.backend.int_shape(backbone_results.decoder.outputs.inputs[0])[1:]
     logger.info("input_shape: [{0}]".format(input_shape))
 
     # --- build hydra combined model
@@ -101,61 +101,41 @@ def model_builder(
             name=INPUT_TENSOR_STR)
 
     input_normalized_layer = \
-        model_normalizer(
+        backbone_results.normalizer(
             input_layer, training=False)
 
     # common backbone low level
-    backbone = \
-        model_backbone(input_normalized_layer)
+    encoding_backbone = \
+        backbone_results.encoder(input_normalized_layer)
+    decoding_backbone = \
+        backbone_results.decoder(encoding_backbone)
 
     config_denoisers = []
-    config_segmentations_bg_fg = []
-    config_segmentations_lumen_wall = []
-    config_segmentations_materials = []
 
-    for i in range(backbone_no_outputs):
-        segmentation_input_channels = \
-            tf.keras.backend.int_shape(model_backbone.outputs[i])[-1]
-        segmentation_shape = copy.deepcopy(config_backbone[INPUT_SHAPE_STR])
-        segmentation_shape[-1] = segmentation_input_channels
+    for i in range(decoder_no_outputs):
+        input_channels = \
+            tf.keras.backend.int_shape(decoding_backbone.outputs[i])[-1]
+        shape = copy.deepcopy(config_backbone[INPUT_SHAPE_STR])
+        shape[-1] = input_channels
 
         tmp_config_denoiser = copy.deepcopy(config_denoiser)
-        tmp_config_denoiser[INPUT_SHAPE_STR] = copy.deepcopy(segmentation_shape)
+        tmp_config_denoiser[INPUT_SHAPE_STR] = copy.deepcopy(shape)
         config_denoisers.append(tmp_config_denoiser)
 
-        tmp_config_segmentation_bg_fg = copy.deepcopy(config_segmentation_bg_fg)
-        tmp_config_segmentation_bg_fg[INPUT_SHAPE_STR] = copy.deepcopy(segmentation_shape)
-        tmp_config_segmentation_bg_fg["no_classes"] = NUMBER_OF_BG_FG_CLASSES
-        tmp_config_segmentation_bg_fg["output_kernel"] = (3, 3)
-        config_segmentations_bg_fg.append(tmp_config_segmentation_bg_fg)
+    # --- denoiser heads
+    model_denoisers = [
+        model_denoiser_builder(
+            config=config_denoisers[i],
+            name=f"denoiser_head_{i}")
+        for i in range(decoder_no_outputs)
+    ]
+    denoisers_mid = [
+        backbone_results.denormalizer(
+            model_denoisers[i](decoding_backbone[i]), training=False)
+        for i in range(decoder_no_outputs)
+    ]
 
-        tmp_config_segmentation_lumen_wall = copy.deepcopy(config_segmentation_lumen_wall)
-        tmp_config_segmentation_lumen_wall[INPUT_SHAPE_STR] = copy.deepcopy(segmentation_shape)
-        tmp_config_segmentation_lumen_wall["no_classes"] = NUMBER_OF_LUMEN_WALL_CLASSES
-        tmp_config_segmentation_lumen_wall["output_kernel"] = (3, 3)
-        config_segmentations_lumen_wall.append(tmp_config_segmentation_lumen_wall)
-
-        tmp_config_segmentation_materials = copy.deepcopy(config_segmentation)
-        tmp_config_segmentation_materials[INPUT_SHAPE_STR] = copy.deepcopy(segmentation_shape)
-        tmp_config_segmentation_materials["no_classes"] = NUMBER_OF_MATERIALS_CLASSES
-        tmp_config_segmentation_materials["output_kernel"] = (1, 1)
-        config_segmentations_materials.append(tmp_config_segmentation_materials)
-
-        # --- denoiser heads
-        model_denoisers = [
-            model_denoiser_builder(
-                config=config_denoisers[i],
-                name=f"denoiser_head_{i}")
-            for i in range(backbone_no_outputs)
-        ]
-        denoisers_mid = [
-            model_denormalizer(
-                model_denoisers[i](backbone[i]), training=False)
-            for i in range(backbone_no_outputs)
-        ]
-
-        output_layers = \
-            denoisers_mid
+    output_layers = denoisers_mid
 
     # create model
     model_hydra = \
@@ -169,11 +149,12 @@ def model_builder(
     # --- pack results
     return \
         BuilderResults(
-            backbone=model_backbone,
-            normalizer=model_normalizer,
-            denormalizer=model_denormalizer,
-            denoiser=model_denoiser,
             hydra=model_hydra,
+            normalizer=backbone_results.normalizer,
+            denormalizer=backbone_results.denormalizer,
+            encoder=backbone_results.encoder,
+            decoder=backbone_results.decoder,
+            denoiser=model_denoiser
         )
 
 
@@ -226,25 +207,9 @@ def model_backbone_builder(
 
     model_params = config[PARAMETERS_STR]
 
-    backbone_model = \
+    model_encoder, model_decoder = \
         backbone_builder(
             input_dims=input_shape, **model_params)
-
-    # --- connect the parts of the model
-    # setup input
-    input_layer = \
-        tf.keras.Input(
-            shape=input_shape,
-            name=INPUT_TENSOR_STR)
-    x = input_layer
-
-    x = backbone_model(x)
-
-    model_backbone = \
-        tf.keras.Model(
-            inputs=input_layer,
-            outputs=x,
-            name=name_str)
 
     return (
         BackboneBuilderResults(

@@ -63,6 +63,11 @@ DEFAULT_DPI = 100
 DEFAULT_SYMMETRIC_FIGSIZE = (8, 8)
 DEFAULT_NON_SYMMETRIC_FIGSIZE = (18, 6)
 
+MODEL_HYDRA_STR = "model_hydra"
+MODEL_DENOISER_STR = "model_denoiser"
+
+MODEL_HYDRA_DEFAULT_NAME_STR = f"{MODEL_HYDRA_STR}.h5"
+MODEL_DENOISER_DEFAULT_NAME_STR = f"{MODEL_DENOISER_STR}.h5"
 
 # ---------------------------------------------------------------------
 

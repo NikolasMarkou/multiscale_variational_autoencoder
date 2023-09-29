@@ -16,14 +16,18 @@ from .custom_logger import logger
 def create_checkpoint(
         step: tf.Variable = tf.Variable(0, trainable=False, dtype=tf.dtypes.int64, name="step"),
         epoch: tf.Variable = tf.Variable(0, trainable=False, dtype=tf.dtypes.int64, name="epoch"),
-        model: tf.keras.Model = None,
+        hydra: tf.keras.Model = None,
+        encoder: tf.keras.Model = None,
+        decoder: tf.keras.Model = None,
         path: Union[str, pathlib.Path] = None) -> tf.train.Checkpoint:
     # define common checkpoint
     ckpt = \
         tf.train.Checkpoint(
             step=step,
             epoch=epoch,
-            model=model)
+            hydra=hydra,
+            encoder=encoder,
+            decoder=decoder)
     # if paths exists load latest
     if path is not None:
         if os.path.isdir(str(path)):

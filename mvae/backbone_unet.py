@@ -112,7 +112,6 @@ def builder(
     )
 
     conv_params = []
-    same_level_conv_params = []
     up_level_conv_params = []
     for i in range(levels):
         params = copy.deepcopy(base_conv_params)
@@ -121,12 +120,7 @@ def builder(
 
         params = copy.deepcopy(base_conv_params)
         params["filters"] = int(round(filters * (filters_level_multiplier ** i)))
-        params["kernel_size"] = 1
-        same_level_conv_params.append(params)
-
-        params = copy.deepcopy(base_conv_params)
-        params["filters"] = int(round(filters * (filters_level_multiplier ** i)))
-        params["kernel_size"] = kernel_size
+        params["kernel_size"] = (2, 2)
         params["strides"] = (2, 2)
         up_level_conv_params.append(params)
 
@@ -180,6 +174,13 @@ def builder(
                 x_down[i] = \
                     keras.layers.SpatialDropout2D(
                         rate=spatial_dropout_rate)(x_down[i])
+
+    # --- create encoder
+    model_encoder = tf.keras.Model(
+        name=f"{name}_encoder",
+        trainable=True,
+        inputs=input_layer,
+        outputs=x_down)
 
     # --- up
     x_level = x_down[-1]
@@ -235,11 +236,18 @@ def builder(
     # otherwise we will get the most shallow output
     output_layers = output_layers[::-1]
 
-    return \
-        tf.keras.Model(
-            name=name,
-            trainable=True,
-            inputs=input_layer,
-            outputs=output_layers)
+    # --- create decoder
+    model_decoder = tf.keras.Model(
+        name=f"{name}_decoder",
+        trainable=True,
+        inputs=[
+            keras.Input(
+                name=f"input_tensor_{i}",
+                shape=(None, None, conv_params[i]["filters"]))
+            for i in range(levels)
+        ],
+        outputs=output_layers)
+
+    return model_encoder, model_decoder
 
 # ---------------------------------------------------------------------
