@@ -1,0 +1,371 @@
+"""
+unet+ backbone
+"""
+
+import copy
+import tensorflow as tf
+from tensorflow import keras
+from typing import List, Dict, Union, Tuple
+
+# ---------------------------------------------------------------------
+# local imports
+# ---------------------------------------------------------------------
+
+from .constants import *
+from .custom_logger import logger
+from .utilities import conv2d_wrapper
+
+# ---------------------------------------------------------------------
+
+
+def builder(
+        input_dims,
+        levels: int = 5,
+        kernel_size: int = 7,
+        filters: int = 32,
+        filters_level_multiplier: float = 2.0,
+        activation: str = "gelu",
+        use_bn: bool = True,
+        use_ln: bool = False,
+        use_bias: bool = False,
+        use_noise_regularization: bool = False,
+        kernel_regularizer="l2",
+        kernel_initializer="glorot_normal",
+        dropout_rate: float = -1,
+        spatial_dropout_rate: float = -1,
+        multiple_scale_outputs: bool = False,
+        output_layer_name: str = "intermediate_output",
+        name="unet_p",
+        **kwargs) -> Tuple[tf.keras.Model, tf.keras.Model]:
+    """
+    builds a unet model that uses convnext blocks
+
+    1. Ensemble results were considerably worse than the single best
+    2. Tested upsampling methods, settled for upscale nearest and regular conv2d after
+    3. different output activation doesnt provide any benefit
+    4. squeeze and excite before the conv2d provides slightly better results
+    5. trying default on squeeze and excite that learns to turn off features
+    6. layer normalization gets bad results
+
+    :param input_dims: Models input dimensions
+    :param levels: number of levels to go down
+    :param kernel_size: kernel size of base convolutional layer
+    :param filters_level_multiplier: every down level increase the number of filters by a factor of
+    :param filters: filters of base convolutional layer
+    :param activation: activation of the convolutional layers
+    :param dropout_rate: probability of dropout, negative to turn off
+    :param spatial_dropout_rate: probability of dropout, negative to turn off
+    :param use_bn: use batch normalization
+    :param use_ln: use layer normalization
+    :param use_bias: use bias (bias free means this should be off)
+    :param use_noise_regularization:
+    :param kernel_regularizer: Kernel weight regularizer
+    :param kernel_initializer: Kernel weight initializer
+    :param multiple_scale_outputs:
+    :param output_layer_name: the output layer name
+    :param name: name of the model
+
+    :return: unet+ encoder/decoder model
+    """
+    # --- argument checking
+    logger.info("building unet_pp backbone")
+    if len(kwargs) > 0:
+        logger.info(f"parameters not used: {kwargs}")
+
+    # --- setup parameters
+    bn_params = None
+    if use_bn:
+        bn_params = \
+            dict(
+                scale=True,
+                center=use_bias,
+                momentum=DEFAULT_BN_MOMENTUM,
+                epsilon=DEFAULT_BN_EPSILON
+            )
+
+    ln_params = None
+    if use_ln:
+        ln_params = \
+            dict(
+                scale=True,
+                center=use_bias,
+                epsilon=DEFAULT_LN_EPSILON
+            )
+
+    dropout_params = None
+    if dropout_rate > 0.0:
+        dropout_params = {"rate": dropout_rate}
+
+    dropout_2d_params = None
+    if spatial_dropout_rate > 0.0:
+        dropout_2d_params = {"rate": spatial_dropout_rate}
+
+    base_conv_params = dict(
+        kernel_size=kernel_size,
+        filters=filters,
+        strides=(1, 1),
+        padding="same",
+        use_bias=use_bias,
+        activation=activation,
+        kernel_regularizer=kernel_regularizer,
+        kernel_initializer=kernel_initializer
+    )
+
+    conv_params = []
+    conv_params_up = []
+    conv_params_res_1 = []
+    conv_params_res_2 = []
+    conv_params_res_3 = []
+
+    for i in range(levels):
+        filters_level = \
+            int(round(filters * max(1, filters_level_multiplier ** i)))
+
+        # conv2d params when moving horizontally the scale
+        params = copy.deepcopy(base_conv_params)
+        params["filters"] = filters_level
+        conv_params.append(params)
+
+        # 1st residual conv
+        params = \
+            dict(
+                kernel_size=kernel_size,
+                depth_multiplier=1,
+                strides=(1, 1),
+                padding="same",
+                use_bias=use_bias,
+                activation="linear",
+                depthwise_regularizer=kernel_regularizer,
+                depthwise_initializer=kernel_initializer
+            )
+        conv_params_res_1.append(params)
+
+        # 2nd residual conv
+        params = copy.deepcopy(base_conv_params)
+        params["kernel_size"] = 1
+        params["activation"] = activation
+        params["filters"] = filters_level * 4
+        conv_params_res_2.append(params)
+
+        # 3rd residual conv
+        params = copy.deepcopy(base_conv_params)
+        params["kernel_size"] = 1
+        params["activation"] = "linear"
+        params["filters"] = filters_level
+        conv_params_res_3.append(params)
+
+        # conv2d params when moving up the scale
+        params = copy.deepcopy(base_conv_params)
+        params["filters"] = filters_level
+        params["kernel_size"] = (3, 3)
+        params["strides"] = (1, 1)
+        params["activation"] = conv_params_res_3[-1]["activation"]
+        conv_params_up.append(params)
+
+    # --- book keeping
+    nodes_dependencies = {}
+
+    # default unet
+    for j in range(0, levels-1, 1):
+        # bottom and left dependencies
+        nodes_dependencies[(j, 1)] = [
+            (j, 0),
+            (j + 1, 1)
+        ]
+
+    # add the deepest level
+    nodes_dependencies[(levels-1, 1)] = [
+        (levels-1, 0)
+    ]
+
+    nodes_output = {}
+    nodes_to_visit = list(nodes_dependencies.keys())
+    nodes_visited = set()
+
+    # --- build model
+    # set input
+    input_layer = \
+        keras.Input(
+            name="input_tensor",
+            shape=input_dims)
+    x = input_layer
+
+    # all the down sampling, backbone
+    for i in range(levels):
+        if i == 0:
+            params = copy.deepcopy(base_conv_params)
+            params["filters"] = max(64, filters)
+            x = \
+                conv2d_wrapper(
+                    input_layer=x,
+                    bn_post_params=bn_params,
+                    ln_post_params=ln_params,
+                    conv_params=params)
+        else:
+            params = copy.deepcopy(conv_params_res_1[i])
+            # double up filters, half resolution
+            params["strides"] = (2, 2)
+            params["depth_multiplier"] = 2
+            if use_noise_regularization:
+                x = tf.keras.layers.GaussianNoise(stddev=0.05, seed=0)(x)
+            x = \
+                conv2d_wrapper(
+                    input_layer=x,
+                    bn_post_params=bn_params,
+                    ln_post_params=ln_params,
+                    conv_params=params)
+        x = \
+            conv2d_wrapper(
+                input_layer=x,
+                bn_post_params=bn_params,
+                ln_post_params=ln_params,
+                conv_params=conv_params_res_2[i])
+        x = \
+            conv2d_wrapper(
+                input_layer=x,
+                bn_post_params=None,
+                ln_post_params=None,
+                conv_params=conv_params_res_3[i])
+
+        node_level = (i, 0)
+        nodes_visited.add(node_level)
+        nodes_output[node_level] = x
+
+    i = None
+    x = None
+    nodes_visited.add((levels - 1, 1))
+    nodes_output[(levels - 1, 1)] = nodes_output[(levels - 1, 0)]
+
+    for k in nodes_output.keys():
+        if dropout_params is not None:
+            nodes_output[k] = (
+                tf.keras.layers.Dropout(rate=dropout_params["rate"])(nodes_output[k]))
+        if dropout_2d_params is not None:
+            nodes_output[k] = (
+                tf.keras.layers.SpatialDropout2D(rate=dropout_2d_params["rate"])(nodes_output[k]))
+
+    while len(nodes_to_visit) > 0:
+        node = nodes_to_visit.pop(0)
+        logger.info(f"node: [{node}, nodes_visited: {nodes_visited}, nodes_to_visit: {nodes_to_visit}")
+        logger.info(f"dependencies: {nodes_dependencies[node]}")
+        # make sure a node is not visited twice
+        if node in nodes_visited:
+            continue
+        # make sure that all the dependencies for a node are matched
+        dependencies = nodes_dependencies[node]
+        dependencies_matched = \
+            all([
+                (d in nodes_output) and (d in nodes_visited or d == node)
+                for d in dependencies
+            ])
+        if not dependencies_matched:
+            nodes_to_visit.append(node)
+            continue
+        # sort it so all same level dependencies are first and added
+        # as residual before finally concatenating the previous scale
+        dependencies = \
+            sorted(list(dependencies),
+                   key=lambda d: d[0],
+                   reverse=False)
+        logger.debug(f"processing node: {node}, "
+                     f"dependencies: {dependencies}, "
+                     f"nodes_output: {list(nodes_output.keys())}")
+
+        x_input = []
+
+        logger.debug(f"node: [{node}], dependencies: {dependencies}")
+        for d in dependencies:
+            logger.debug(f"processing dependency: {d}")
+            y = nodes_output[d]
+            if d[0] == node[0]:
+                # same level
+                pass
+            elif d[0] > node[0]:
+                # lower level, upscale
+                y = tf.keras.layers.UpSampling2D(
+                    size=(2, 2), interpolation="nearest")(y)
+                y = conv2d_wrapper(
+                    input_layer=y,
+                    bn_post_params=None,
+                    ln_post_params=None,
+                    conv_params=conv_params_up[node[0]])
+            else:
+                raise ValueError(f"node: {node}, dependencies: {dependencies}, "
+                                 f"should not supposed to be here")
+            x_input.append(y)
+
+        if len(x_input) == 1:
+            x = x[0]
+        elif len(x_input) > 0:
+            x = tf.keras.layers.Concatenate()(x_input)
+        else:
+            raise ValueError("this must never happen")
+
+        # --- convnext block
+        x = \
+            conv2d_wrapper(
+                input_layer=x,
+                bn_post_params=bn_params,
+                ln_post_params=ln_params,
+                conv_params=conv_params_res_1[node[0]])
+        x = \
+            conv2d_wrapper(
+                input_layer=x,
+                bn_post_params=bn_params,
+                ln_post_params=ln_params,
+                conv_params=conv_params_res_2[node[0]])
+        x = \
+            conv2d_wrapper(
+                input_layer=x,
+                bn_post_params=None,
+                ln_post_params=None,
+                conv_params=conv_params_res_3[node[0]])
+
+        nodes_output[node] = x
+        nodes_visited.add(node)
+
+    # --- output layer here
+    output_layers = []
+
+    # depth outputs
+    if multiple_scale_outputs:
+        tmp_output_layers = []
+        for i in range(1, levels, 1):
+            depth = i
+            width = 1
+            x = nodes_output[(depth, width)]
+            x = tf.keras.layers.Layer(
+                name=f"{output_layer_name}_{depth}_{width}")(x)
+            tmp_output_layers.append(x)
+        # reverse here so deeper levels come on top
+        output_layers += tmp_output_layers[::-1]
+
+    # add as last the best output
+    depth = 0
+    width = 1
+    output_layers += [
+        tf.keras.layers.Layer(name=f"{output_layer_name}_{depth}_{width}")(
+            nodes_output[(depth, width)])
+    ]
+
+    # IMPORTANT
+    # reverse it so the deepest output is first
+    # otherwise we will get the most shallow output
+    output_layers = output_layers[::-1]
+
+    for i, o in enumerate(output_layers):
+        if bn_params is not None:
+            output_layers[i] = \
+                tf.keras.layers.BatchNormalization(**bn_params)(output_layers[i])
+        if ln_params is not None:
+            output_layers[i] = \
+                tf.keras.layers.LayerNormalization(**ln_params)(output_layers[i])
+
+    return \
+        tf.keras.Model(
+            name=name,
+            trainable=True,
+            inputs=input_layer,
+            outputs=output_layers)
+
+# ---------------------------------------------------------------------
