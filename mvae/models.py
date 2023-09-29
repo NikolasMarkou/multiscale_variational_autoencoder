@@ -318,7 +318,7 @@ def model_output_indices(no_outputs: int) -> Dict[str, List[int]]:
             i for i in range(int(no_outputs_tmp / 3), 2 * int(no_outputs_tmp / 3))
         ],
         DENOISER_STR: [
-            i for i in range(2 * int(no_outputs_tmp / 3), int(no_outputs_tmp / 3))
+            i for i in range(2 * int(no_outputs_tmp / 3), no_outputs_tmp)
         ],
         VARIATIONAL_AUTOENCODER_STR: [no_outputs-1]
     }
