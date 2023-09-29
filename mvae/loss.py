@@ -195,7 +195,6 @@ def loss_function_builder(
     return {
         MODEL_LOSS_FN_STR: model_loss,
         DENOISER_LOSS_FN_STR: denoiser_loss,
-        SEGMENTATION_LOSS_FN_STR: segmentation_loss
     }
 
 # ---------------------------------------------------------------------
