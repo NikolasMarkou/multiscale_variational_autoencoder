@@ -16,7 +16,7 @@ import subprocess
 
 CUDA_DEVICE = 0
 CURRENT_DIR = pathlib.Path(__file__).parent.resolve()
-SRC_DIR = CURRENT_DIR.parent.resolve() / "src"
+SRC_DIR = CURRENT_DIR.parent.resolve()
 CONFIGS_DIR = SRC_DIR / "mvae" / "configs"
 CHECKPOINT_DIRECTORY = "/media/arxwn/external/Training"
 
