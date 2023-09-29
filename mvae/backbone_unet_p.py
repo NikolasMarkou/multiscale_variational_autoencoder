@@ -184,7 +184,7 @@ def builder(
     # set input
     encoder_input_layer = \
         keras.Input(
-            name="input_tensor",
+            name=INPUT_TENSOR_STR,
             shape=input_dims)
     x = encoder_input_layer
 
