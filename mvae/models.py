@@ -121,6 +121,7 @@ def model_builder(
 
         tmp_config_denoiser = copy.deepcopy(config_denoiser)
         tmp_config_denoiser[INPUT_SHAPE_STR] = copy.deepcopy(shape)
+        tmp_config_denoiser["output_channels"] = input_shape[-1]
         config_denoisers.append(tmp_config_denoiser)
 
     # --- denoiser heads

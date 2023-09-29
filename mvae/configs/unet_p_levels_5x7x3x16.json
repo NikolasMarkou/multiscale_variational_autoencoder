@@ -2,7 +2,7 @@
 	"model": {
 		"backbone": {
 			"type": "unet_p",
-			"input_shape": ["?", "?", 1],
+			"input_shape": ["?", "?", 3],
 			"value_range": [0, 255],
 			"parameters": {
 				"width": -1,
@@ -35,7 +35,6 @@
 		"denoiser": {
 			"use_bias": false,
 			"output_kernel": 1,
-			"output_channels": 1,
 			"kernel_regularizer": "l2",
 			"kernel_initializer": "glorot_normal"
 		},
