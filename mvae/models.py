@@ -137,10 +137,15 @@ def model_builder(
     ]
 
     output_layers = (
-            [encoding_results] +
-            [decoding_results] +
+            encoding_results +
+            decoding_results +
             denoisers_mid +
-            [denoisers_mid[0]])
+            [tf.zeros_like(denoisers_mid[0])])
+    # output_layers = (
+    #         [encoding_results] +
+    #         [decoding_results] +
+    #         denoisers_mid +
+    #         [denoisers_mid[0]])
 
     # create model
     model_hydra = \
@@ -192,13 +197,13 @@ def model_backbone_builder(
     # --- build normalize denormalize models
     model_normalize = \
         build_normalize_model(
-            input_dims=(None, None, None),
+            input_dims=input_shape,
             min_value=min_value,
             max_value=max_value)
 
     model_denormalize = \
         build_denormalize_model(
-            input_dims=(None, None, None),
+            input_dims=input_shape,
             min_value=min_value,
             max_value=max_value)
 

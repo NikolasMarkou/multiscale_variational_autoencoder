@@ -33,6 +33,7 @@ os.environ["CUDA_VISIBLE_DEVICES"] = ""
 # ---------------------------------------------------------------------
 
 import mvae
+from mvae.utilities import logger
 
 # ---------------------------------------------------------------------
 
@@ -57,6 +58,7 @@ def main(args):
 
     models = mvae.model_builder(config=config[mvae.constants.MODEL_STR])
 
+    models.hydra.summary(print_fn=logger.info)
     if len(args.output) <= 0:
         models.hydra.save(f"hydra_{model}.h5")
     else:
