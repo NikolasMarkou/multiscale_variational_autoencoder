@@ -194,7 +194,7 @@ def builder(
     for i in range(levels):
         if i == 0:
             params = copy.deepcopy(base_conv_params)
-            params["filters"] = max(64, filters)
+            params["filters"] = max(32, filters)
             x = \
                 conv2d_wrapper(
                     input_layer=x,
@@ -202,12 +202,9 @@ def builder(
                     ln_post_params=ln_params,
                     conv_params=params)
         else:
-            params = copy.deepcopy(conv_params_res_1[i])
-            # double up filters, half resolution
-            params["strides"] = (2, 2)
-            params["depth_multiplier"] = 2
-            if use_noise_regularization:
-                x = tf.keras.layers.GaussianNoise(stddev=0.05, seed=0)(x)
+            x = \
+                tf.keras.layers.MaxPooling2D(
+                    pool_size=(2, 2), padding="same", strides=(2, 2))(x)
             x = \
                 conv2d_wrapper(
                     input_layer=x,
