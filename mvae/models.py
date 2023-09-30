@@ -14,9 +14,9 @@ from .utilities import \
     input_shape_fixer, \
     build_normalize_model, \
     build_denormalize_model
-from .pyramid import build_inverse_pyramid_model
 from .backbone_unet import builder as builder_unet
 from .backbone_unet_p import builder as builder_unet_p
+from .pyramid import build_inverse_laplacian_pyramid_model
 
 # ---------------------------------------------------------------------
 
@@ -141,7 +141,7 @@ def model_builder(
         backbone_results.denormalizer(denoisers_mid[-1])
 
     inverse_pyramid_model = \
-        build_inverse_pyramid_model(
+        build_inverse_laplacian_pyramid_model(
             input_dims=(None, None, None),
             levels=len(denoisers_mid))
 
