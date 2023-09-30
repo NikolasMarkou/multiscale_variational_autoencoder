@@ -444,7 +444,7 @@ def train_loop(
                         tf.summary.image(name=f"input/scale_{i}/output", data=tf.sigmoid(d),
                                          max_outputs=visualization_number, step=ckpt.step)
                     tf.summary.image(name=f"input/scale_{len(denoiser_index)-1}/output",
-                                     data=scale_gt_image_batch[-1] / 255,
+                                     data=models.denormalizer(scale_gt_image_batch[-1]) / 255,
                                      max_outputs=visualization_number,
                                      step=ckpt.step)
                     # for i, d in enumerate(scale_gt_image_batch):
