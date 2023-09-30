@@ -154,7 +154,7 @@ def model_builder(
             encoding_results +
             decoding_results +
             denoisers_mid +
-            [reconstruction[0]])
+            [reconstruction])
 
     # create model
     model_hydra = \
