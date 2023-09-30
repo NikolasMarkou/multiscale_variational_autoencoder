@@ -235,7 +235,6 @@ def train_loop(
         # find indices of denoiser,
         model_no_outputs = model_output_indices(len(ckpt.hydra.outputs))
         denoiser_index = model_no_outputs[DENOISER_STR]
-        reconstruction_index = model_no_outputs[RECONSTRUCTION_STR]
 
         logger.info(f"model number of outputs: [{model_no_outputs}]")
         logger.info(f"model denoiser_index: {denoiser_index}")
@@ -247,7 +246,7 @@ def train_loop(
         @tf.function(reduce_retracing=True, jit_compile=False)
         def test_denoiser_step(n: tf.Tensor) -> tf.Tensor:
             results = ckpt.hydra(n, training=False)
-            return results[reconstruction_index[0]]
+            return results[denoiser_index[0]]
 
         if ckpt.step == 0:
             tf.summary.trace_on(graph=True, profiler=False)
@@ -448,7 +447,7 @@ def train_loop(
                                          max_outputs=visualization_number, step=ckpt.step)
 
                     # reconstruction
-                    reconstruction = test_denoiser_step(noisy_image_batch)
+                    reconstruction = inverse_laplacian_pyramid_model(prediction_denoiser)
                     tf.summary.image(name=f"reconstruction", data=reconstruction / 255,
                                      max_outputs=visualization_number, step=ckpt.step)
 

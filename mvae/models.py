@@ -14,7 +14,6 @@ from .utilities import \
     input_shape_fixer, \
     build_normalize_model, \
     build_denormalize_model
-from .pyramid import build_inverse_pyramid_model
 from .backbone_unet import builder as builder_unet
 from .backbone_unet_p import builder as builder_unet_p
 
@@ -133,28 +132,16 @@ def model_builder(
         for i in range(decoder_no_outputs)
     ]
     denoisers_mid = [
-        model_denoisers[i](decoding_results[i])
+        backbone_results.denormalizer(
+            model_denoisers[i](decoding_results[i]), training=False)
         for i in range(decoder_no_outputs)
     ]
 
-    denoisers_mid[-1] = \
-        backbone_results.denormalizer(denoisers_mid[-1])
-
-    inverse_pyramid_model = \
-        build_inverse_pyramid_model(
-            input_dims=(None, None, None),
-            levels=len(denoisers_mid))
-
-    reconstruction = \
-        inverse_pyramid_model(denoisers_mid, training=False)
-    reconstruction = backbone_results.denormalizer(reconstruction)
-
-    # TODO add autoencoder results
     output_layers = (
             encoding_results +
             decoding_results +
             denoisers_mid +
-            reconstruction)
+            [tf.zeros_like(denoisers_mid[0])]) # TODO replace this with autoencoder results
 
     # create model
     model_hydra = \
@@ -333,7 +320,7 @@ def model_output_indices(no_outputs: int) -> Dict[str, List[int]]:
         DENOISER_STR: [
             i for i in range(2 * int(no_outputs_tmp / 3), no_outputs_tmp)
         ],
-        RECONSTRUCTION_STR: [no_outputs-1]
+        VARIATIONAL_AUTOENCODER_STR: [no_outputs-1]
     }
 
 # ---------------------------------------------------------------------
