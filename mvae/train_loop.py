@@ -272,7 +272,7 @@ def train_loop(
 
         inverse_laplacian_pyramid_model = \
             build_inverse_laplacian_pyramid_model(
-                input_dims=(None, None, None),
+                input_dims=(input_shape[0], input_shape[1], None),
                 levels=len(denoiser_index))
 
         # ---
