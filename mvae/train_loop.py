@@ -439,16 +439,9 @@ def train_loop(
                                      max_outputs=visualization_number, step=ckpt.step)
 
                     # different input scales batch
-                    for i in range(len(denoiser_index) - 1):
+                    for i, d in enumerate(scale_gt_image_batch):
                         tf.summary.image(name=f"input/scale_{i}/output", data=d * 255,
                                          max_outputs=visualization_number, step=ckpt.step)
-                    tf.summary.image(name=f"input/scale_{len(denoiser_index)-1}/output",
-                                     data=models.denormalizer(scale_gt_image_batch[-1]) / 255,
-                                     max_outputs=visualization_number,
-                                     step=ckpt.step)
-                    # for i, d in enumerate(scale_gt_image_batch):
-                    #     tf.summary.image(name=f"input/scale_{i}/output", data=d * 255,
-                    #                      max_outputs=visualization_number, step=ckpt.step)
 
                     # denoised batch
                     for i, d in enumerate(prediction_denoiser):
