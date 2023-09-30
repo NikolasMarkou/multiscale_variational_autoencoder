@@ -350,18 +350,16 @@ def build_laplacian_pyramid_model(
     multiscale_layers = []
 
     for level in range(0, levels - 1):
-        level_x_down = \
+        level_x_smoothed = \
             keras.layers.AveragePooling2D(
                 pool_size=kernel_size,
-                strides=(2, 2),
+                strides=(1, 1),
                 padding="same")(level_x)
-        level_x_smoothed = \
-            keras.layers.UpSampling2D(
-                size=(2, 2),
-                interpolation="bilinear")(level_x_down)
-        level_x_diff = level_x - level_x_smoothed
-        level_x = level_x_down
-        multiscale_layers.append(level_x_diff)
+        multiscale_layers.append(level_x - level_x_smoothed)
+        level_x = \
+            keras.layers.MaxPooling2D(
+                pool_size=(1, 1),
+                strides=(2, 2))(level_x_smoothed)
     level_x = \
         keras.layers.Layer(name=f"level_{levels - 1}")(level_x)
     multiscale_layers.append(level_x)

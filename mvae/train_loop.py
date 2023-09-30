@@ -445,7 +445,7 @@ def train_loop(
 
                     # denoised batch
                     for i, d in enumerate(prediction_denoiser):
-                        tf.summary.image(name=f"denoiser/scale_{i}/output", data=d / 255,
+                        tf.summary.image(name=f"output/scale_{i}/output", data=d / 255,
                                          max_outputs=visualization_number, step=ckpt.step)
 
                     # reconstruction
