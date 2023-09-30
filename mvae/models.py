@@ -137,17 +137,17 @@ def model_builder(
         for i in range(decoder_no_outputs)
     ]
 
+    denoisers_mid[-1] = \
+        backbone_results.denormalizer(denoisers_mid[-1])
+
     inverse_pyramid_model = \
         build_inverse_laplacian_pyramid_model(
             input_dims=(None, None, None),
             levels=len(denoisers_mid))
 
     reconstruction = \
-        inverse_pyramid_model(
-            denoisers_mid, training=False)
-    reconstruction = \
-        backbone_results.denormalizer(
-            reconstruction, training=False)
+        inverse_pyramid_model(denoisers_mid, training=False)
+    reconstruction = backbone_results.denormalizer(reconstruction)
 
     # TODO add autoencoder results
     output_layers = (
