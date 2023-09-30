@@ -24,6 +24,7 @@ BACKBONE_STR = "backbone"
 NORMALIZER_STR = "normalizer"
 DENORMALIZER_STR = "denormalizer"
 POSTPROCESSOR_STR = "postprocessor"
+RECONSTRUCTION_STR = "reconstruction"
 VARIATIONAL_AUTOENCODER_STR = "variational_autoencoder"
 
 # ---------------------------------------------------------------------
