@@ -9,8 +9,8 @@ from typing import Dict, Tuple, Union, List
 
 # ---------------------------------------------------------------------
 
-from .constants import *
 from .custom_logger import logger
+from .constants import TYPE_STR
 
 # ---------------------------------------------------------------------
 
@@ -342,7 +342,7 @@ def build_laplacian_pyramid_model(
     input_dims = list(input_dims)
     input_layer = \
         keras.Input(
-            name=INPUT_TENSOR_STR,
+            name="input_tensor",
             shape=input_dims[:-1] + [None])
 
     # --- split input in levels
@@ -398,7 +398,7 @@ def build_inverse_laplacian_pyramid_model(
     input_dims = list(input_dims)
     input_layers = [
         keras.Input(
-            name=f"{INPUT_TENSOR_STR}_{i}",
+            name=f"input_tensor_{i}",
             shape=input_dims[:-1] + [None])
         for i in range(0, levels)
     ]
