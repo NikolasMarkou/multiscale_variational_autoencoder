@@ -5,11 +5,16 @@ from typing import Dict, Tuple, List
 
 # ---------------------------------------------------------------------
 
+from .constants import *
+from .utilities import conv2d_wrapper, ConvType
+
+# ---------------------------------------------------------------------
+
 
 def builder_scales_fusion(
         levels: int = 5,
         filters: int = 16,
-        filters_level_multiplier: float = 2.0):
+        filters_level_multiplier: float = 2.0) -> tf.keras.Model:
     filters_per_level = [
         int(round(filters * max(1, filters_level_multiplier ** i)))
         for i in range(levels)
@@ -48,7 +53,7 @@ def builder_scales_fusion(
 def builder_scales_splitter(
         levels: int = 5,
         filters: int = 16,
-        filters_level_multiplier: float = 2.0):
+        filters_level_multiplier: float = 2.0) -> tf.keras.Model:
     filters_per_level = [
         int(round(filters * max(1, filters_level_multiplier ** i)))
         for i in range(levels)
@@ -73,5 +78,65 @@ def builder_scales_splitter(
             trainable=False,
             inputs=input_layer,
             outputs=output_layers))
+
+# ---------------------------------------------------------------------
+
+def builder_vae(
+        levels: int = 5,
+        filters: int = 16,
+        filters_level_multiplier: float = 2.0,
+        activation: str = "gelu",
+        use_bn: bool = True,
+        use_ln: bool = False,
+        use_bias: bool = False,
+        kernel_regularizer="l2",
+        kernel_initializer="glorot_normal"):
+    filters_per_level = [
+        int(round(filters * max(1, filters_level_multiplier ** i)))
+        for i in range(levels)
+    ]
+    bn_params = None
+    if use_bn:
+        bn_params = \
+            dict(
+                scale=True,
+                center=use_bias,
+                momentum=DEFAULT_BN_MOMENTUM,
+                epsilon=DEFAULT_BN_EPSILON
+            )
+
+    ln_params = None
+    if use_ln:
+        ln_params = \
+            dict(
+                scale=True,
+                center=use_bias,
+                epsilon=DEFAULT_LN_EPSILON
+            )
+    base_conv_params = dict(
+        kernel_size=(2, 2),
+        filters=filters,
+        strides=(2, 2),
+        padding="same",
+        use_bias=False,
+        activation=activation,
+        kernel_regularizer=kernel_regularizer,
+        kernel_initializer=kernel_initializer
+    )
+
+    # ----
+    input_layer = tf.keras.Input(
+            name=INPUT_TENSOR_STR,
+            shape=(None, None, None))
+    x = input_layer
+    for i in range(levels):
+        x = \
+            conv2d_wrapper(
+                input_layer=x,
+                bn_post_params=bn_params,
+                ln_post_params=ln_params,
+                conv_params=base_conv_params)
+    x = tf
+
 
 # ---------------------------------------------------------------------

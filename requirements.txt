@@ -1,6 +1,5 @@
 pandas
 jupyter
-tf2onnx
 matplotlib
 pip-chill==1.0.3
 pylibjpeg==1.4.0

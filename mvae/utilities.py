@@ -158,38 +158,6 @@ def merge_iterators(
             if value is not empty:
                 yield value
 
-
-# ---------------------------------------------------------------------
-
-
-def distance_from_center_layer(
-        input_layer) -> tf.Tensor:
-    """
-    add 1 extra channel containing the distance from center
-
-    :param input_layer:
-    :return:
-    """
-    shape = tf.shape(input_layer)
-    width = shape[2]
-    height = shape[1]
-
-    # ---
-    x_grid = tf.linspace(start=0.0, stop=1.0, num=width)
-    y_grid = tf.linspace(start=0.0, stop=1.0, num=height)
-    xx_grid, yy_grid = \
-        tf.meshgrid(x_grid, y_grid)
-    dd_grid = \
-        tf.sqrt(
-            tf.square(xx_grid - 0.5) +
-            tf.square(yy_grid - 0.5)
-        )
-    dd_grid = tf.expand_dims(dd_grid, axis=0)
-    dd_grid = tf.expand_dims(dd_grid, axis=3)
-    # repeat in batch dim
-    dd_grid = tf.repeat(dd_grid, axis=0, repeats=shape[0])
-    return dd_grid
-
 # ---------------------------------------------------------------------
 
 
@@ -458,140 +426,6 @@ def build_denormalize_model(
             inputs=model_input,
             outputs=model_output)
 
-
-# ---------------------------------------------------------------------
-
-
-def crop_from_middle(
-        input_batch: tf.Tensor,
-        crop_size: Tuple[int, int] = (128, 128)) -> tf.Tensor:
-    # TODO rewrite this to be more robust
-    shape = tf.shape(input_batch)
-    width = shape[1]
-    height = shape[2]
-    start_width = tf.cast((width - crop_size[0]) / 2, tf.int32)
-    start_height = tf.cast((height - crop_size[1]) / 2, tf.int32)
-    if width > crop_size[0]:
-        input_batch = input_batch[:, start_width:start_width + crop_size[0], :, :]
-    if height > crop_size[1]:
-        input_batch = input_batch[:, :, start_height:start_height + crop_size[1], :]
-    return input_batch
-
-
-# ---------------------------------------------------------------------
-
-
-def clean_image(
-        t: tf.Tensor,
-        threshold_band: Tuple[float, float] = (247.0, 255.0),
-        filter_shape: Tuple[int, int] = (7, 7),
-        iterations: int = 3) -> tf.Tensor:
-    """
-    inpainting of values based on diffusion process
-    """
-    # --- assertions
-    tf.assert_rank(x=t,
-                   rank=4,
-                   message=f"t [{tf.shape(t)}] must be 4d")
-
-    t_f = tf.cast(t, dtype=tf.float32)
-    mask = \
-        tf.cast(
-            tf.math.logical_and(
-                t_f >= threshold_band[0],
-                t_f <= threshold_band[1]),
-            dtype=tf.float32)
-
-    mask = \
-        tf.nn.max_pool2d(
-            mask,
-            ksize=(3, 3),
-            strides=(1, 1),
-            padding="SAME")
-    result = tf.identity(t_f)
-
-    # diffuse surroundings into the mask
-    # without affecting anything outside the mask
-    for i in range(iterations):
-        result = \
-            tf.nn.avg_pool2d(
-                result,
-                ksize=filter_shape,
-                strides=(1, 1),
-                padding="SAME")
-        result = \
-            (result * mask) + \
-            (t_f * (1.0 - mask))
-
-    return tf.cast(result, dtype=t.dtype)
-
-# ---------------------------------------------------------------------
-
-
-def reduce_mean_above_threshold(
-        input_tensor: tf.Tensor,
-        threshold: float = 0.0,
-        axis: List[int] = [1, 2]) -> tf.Tensor:
-    """
-    similar to reduce mean, but count only everything above threshold
-
-    :param input_tensor: input tensor
-    :param threshold: cutoff value for computing mean
-    :param axis:
-    :return: tensor with the differences
-
-    """
-    mask = \
-        tf.cast(
-            tf.greater(input_tensor,
-                       tf.constant(threshold, dtype=tf.float32)),
-            dtype=tf.float32)
-    non_zero = \
-        tf.math.count_nonzero(
-            mask,
-            axis=axis,
-            keepdims=False,
-            dtype=tf.float32)
-    # sum over axis and divide over non zero elements
-    mean_non_zero = \
-        tf.reduce_sum(
-            tf.multiply(input_tensor, mask),
-            keepdims=False,
-            axis=axis) / \
-        (non_zero + DEFAULT_EPSILON)
-    return mean_non_zero
-
-# ---------------------------------------------------------------------
-
-
-def normalize_local(
-        input_tensor: tf.Tensor,
-        kernel_size: Tuple[int, int] = (9, 9)) -> tf.Tensor:
-    """
-    calculate window mean per channel and window variance per channel
-
-    :param input_tensor: the layer to operate on
-    :param kernel_size: size of the kernel (window)
-    :return: normalized input_tensor
-    """
-
-    # ---
-    local_mean = (
-        tf.nn.avg_pool2d(
-            input=input_tensor,
-            ksize=kernel_size,
-            strides=(1, 1),
-            padding="SAME"))
-    local_diff = tf.square(input_tensor - local_mean)
-    local_variance = (
-        tf.nn.avg_pool2d(
-            input=local_diff,
-            ksize=kernel_size,
-            strides=(1, 1),
-            padding="SAME"))
-    local_std = tf.sqrt(local_variance + DEFAULT_EPSILON)
-    return input_tensor / (local_std + 1.0)
-
 # ---------------------------------------------------------------------
 
 
@@ -681,17 +515,5 @@ def random_crops(
 
     # --- cast to original img dtype (no surprises principle)
     return tf.cast(result, dtype=original_dtype)
-
-# ---------------------------------------------------------------------
-
-
-def subsample(
-        input_batch: tf.Tensor) -> tf.Tensor:
-    return \
-        tf.nn.max_pool2d(
-            input=input_batch,
-            ksize=(1, 1),
-            strides=(2, 2),
-            padding="SAME")
 
 # ---------------------------------------------------------------------
