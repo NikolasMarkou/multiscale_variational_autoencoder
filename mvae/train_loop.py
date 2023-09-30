@@ -440,7 +440,6 @@ def train_loop(
 
                     # different input scales batch
                     for i in range(len(denoiser_index) - 1):
-                        d = scale_gt_image_batch[i]
                         tf.summary.image(name=f"input/scale_{i}/output", data=d * 255,
                                          max_outputs=visualization_number, step=ckpt.step)
                     tf.summary.image(name=f"input/scale_{len(denoiser_index)-1}/output",
