@@ -17,6 +17,9 @@ from .custom_logger import logger
 from .file_operations import load_image
 from .optimizer import optimizer_builder
 from .loss import loss_function_builder
+from .pyramid import \
+    build_laplacian_pyramid_model, \
+    build_inverse_laplacian_pyramid_model
 from .utilities_checkpoints import \
     create_checkpoint, \
     model_weights_from_checkpoint
@@ -262,6 +265,16 @@ def train_loop(
             for i in range(len(denoiser_index))
         ]
 
+        laplacian_pyramid_model = \
+            build_laplacian_pyramid_model(
+                input_dims=(input_shape[0], input_shape[1], None),
+                levels=len(denoiser_index))
+
+        inverse_laplacian_pyramid_model = \
+            build_inverse_laplacian_pyramid_model(
+                input_dims=(input_shape[0], input_shape[1], None),
+                levels=len(denoiser_index))
+
         # ---
         finished_training = False
         trainable_variables = ckpt.hydra.trainable_variables
@@ -325,23 +338,25 @@ def train_loop(
                         epoch_finished_training = True
                         break
 
-                    scale_gt_image_batch = [input_image_batch]
-                    tmp_gt_image = input_image_batch
-
-                    for i in range(1, len(denoiser_index), 1):
-                        # tmp_gt_image = \
-                        #     tf.nn.avg_pool2d(
-                        #         input=tmp_gt_image,
-                        #         ksize=(2, 2),
-                        #         strides=(2, 2),
-                        #         padding="SAME")
-                        tmp_gt_image = \
-                            tf.image.resize(
-                                images=tmp_gt_image,
-                                size=sizes[i],
-                                method=tf.image.ResizeMethod.LANCZOS5
-                            )
-                        scale_gt_image_batch.append(tmp_gt_image)
+                    scale_gt_image_batch = \
+                        laplacian_pyramid_model(input_image_batch)
+                    # scale_gt_image_batch = [input_image_batch]
+                    # tmp_gt_image = input_image_batch
+                    #
+                    # for i in range(1, len(denoiser_index), 1):
+                    #     # tmp_gt_image = \
+                    #     #     tf.nn.avg_pool2d(
+                    #     #         input=tmp_gt_image,
+                    #     #         ksize=(2, 2),
+                    #     #         strides=(2, 2),
+                    #     #         padding="SAME")
+                    #     tmp_gt_image = \
+                    #         tf.image.resize(
+                    #             images=tmp_gt_image,
+                    #             size=sizes[i],
+                    #             method=tf.image.ResizeMethod.LANCZOS5
+                    #         )
+                    #     scale_gt_image_batch.append(tmp_gt_image)
 
                     with tf.GradientTape() as tape:
                         predictions = \
@@ -421,15 +436,20 @@ def train_loop(
                 # --- add image prediction for tensorboard
                 if (ckpt.step % visualization_every) == 0:
                     # --- denoiser
-                    tf.summary.image(name="denoiser/input", data=input_image_batch / 255,
+                    tf.summary.image(name="input", data=input_image_batch / 255,
                                      max_outputs=visualization_number, step=ckpt.step)
                     # noisy batch
-                    tf.summary.image(name="denoiser/noisy", data=noisy_image_batch / 255,
+                    tf.summary.image(name="noisy", data=noisy_image_batch / 255,
                                      max_outputs=visualization_number, step=ckpt.step)
                     # denoised batch
                     for i, d in enumerate(prediction_denoiser):
-                        tf.summary.image(name=f"denoiser/scale_{i}/output", data=d / 255,
+                        tf.summary.image(name=f"scale_{i}/output", data=d / 255,
                                          max_outputs=visualization_number, step=ckpt.step)
+
+                    # reconstruction
+                    reconstruction = inverse_laplacian_pyramid_model(prediction_denoiser)
+                    tf.summary.image(name=f"reconstruction", data=reconstruction / 255,
+                                     max_outputs=visualization_number, step=ckpt.step)
 
                     # --- add gradient activity
                     gradient_activity = \
@@ -478,7 +498,7 @@ def train_loop(
                                   data=optimizer.learning_rate,
                                   step=ckpt.step)
                 tf.summary.scalar(name="training/steps_per_second",
-                                  data=1.0 / (step_time_forward_backward + 0.00001),
+                                  data=1.0 / (step_time_forward_backward + DEFAULT_EPSILON),
                                   step=ckpt.step)
 
                 # ---
