@@ -440,7 +440,7 @@ def train_loop(
 
                     # different input scales batch
                     for i, d in enumerate(scale_gt_image_batch):
-                        tf.summary.image(name=f"input/scale_{i}/output", data=d * 255,
+                        tf.summary.image(name=f"input/scale_{i}/output", data=d,
                                          max_outputs=visualization_number, step=ckpt.step)
 
                     # denoised batch
