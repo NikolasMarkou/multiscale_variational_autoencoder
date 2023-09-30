@@ -249,7 +249,7 @@ def train_loop(
             tf.summary.trace_on(graph=True, profiler=False)
 
             # run a single step
-            _ = train_denoiser_step(iter(dataset_training).get_next()[0])
+            _ = train_denoiser_step(iter(dataset.training).get_next()[0])
 
             tf.summary.trace_export(
                 step=ckpt.step,
@@ -291,7 +291,8 @@ def train_loop(
 
             # --- initialize iterators
             epoch_finished_training = False
-            dataset_train = iter(dataset_training)
+            dataset_train = iter(dataset.training)
+            dataset_test = iter(dataset.testing)
             total_loss = tf.constant(0.0, dtype=tf.float32)
             gradients = [
                 tf.constant(0.0, dtype=tf.float32)
@@ -415,14 +416,20 @@ def train_loop(
                 # --- add image prediction for tensorboard
                 if (ckpt.step % visualization_every) == 0:
                     # --- denoiser
-                    tf.summary.image(name="denoiser/input", data=input_image_batch / 255,
+                    tf.summary.image(name="input", data=input_image_batch / 255,
                                      max_outputs=visualization_number, step=ckpt.step)
                     # noisy batch
-                    tf.summary.image(name="denoiser/noisy", data=noisy_image_batch / 255,
+                    tf.summary.image(name="noisy", data=noisy_image_batch / 255,
                                      max_outputs=visualization_number, step=ckpt.step)
+
+                    # scale input batch
+                    for i, d in enumerate(scale_gt_image_batch):
+                        tf.summary.image(name=f"input/scale_{i}", data=d / 255,
+                                         max_outputs=visualization_number, step=ckpt.step)
+
                     # denoised batch
                     for i, d in enumerate(prediction_denoiser):
-                        tf.summary.image(name=f"denoiser/scale_{i}/output", data=d / 255,
+                        tf.summary.image(name=f"output/scale_{i}", data=d / 255,
                                          max_outputs=visualization_number, step=ckpt.step)
 
                     # --- add gradient activity
