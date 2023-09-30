@@ -136,7 +136,6 @@ def builder_vae(
                 bn_post_params=bn_params,
                 ln_post_params=ln_params,
                 conv_params=base_conv_params)
-    x = tf
 
 
 # ---------------------------------------------------------------------

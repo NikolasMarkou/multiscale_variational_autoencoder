@@ -7,7 +7,7 @@
 			"parameters": {
 				"levels": 5,
 				"backbone_kernel_size": 7,
-				"kernel_size": 3,
+				"kernel_size": 5,
 				"filters": 16,
 				"filters_level_multiplier": 2.0,
 				"activation": "leaky_relu",
@@ -35,7 +35,7 @@
 		}
 	},
 	"train": {
-		"epochs": 30,
+		"epochs": 10,
 		"total_steps": -1,
 		"gpu_batches_per_step": 4,
 		"checkpoints_to_keep": 1,
@@ -50,7 +50,7 @@
 				"type": "exponential_decay",
 				"config": {
 					"decay_rate": 0.9,
-					"decay_steps": 3000,
+					"decay_steps": 5000,
 					"learning_rate": 0.001
 				}
 			}
