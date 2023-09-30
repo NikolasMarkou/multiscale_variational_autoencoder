@@ -329,12 +329,6 @@ def train_loop(
                     tmp_gt_image = input_image_batch
 
                     for i in range(1, len(denoiser_index), 1):
-                        # tmp_gt_image = \
-                        #     tf.nn.avg_pool2d(
-                        #         input=tmp_gt_image,
-                        #         ksize=(2, 2),
-                        #         strides=(2, 2),
-                        #         padding="SAME")
                         tmp_gt_image = \
                             tf.image.resize(
                                 images=tmp_gt_image,
