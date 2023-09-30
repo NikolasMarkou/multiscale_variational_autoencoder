@@ -271,11 +271,6 @@ def train_loop(
                 input_dims=(input_shape[0], input_shape[1], None),
                 levels=len(denoiser_index))
 
-        inverse_laplacian_pyramid_model = \
-            build_inverse_laplacian_pyramid_model(
-                input_dims=(None, None, None),
-                levels=len(denoiser_index))
-
         # ---
         finished_training = False
         trainable_variables = ckpt.hydra.trainable_variables
@@ -437,14 +432,20 @@ def train_loop(
                 # --- add image prediction for tensorboard
                 if (ckpt.step % visualization_every) == 0:
                     # --- denoiser
-                    tf.summary.image(name="input", data=input_image_batch / 255,
+                    tf.summary.image(name="input/original", data=input_image_batch / 255,
                                      max_outputs=visualization_number, step=ckpt.step)
                     # noisy batch
-                    tf.summary.image(name="noisy", data=noisy_image_batch / 255,
+                    tf.summary.image(name="input/noisy", data=noisy_image_batch / 255,
                                      max_outputs=visualization_number, step=ckpt.step)
+
+                    # different input scales batch
+                    for i, d in enumerate(scale_gt_image_batch):
+                        tf.summary.image(name=f"input/scale_{i}/output", data=d / 255,
+                                         max_outputs=visualization_number, step=ckpt.step)
+
                     # denoised batch
                     for i, d in enumerate(prediction_denoiser):
-                        tf.summary.image(name=f"scale_{i}/output", data=d / 255,
+                        tf.summary.image(name=f"denoiser/scale_{i}/output", data=d / 255,
                                          max_outputs=visualization_number, step=ckpt.step)
 
                     # reconstruction
