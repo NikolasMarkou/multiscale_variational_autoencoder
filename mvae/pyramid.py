@@ -400,7 +400,7 @@ def build_inverse_laplacian_pyramid_model(
         keras.Input(
             name=f"{INPUT_TENSOR_STR}_{i}",
             shape=input_dims[:-1] + [None])
-        for i in range(0, levels)
+        for i in range(levels)
     ]
 
     # --- merge different levels (from smallest to biggest)
