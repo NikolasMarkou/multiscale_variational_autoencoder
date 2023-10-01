@@ -4,6 +4,7 @@ import json
 import numpy as np
 import tensorflow as tf
 from pathlib import Path
+from pprint import pformat
 from typing import Union, Dict, Tuple
 
 # ---------------------------------------------------------------------
@@ -146,7 +147,7 @@ def train_loop(
     # --- train the model
     with (tf.summary.create_file_writer(model_dir).as_default()):
         # --- write configuration in tensorboard
-        tf.summary.text("config", json.dumps(config, indent=4), step=0)
+        tf.summary.text("config", pformat(config), step=0)
 
         # --- create the help variables
         total_epochs = tf.constant(
