@@ -392,13 +392,13 @@ def train_loop(
                     gradients[i] *= 0.0
 
                 # --- add loss summaries for tensorboard
-                tf.summary.scalar(name=f"loss_train/mae",
+                tf.summary.scalar(name=f"train/mae",
                                   data=all_denoiser_loss[0][MAE_LOSS_STR],
                                   step=ckpt.step)
-                tf.summary.scalar(name=f"loss_train//ssim",
+                tf.summary.scalar(name=f"train/ssim",
                                   data=all_denoiser_loss[0][SSIM_LOSS_STR],
                                   step=ckpt.step)
-                tf.summary.scalar(name=f"loss_train//total",
+                tf.summary.scalar(name=f"train/total",
                                   data=all_denoiser_loss[0][TOTAL_LOSS_STR],
                                   step=ckpt.step)
                 for i, d in enumerate(all_denoiser_loss):
@@ -477,13 +477,13 @@ def train_loop(
                             denoiser_loss_fn(
                                 input_batch=input_image_batch,
                                 predicted_batch=predictions)
-                        tf.summary.scalar(name=f"loss_test/mae",
+                        tf.summary.scalar(name=f"test/mae",
                                           data=d[MAE_LOSS_STR],
                                           step=ckpt.step)
-                        tf.summary.scalar(name=f"loss_test/ssim",
+                        tf.summary.scalar(name=f"test/ssim",
                                           data=d[SSIM_LOSS_STR],
                                           step=ckpt.step)
-                        tf.summary.scalar(name=f"loss_test/total",
+                        tf.summary.scalar(name=f"test/total",
                                           data=d[TOTAL_LOSS_STR],
                                           step=ckpt.step)
 
