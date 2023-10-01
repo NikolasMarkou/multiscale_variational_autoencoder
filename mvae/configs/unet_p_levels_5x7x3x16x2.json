@@ -8,7 +8,7 @@
 				"width": 2,
 				"levels": 5,
 				"backbone_kernel_size": 7,
-				"kernel_size": 5,
+				"kernel_size": 3,
 				"filters": 16,
 				"filters_level_multiplier": 2.0,
 				"activation": "leaky_relu",
@@ -20,7 +20,7 @@
 				"kernel_regularizer": "l2",
 				"kernel_initializer": "glorot_normal",
 				"dropout_rate": 0.5,
-				"spatial_dropout_rate": 0.5
+				"spatial_dropout_rate": 0.25
 			}
 		},
 		"denoiser": {
