@@ -20,6 +20,7 @@ from .utilities import conv2d_wrapper
 
 def builder(
         input_dims,
+        width: int = 1,
         levels: int = 5,
         kernel_size: int = 7,
         filters: int = 32,
@@ -39,14 +40,8 @@ def builder(
     """
     builds a unet model that uses convnext blocks
 
-    1. Ensemble results were considerably worse than the single best
-    2. Tested upsampling methods, settled for upscale nearest and regular conv2d after
-    3. different output activation doesnt provide any benefit
-    4. squeeze and excite before the conv2d provides slightly better results
-    5. trying default on squeeze and excite that learns to turn off features
-    6. layer normalization gets bad results
-
     :param input_dims: Models input dimensions
+    :param width:
     :param levels: number of levels to go down
     :param kernel_size: kernel size of base convolutional layer
     :param filters_level_multiplier: every down level increase the number of filters by a factor of
@@ -190,39 +185,50 @@ def builder(
 
     # all the down sampling, backbone
     for i in range(levels):
-        if i == 0:
-            # first ever
-            params = copy.deepcopy(base_conv_params)
-            params["filters"] = max(32, filters)
+        x_start = x
+        for j in range(width):
+            if i == 0 and j == 0:
+                # first ever
+                params = copy.deepcopy(base_conv_params)
+                params["filters"] = max(32, filters)
+                x = \
+                    conv2d_wrapper(
+                        input_layer=x,
+                        bn_post_params=bn_params,
+                        ln_post_params=ln_params,
+                        conv_params=params)
+            elif j == 0:
+                # new level
+                x = \
+                    tf.keras.layers.MaxPooling2D(
+                        pool_size=(2, 2), padding="same", strides=(2, 2))(x)
+                x = \
+                    conv2d_wrapper(
+                        input_layer=x,
+                        bn_post_params=bn_params,
+                        ln_post_params=ln_params,
+                        conv_params=conv_params_res_1[i])
+            else:
+                x = tf.keras.layers.Concatenate(axis=-1)([x, x_start])
+                x = \
+                    conv2d_wrapper(
+                        input_layer=x,
+                        bn_post_params=bn_params,
+                        ln_post_params=ln_params,
+                        conv_params=conv_params_res_1[i])
             x = \
                 conv2d_wrapper(
                     input_layer=x,
                     bn_post_params=bn_params,
                     ln_post_params=ln_params,
-                    conv_params=params)
-        else:
-            # new level
-            x = \
-                tf.keras.layers.MaxPooling2D(
-                    pool_size=(2, 2), padding="same", strides=(2, 2))(x)
+                    conv_params=conv_params_res_2[i])
             x = \
                 conv2d_wrapper(
                     input_layer=x,
-                    bn_post_params=bn_params,
-                    ln_post_params=ln_params,
-                    conv_params=conv_params_res_1[i])
-        x = \
-            conv2d_wrapper(
-                input_layer=x,
-                bn_post_params=bn_params,
-                ln_post_params=ln_params,
-                conv_params=conv_params_res_2[i])
-        x = \
-            conv2d_wrapper(
-                input_layer=x,
-                bn_post_params=None,
-                ln_post_params=None,
-                conv_params=conv_params_res_3[i])
+                    bn_post_params=None,
+                    ln_post_params=None,
+                    conv_params=conv_params_res_3[i])
+            x_start = x
 
         node_level = (i, 0)
         nodes_visited.add(node_level)
@@ -321,24 +327,29 @@ def builder(
             raise ValueError("this must never happen")
 
         # --- convnext block
-        x = \
-            conv2d_wrapper(
-                input_layer=x,
-                bn_post_params=bn_params,
-                ln_post_params=ln_params,
-                conv_params=conv_params_res_1[node[0]])
-        x = \
-            conv2d_wrapper(
-                input_layer=x,
-                bn_post_params=bn_params,
-                ln_post_params=ln_params,
-                conv_params=conv_params_res_2[node[0]])
-        x = \
-            conv2d_wrapper(
-                input_layer=x,
-                bn_post_params=None,
-                ln_post_params=None,
-                conv_params=conv_params_res_3[node[0]])
+        x_start = x
+        for j in range(width):
+            if j > 0:
+                x = tf.keras.layers.Concatenate(axis=-1)([x, x_start])
+            x = \
+                conv2d_wrapper(
+                    input_layer=x,
+                    bn_post_params=bn_params,
+                    ln_post_params=ln_params,
+                    conv_params=conv_params_res_1[node[0]])
+            x = \
+                conv2d_wrapper(
+                    input_layer=x,
+                    bn_post_params=bn_params,
+                    ln_post_params=ln_params,
+                    conv_params=conv_params_res_2[node[0]])
+            x = \
+                conv2d_wrapper(
+                    input_layer=x,
+                    bn_post_params=None,
+                    ln_post_params=None,
+                    conv_params=conv_params_res_3[node[0]])
+            x_start = x
 
         nodes_output[node] = x
         nodes_visited.add(node)
