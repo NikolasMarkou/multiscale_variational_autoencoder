@@ -499,7 +499,7 @@ def train_loop(
 
                         test_done = True
                     except tf.errors.OutOfRangeError:
-                        dataset_test = iter(dataset.test)
+                        dataset_test = iter(dataset.testing)
 
                 # --- check if it is time to save a checkpoint
                 if checkpoint_every > 0 and ckpt.step > 0 and \
