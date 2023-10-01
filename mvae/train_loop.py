@@ -392,18 +392,25 @@ def train_loop(
                     gradients[i] *= 0.0
 
                 # --- add loss summaries for tensorboard
-                # denoiser
+                tf.summary.scalar(name=f"loss_train/mae",
+                                  data=all_denoiser_loss[0][MAE_LOSS_STR],
+                                  step=ckpt.step)
+                tf.summary.scalar(name=f"loss_train//ssim",
+                                  data=all_denoiser_loss[0][SSIM_LOSS_STR],
+                                  step=ckpt.step)
+                tf.summary.scalar(name=f"loss_train//total",
+                                  data=all_denoiser_loss[0][TOTAL_LOSS_STR],
+                                  step=ckpt.step)
                 for i, d in enumerate(all_denoiser_loss):
-                    tf.summary.scalar(name=f"loss_train/scale_{i}/mae",
+                    tf.summary.scalar(name=f"debug/scale_{i}/mae",
                                       data=d[MAE_LOSS_STR],
                                       step=ckpt.step)
-                    tf.summary.scalar(name=f"loss_train/scale_{i}/ssim",
+                    tf.summary.scalar(name=f"debug/scale_{i}/ssim",
                                       data=d[SSIM_LOSS_STR],
                                       step=ckpt.step)
-                    tf.summary.scalar(name=f"loss_train/scale_{i}/total",
+                    tf.summary.scalar(name=f"debug/scale_{i}/total",
                                       data=d[TOTAL_LOSS_STR],
                                       step=ckpt.step)
-
                 # model
                 tf.summary.scalar(name="loss/regularization",
                                   data=model_loss[REGULARIZATION_LOSS_STR],
@@ -470,13 +477,13 @@ def train_loop(
                             denoiser_loss_fn(
                                 input_batch=input_image_batch,
                                 predicted_batch=predictions)
-                        tf.summary.scalar(name=f"loss_test/scale_0/mae",
+                        tf.summary.scalar(name=f"loss_test/mae",
                                           data=d[MAE_LOSS_STR],
                                           step=ckpt.step)
-                        tf.summary.scalar(name=f"loss_test/scale_0/ssim",
+                        tf.summary.scalar(name=f"loss_test/ssim",
                                           data=d[SSIM_LOSS_STR],
                                           step=ckpt.step)
-                        tf.summary.scalar(name=f"loss_test/scale_0/total",
+                        tf.summary.scalar(name=f"loss_test/total",
                                           data=d[TOTAL_LOSS_STR],
                                           step=ckpt.step)
 
