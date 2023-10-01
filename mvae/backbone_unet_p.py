@@ -185,7 +185,7 @@ def builder(
 
     # all the down sampling, backbone
     for i in range(levels):
-        x_start = x
+        x_skip = None
         for j in range(width):
             if i == 0 and j == 0:
                 # first ever
@@ -209,7 +209,6 @@ def builder(
                         ln_post_params=ln_params,
                         conv_params=conv_params_res_1[i])
             else:
-                x = tf.keras.layers.Concatenate(axis=-1)([x, x_start])
                 x = \
                     conv2d_wrapper(
                         input_layer=x,
@@ -228,7 +227,9 @@ def builder(
                     bn_post_params=None,
                     ln_post_params=None,
                     conv_params=conv_params_res_3[i])
-            x_start = x
+            if j > 0 and x_skip is not None:
+                x = x + x_skip
+            x_skip = x
 
         node_level = (i, 0)
         nodes_visited.add(node_level)
@@ -327,10 +328,8 @@ def builder(
             raise ValueError("this must never happen")
 
         # --- convnext block
-        x_start = x
+        x_skip = None
         for j in range(width):
-            if j > 0:
-                x = tf.keras.layers.Concatenate(axis=-1)([x, x_start])
             x = \
                 conv2d_wrapper(
                     input_layer=x,
@@ -349,7 +348,9 @@ def builder(
                     bn_post_params=None,
                     ln_post_params=None,
                     conv_params=conv_params_res_3[node[0]])
-            x_start = x
+            if j > 0 and x_skip is not None:
+                x = x + x_skip
+            x_skip = x
 
         nodes_output[node] = x
         nodes_visited.add(node)
