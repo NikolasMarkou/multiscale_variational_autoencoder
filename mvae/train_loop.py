@@ -462,15 +462,14 @@ def train_loop(
                 while not test_done:
                     try:
                         (input_image_batch,
-                         noisy_image_batch) = \
-                            dataset_test.get_next()
+                         noisy_image_batch) = dataset_test.get_next()
                         predictions = test_denoiser_step(noisy_image_batch)
 
                         # compute the loss value for this mini-batch
                         d = \
                             denoiser_loss_fn(
-                                input_batch=input_image_batch[i],
-                                predicted_batch=predictions[i])
+                                input_batch=input_image_batch,
+                                predicted_batch=predictions)
                         tf.summary.scalar(name=f"loss_test/scale_0/mae",
                                           data=d[MAE_LOSS_STR],
                                           step=ckpt.step)
