@@ -20,7 +20,7 @@
 				"kernel_regularizer": "l2",
 				"kernel_initializer": "glorot_normal",
 				"dropout_rate": 0.5,
-				"spatial_dropout_rate": -1.0
+				"spatial_dropout_rate": 0.5
 			}
 		},
 		"denoiser": {
