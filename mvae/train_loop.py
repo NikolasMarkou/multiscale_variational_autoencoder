@@ -22,7 +22,10 @@ from .utilities_checkpoints import \
     create_checkpoint, \
     model_weights_from_checkpoint
 from .models import model_builder, model_output_indices
-from .utilities import load_config, save_config
+from .utilities import \
+    load_config, \
+    save_config, \
+    compute_noise_mask
 from .visualize import \
     visualize_weights_boxplot, \
     visualize_weights_heatmap, \
@@ -92,6 +95,14 @@ def train_loop(
             input_signature=[
                 tf.TensorSpec(shape=[batch_size, None, None, input_shape[-1]], dtype=tf.float32),
                 tf.TensorSpec(shape=[batch_size, None, None, input_shape[-1]], dtype=tf.float32),
+            ],
+            reduce_retracing=True)
+    noise_estimation_loss_fn = \
+        tf.function(
+            func=loss_fn_map[NOISE_ESTIMATION_LOSS_FN_STR],
+            input_signature=[
+                tf.TensorSpec(shape=[batch_size, None, None, 1], dtype=tf.float32),
+                tf.TensorSpec(shape=[batch_size, None, None, 1], dtype=tf.float32),
             ],
             reduce_retracing=True)
 
@@ -231,9 +242,9 @@ def train_loop(
         # find indices of denoiser,
         model_no_outputs = model_output_indices(len(ckpt.hydra.outputs))
         denoiser_index = model_no_outputs[DENOISER_STR]
+        noise_estimation_index = model_no_outputs[NOISE_ESTIMATION_STR]
 
-        logger.info(f"model number of outputs: [{model_no_outputs}]")
-        logger.info(f"model denoiser_index: {denoiser_index}")
+        logger.info(f"outputs: {pformat(model_no_outputs)}")
 
         @tf.function(reduce_retracing=True, jit_compile=False)
         def train_denoiser_step(n: tf.Tensor) -> List[tf.Tensor]:
@@ -310,7 +321,10 @@ def train_loop(
                     finished_training = True
 
             total_denoiser_loss = tf.constant(0.0, dtype=tf.float32)
+            total_noise_estimation_loss = tf.constant(0.0, dtype=tf.float32)
+
             total_denoiser_multiplier = tf.constant(0.0, dtype=tf.float32)
+            total_noise_estimation_multiplier = tf.constant(0.0, dtype=tf.float32)
 
             # --- iterate over the batches of the dataset
             while not finished_training and \
@@ -325,8 +339,19 @@ def train_loop(
                         epoch_finished_training = True
                         break
 
+                    # compute where the noise is the most
+                    noisy_image_mask = \
+                        compute_noise_mask(
+                            input_image_batch,
+                            noisy_image_batch)
+
                     scale_gt_image_batch = [input_image_batch]
+                    scale_gt_noisy_batch = [noisy_image_batch]
+                    scale_gt_noisy_mask_batch = [noisy_image_batch]
+
                     tmp_gt_image = input_image_batch
+                    tmp_gt_noise = noisy_image_batch
+                    tmp_gt_noisy_mask = noisy_image_mask
 
                     for i in range(1, len(denoiser_index), 1):
                         tmp_gt_image = \
@@ -337,6 +362,22 @@ def train_loop(
                             )
                         scale_gt_image_batch.append(tmp_gt_image)
 
+                        tmp_gt_noise = \
+                            tf.image.resize(
+                                images=tmp_gt_noise,
+                                size=sizes[i],
+                                method=tf.image.ResizeMethod.LANCZOS5
+                            )
+                        scale_gt_noisy_batch.append(tmp_gt_noise)
+
+                        tmp_gt_noisy_mask = \
+                            tf.image.resize(
+                                images=tmp_gt_noisy_mask,
+                                size=sizes[i],
+                                method=tf.image.ResizeMethod.LANCZOS5
+                            )
+                        scale_gt_noisy_mask_batch.append(tmp_gt_noisy_mask)
+
                     with tf.GradientTape() as tape:
                         predictions = \
                             train_denoiser_step(noisy_image_batch)
@@ -345,6 +386,15 @@ def train_loop(
                             predictions[i] for i in denoiser_index
                         ]
 
+                        prediction_noise_estimation = [
+                            predictions[i] for i in noise_estimation_index
+                        ]
+
+                        for i in range(len(denoiser_index)):
+                            prediction_denoiser[i] = \
+                                scale_gt_noisy_batch[i] * (prediction_noise_estimation[i]) + \
+                                prediction_denoiser[i] * (1.0 - prediction_noise_estimation[i])
+
                         # compute the loss value for this mini-batch
                         all_denoiser_loss = [
                             denoiser_loss_fn(
@@ -352,17 +402,31 @@ def train_loop(
                                 predicted_batch=prediction_denoiser[i])
                             for i in range(len(prediction_denoiser))
                         ]
-
                         total_denoiser_loss *= 0.0
                         total_denoiser_multiplier *= 0.0
                         for i, s in enumerate(all_denoiser_loss):
                             depth_weight = float(output_discount_factor ** (float(i) * percentage_done))
                             total_denoiser_loss += s[TOTAL_LOSS_STR] * depth_weight
-                            total_denoiser_multiplier += depth_weight
+
+                        # ---
+                        all_noise_estimation_loss = [
+                            noise_estimation_loss_fn(
+                                input_batch=tmp_gt_noisy_mask[i],
+                                predicted_batch=prediction_noise_estimation[i])
+                            for i in range(len(prediction_noise_estimation))
+                        ]
+                        total_noise_estimation_loss *= 0.0
+                        total_noise_estimation_multiplier *= 0.0
+                        for i, s in enumerate(all_noise_estimation_loss):
+                            depth_weight = float(output_discount_factor ** (float(i) * percentage_done))
+                            total_noise_estimation_loss += s[TOTAL_LOSS_STR] * depth_weight
 
                         # combine losses
                         model_loss = model_loss_fn(model=ckpt.hydra)
-                        total_loss = total_denoiser_loss + model_loss[TOTAL_LOSS_STR]
+                        total_loss = \
+                            total_denoiser_loss + \
+                            total_noise_estimation_loss + \
+                            model_loss[TOTAL_LOSS_STR]
 
                         gradient = \
                             tape.gradient(
@@ -401,6 +465,13 @@ def train_loop(
                 tf.summary.scalar(name=f"train/total",
                                   data=all_denoiser_loss[0][TOTAL_LOSS_STR],
                                   step=ckpt.step)
+                tf.summary.scalar(name=f"train/noise_estimation/mae",
+                                  data=all_noise_estimation_loss[0][MAE_LOSS_STR],
+                                  step=ckpt.step)
+                tf.summary.scalar(name=f"train/noise_estimation/total",
+                                  data=all_noise_estimation_loss[0][TOTAL_LOSS_STR],
+                                  step=ckpt.step)
+
                 for i, d in enumerate(all_denoiser_loss):
                     tf.summary.scalar(name=f"debug/scale_{i}/mae",
                                       data=d[MAE_LOSS_STR],
@@ -427,6 +498,11 @@ def train_loop(
                                      max_outputs=visualization_number, step=ckpt.step)
                     tf.summary.image(name="train/denoised", data=prediction_denoiser[0] / 255,
                                      max_outputs=visualization_number, step=ckpt.step)
+                    tf.summary.image(name="train/noise_mask", data=noisy_image_mask,
+                                     max_outputs=visualization_number, step=ckpt.step)
+                    tf.summary.image(name="train/noise_estimation", data=prediction_noise_estimation[0],
+                                     max_outputs=visualization_number, step=ckpt.step)
+
                     for i, d in enumerate(scale_gt_image_batch):
                         tf.summary.image(name=f"debug/input/scale_{i}", data=d / 255,
                                          max_outputs=visualization_number, step=ckpt.step)

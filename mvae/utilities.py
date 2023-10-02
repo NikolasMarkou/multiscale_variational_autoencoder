@@ -517,3 +517,15 @@ def random_crops(
     return tf.cast(result, dtype=original_dtype)
 
 # ---------------------------------------------------------------------
+
+
+def compute_noise_mask(
+        input_image_batch: tf.Tensor,
+        noisy_image_batch: tf.Tensor) -> tf.Tensor:
+    x_tmp = tf.abs(input_image_batch - noisy_image_batch)
+    x_tmp = tf.reduce_max(x_tmp, axis=-1, keepdims=True)
+    x_tmp = tf.clip_by_value(x_tmp, clip_value_min=0.0, clip_value_max=255.0)
+    x_tmp = x_tmp / 255.0
+    return x_tmp
+
+# ---------------------------------------------------------------------

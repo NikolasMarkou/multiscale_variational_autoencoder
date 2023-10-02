@@ -24,6 +24,7 @@ BACKBONE_STR = "backbone"
 NORMALIZER_STR = "normalizer"
 DENORMALIZER_STR = "denormalizer"
 POSTPROCESSOR_STR = "postprocessor"
+NOISE_ESTIMATION_STR = "noise_estimation_str"
 VARIATIONAL_AUTOENCODER_STR = "variational_autoencoder"
 
 # ---------------------------------------------------------------------
@@ -31,6 +32,7 @@ VARIATIONAL_AUTOENCODER_STR = "variational_autoencoder"
 BATCH_SIZE_STR = "batch_size"
 INPUT_SHAPE_STR = "input_shape"
 INPUT_TENSOR_STR = "input_tensor"
+OUTPUT_TENSOR_STR = "output_tensor"
 
 # ---------------------------------------------------------------------
 
@@ -50,6 +52,7 @@ REGULARIZATION_LOSS_STR = "regularization_loss"
 
 MODEL_LOSS_FN_STR = "model"
 DENOISER_LOSS_FN_STR = "denoiser"
+NOISE_ESTIMATION_LOSS_FN_STR = "noise_estimation"
 
 # ---------------------------------------------------------------------
 
