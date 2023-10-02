@@ -492,7 +492,7 @@ def train_loop(
                     try:
                         (input_image_batch, noisy_image_batch) = \
                             dataset_test.get_next()
-                        predictions = \
+                        prediction_denoiser = \
                             test_denoiser_step(noisy_image_batch)
 
                         # compute the loss value for this mini-batch
@@ -511,15 +511,27 @@ def train_loop(
                                           step=ckpt.step)
 
                         if (ckpt.step % visualization_every) == 0:
-                            tf.summary.image(name="test/input", data=input_image_batch / 255,
-                                             max_outputs=visualization_number, step=ckpt.step)
-                            # noisy batch
-                            tf.summary.image(name="test/input_noisy", data=noisy_image_batch / 255,
-                                             max_outputs=visualization_number, step=ckpt.step)
-                            # denoised batch
-                            tf.summary.image(name=f"test/input_denoised", data=predictions / 255,
-                                             max_outputs=visualization_number, step=ckpt.step)
-
+                            x_error = \
+                                tf.clip_by_value(
+                                    tf.abs(input_image_batch - prediction_denoiser),
+                                    clip_value_min=0.0,
+                                    clip_value_max=255.0
+                                )
+                            x_collage = \
+                                tf.concat(
+                                    values=[
+                                        tf.concat(
+                                            values=[input_image_batch, noisy_image_batch],
+                                            axis=2),
+                                        tf.concat(
+                                            values=[prediction_denoiser, x_error],
+                                            axis=2)
+                                    ],
+                                    axis=1)
+                            tf.summary.image(name="test/collage",
+                                             data=x_collage / 255,
+                                             max_outputs=visualization_number,
+                                             step=ckpt.step)
                         test_done = True
                     except tf.errors.OutOfRangeError:
                         dataset_test = iter(dataset.testing)
