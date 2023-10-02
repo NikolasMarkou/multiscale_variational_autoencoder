@@ -112,7 +112,6 @@ def model_builder(
         backbone_results.decoder(encoding_results)
 
     config_denoisers = []
-    config_noise_estimators = []
 
     for i in range(decoder_no_outputs):
         input_channels = \
@@ -124,10 +123,6 @@ def model_builder(
         tmp_config_denoiser[INPUT_SHAPE_STR] = copy.deepcopy(shape)
         tmp_config_denoiser["output_channels"] = input_shape[-1]
         config_denoisers.append(tmp_config_denoiser)
-
-        tmp_config_noise_estimator = copy.deepcopy(tmp_config_denoiser)
-        tmp_config_noise_estimator["output_channels"] = 1
-        config_noise_estimators.append(tmp_config_noise_estimator)
 
     # --- noise estimation heads
     model_noise_estimation = [
