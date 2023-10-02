@@ -244,7 +244,7 @@ def train_loop(
         denoiser_index = model_no_outputs[DENOISER_STR]
         noise_estimation_index = model_no_outputs[NOISE_ESTIMATION_STR]
 
-        logger.info(f"outputs: {pformat(model_no_outputs)}")
+        logger.info(f"outputs: \n{pformat(model_no_outputs)}")
 
         @tf.function(reduce_retracing=True, jit_compile=False)
         def train_denoiser_step(n: tf.Tensor) -> List[tf.Tensor]:
@@ -411,7 +411,7 @@ def train_loop(
                         # ---
                         all_noise_estimation_loss = [
                             noise_estimation_loss_fn(
-                                input_batch=tmp_gt_noisy_mask[i],
+                                input_batch=scale_gt_noisy_mask_batch[i],
                                 predicted_batch=prediction_noise_estimation[i])
                             for i in range(len(prediction_noise_estimation))
                         ]
