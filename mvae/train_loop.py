@@ -465,8 +465,8 @@ def train_loop(
                 tf.summary.scalar(name=f"train/total",
                                   data=all_denoiser_loss[0][TOTAL_LOSS_STR],
                                   step=ckpt.step)
-                tf.summary.scalar(name=f"train/noise_estimation/mse",
-                                  data=all_noise_estimation_loss[0][MSE_LOSS_STR],
+                tf.summary.scalar(name=f"train/noise_estimation/mae",
+                                  data=all_noise_estimation_loss[0][MAE_LOSS_STR],
                                   step=ckpt.step)
                 tf.summary.scalar(name=f"train/noise_estimation/total",
                                   data=all_noise_estimation_loss[0][TOTAL_LOSS_STR],
