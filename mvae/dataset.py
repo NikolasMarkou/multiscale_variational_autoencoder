@@ -1,5 +1,6 @@
 import copy
 import tensorflow as tf
+from pprint import pformat
 from collections import namedtuple
 from typing import Dict, Callable, Iterator, Tuple
 
@@ -40,7 +41,8 @@ DatasetResults = namedtuple(
 def dataset_builder(
         config: Dict) -> tf.data.Dataset:
     # ---
-    logger.info("creating dataset_builder with configuration [{0}]".format(config))
+    logger.info(f"creating dataset_builder with configuration:\n"
+                f"{pformat(config)}")
 
     # --- argument parsing
     batch_size = config["batch_size"]

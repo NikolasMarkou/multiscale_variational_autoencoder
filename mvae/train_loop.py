@@ -232,8 +232,8 @@ def train_loop(
         model_no_outputs = model_output_indices(len(ckpt.hydra.outputs))
         denoiser_index = model_no_outputs[DENOISER_STR]
 
-        logger.info(f"model number of outputs: [{model_no_outputs}]")
-        logger.info(f"model denoiser_index: {denoiser_index}")
+        logger.info(f"model number of outputs: \n"
+                    f"{pformat(model_no_outputs)}")
 
         @tf.function(reduce_retracing=True, jit_compile=False)
         def train_denoiser_step(n: tf.Tensor) -> List[tf.Tensor]:
