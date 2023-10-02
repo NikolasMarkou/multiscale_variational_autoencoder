@@ -347,7 +347,7 @@ def train_loop(
 
                     scale_gt_image_batch = [input_image_batch]
                     scale_gt_noisy_batch = [noisy_image_batch]
-                    scale_gt_noisy_mask_batch = [noisy_image_mask]
+                    scale_gt_noisy_mask_batch = [noisy_image_batch]
 
                     tmp_gt_image = input_image_batch
                     tmp_gt_noise = noisy_image_batch
