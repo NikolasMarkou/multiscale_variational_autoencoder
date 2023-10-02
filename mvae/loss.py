@@ -1,6 +1,7 @@
 r"""Constructs the loss function for the denoiser task and variational autoencoder task"""
 
 import tensorflow as tf
+from pprint import pformat
 from typing import List, Dict, Callable
 
 # ---------------------------------------------------------------------
@@ -104,14 +105,15 @@ def rmse(
 
 
 def loss_function_builder(
-        config: Dict) -> Callable:
+        config: Dict) -> Dict[str, Callable]:
     """
     Constructs the loss function of the denoiser and variational autoencoder
 
     :param config: configuration dictionary
     :return: callable loss function
     """
-    logger.info("building loss_function with config [{0}]".format(config))
+    logger.info(f"creating loss_function with configuration:\n"
+                f"{pformat(config)}")
 
     # --- denoiser params
     denoiser_params = config.get(DENOISER_STR, None)
