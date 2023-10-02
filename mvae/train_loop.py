@@ -393,10 +393,9 @@ def train_loop(
                         ]
 
                         for i in range(len(denoiser_index)):
-                            p = tf.stop_gradient(prediction_noise_estimation[i])
                             prediction_denoiser[i] = \
-                                scale_gt_noisy_batch[i] * p + \
-                                prediction_denoiser[i] * (1.0 - p)
+                                scale_gt_noisy_batch[i] * (prediction_noise_estimation[i]) + \
+                                prediction_denoiser[i] * (1.0 - prediction_noise_estimation[i])
 
                         # compute the loss value for this mini-batch
                         all_denoiser_loss = [
