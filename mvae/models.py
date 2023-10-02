@@ -132,8 +132,8 @@ def model_builder(
     # --- noise estimation heads
     model_noise_estimation = [
         model_noise_estimation_builder(
-            config=config_noise_estimators[i],
-            name=f"noise_estimation_head_{i}")
+            config=config_denoisers[i],
+            name=f"noise_estimation_head{i}")
         for i in range(decoder_no_outputs)
     ]
     noise_estimation_mid = [
@@ -152,6 +152,9 @@ def model_builder(
         model_denoisers[i](decoding_results[i])
         for i in range(decoder_no_outputs)
     ]
+    # denoisers_mid[0] = \
+    #     input_normalized_layer * (noise_estimation_mid[0]) + \
+    #     denoisers_mid[0] * (1.0 - noise_estimation_mid[0])
     denoisers_mid = [
         backbone_results.denormalizer(denoisers_mid[i], training=False)
         for i in range(decoder_no_outputs)
