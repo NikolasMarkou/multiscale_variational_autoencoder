@@ -151,21 +151,15 @@ def loss_function_builder(
                     images=input_batch,
                     size=tf.shape(predicted_batch)[1:3],
                     method=tf.image.ResizeMethod.BILINEAR)
-        # --- loss prediction on mse
-        mae_prediction_loss = \
-            tf.constant(0.0, dtype=tf.float32)
 
-        if use_mae:
-            mae_prediction_loss += \
-                mae(original=input_batch,
-                    prediction=predicted_batch,
-                    hinge=hinge,
-                    cutoff=cutoff)
+        # --- loss prediction on mse
+        mse_prediction_loss = \
+            rmse(original=input_batch,
+                 prediction=predicted_batch)
 
         return {
-            TOTAL_LOSS_STR:
-                mae_prediction_loss * mae_multiplier,
-            MAE_LOSS_STR: mae_prediction_loss
+            TOTAL_LOSS_STR: mse_prediction_loss,
+            MSE_LOSS_STR: mse_prediction_loss,
         }
 
     def denoiser_loss(
