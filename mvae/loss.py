@@ -137,31 +137,6 @@ def loss_function_builder(
         }
 
     # ---
-    def noise_estimation_loss(
-            input_batch: tf.Tensor,
-            predicted_batch: tf.Tensor) -> Dict[str, tf.Tensor]:
-        # --- resize input to match prediction in case they are different sizes
-        if tf.reduce_any(
-                tf.shape(input_batch) != tf.shape(predicted_batch)):
-            # this must be bilinear or nearest for speed during training,
-            input_batch = \
-                tf.image.resize(
-                    images=input_batch,
-                    size=tf.shape(predicted_batch)[1:3],
-                    method=tf.image.ResizeMethod.BILINEAR)
-        # --- loss prediction on mse
-        mse_prediction_loss = \
-            tf.constant(0.0, dtype=tf.float32)
-        if use_mse:
-            mse_prediction_loss += \
-                rmse(original=input_batch,
-                     prediction=predicted_batch)
-        return {
-            TOTAL_LOSS_STR:
-                mse_prediction_loss * mse_multiplier,
-            MSE_LOSS_STR: mse_prediction_loss,
-        }
-
     def denoiser_loss(
             input_batch: tf.Tensor,
             predicted_batch: tf.Tensor) -> Dict[str, tf.Tensor]:
@@ -223,7 +198,6 @@ def loss_function_builder(
     return {
         MODEL_LOSS_FN_STR: model_loss,
         DENOISER_LOSS_FN_STR: denoiser_loss,
-        NOISE_ESTIMATION_LOSS_FN_STR: noise_estimation_loss
     }
 
 # ---------------------------------------------------------------------

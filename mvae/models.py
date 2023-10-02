@@ -124,18 +124,6 @@ def model_builder(
         tmp_config_denoiser["output_channels"] = input_shape[-1]
         config_denoisers.append(tmp_config_denoiser)
 
-    # --- noise estimation heads
-    model_noise_estimation = [
-        model_noise_estimation_builder(
-            config=config_denoisers[i],
-            name=f"noise_estimation_head{i}")
-        for i in range(decoder_no_outputs)
-    ]
-    noise_estimation_mid = [
-        model_noise_estimation[i](decoding_results[i])
-        for i in range(decoder_no_outputs)
-    ]
-
     # --- denoiser heads
     model_denoisers = [
         model_denoiser_builder(
@@ -144,21 +132,14 @@ def model_builder(
         for i in range(decoder_no_outputs)
     ]
     denoisers_mid = [
-        model_denoisers[i](decoding_results[i])
-        for i in range(decoder_no_outputs)
-    ]
-    # denoisers_mid[0] = \
-    #     input_normalized_layer * (noise_estimation_mid[0]) + \
-    #     denoisers_mid[0] * (1.0 - noise_estimation_mid[0])
-    denoisers_mid = [
-        backbone_results.denormalizer(denoisers_mid[i], training=False)
+        backbone_results.denormalizer(
+            model_denoisers[i](decoding_results[i]), training=False)
         for i in range(decoder_no_outputs)
     ]
 
     output_layers = (
             encoding_results +
             decoding_results +
-            noise_estimation_mid +
             denoisers_mid +
             [tf.zeros_like(denoisers_mid[0])]) # TODO replace this with autoencoder results
 
@@ -315,75 +296,12 @@ def model_denoiser_builder(
 # ---------------------------------------------------------------------
 
 
-def model_noise_estimation_builder(
-        config: Dict,
-        name: str = "noise_estimation_head") -> tf.keras.Model:
-    """
-    builds the noise estimation model on top of the backbone layer
-
-    :param config: dictionary with the configuration
-    :param name: name of the model
-
-    :return: noise estimation head model
-    """
-    # --- argument checking
-    logger.info(f"building noise estimation model with [{config}]")
-
-    # --- set configuration
-    output_channels = config.get("output_channels", 1)
-    input_shape = input_shape_fixer(config.get(INPUT_SHAPE_STR))
-    # use bias
-    use_bias = config.get("use_bias", False)
-    # output kernel size
-    output_kernel = config.get("output_kernel", 1)
-
-    conv_params = \
-        dict(
-            kernel_size=output_kernel,
-            strides=(1, 1),
-            padding="same",
-            use_bias=use_bias,
-            filters=output_channels,
-            activation="linear",
-            kernel_regularizer="l2",
-            kernel_initializer="glorot_normal")
-
-    # --- define denoiser network here
-    model_input_layer = \
-        tf.keras.Input(
-            shape=input_shape,
-            name=INPUT_TENSOR_STR)
-
-    x = model_input_layer
-
-    x = \
-        conv2d_wrapper(
-            input_layer=x,
-            conv_params=conv_params)
-    x = tf.nn.sigmoid(x)
-
-    model_output_layer = \
-        tf.keras.layers.Layer(
-            name=OUTPUT_TENSOR_STR)(x)
-
-    model_head = \
-        tf.keras.Model(
-            inputs=model_input_layer,
-            outputs=model_output_layer,
-            name=name)
-
-    return model_head
-
-# ---------------------------------------------------------------------
-
-
-def model_output_indices(
-        no_outputs: int) -> Dict[str, List[int]]:
+def model_output_indices(no_outputs: int) -> Dict[str, List[int]]:
     """
     computes the indices for each head
 
     :param no_outputs:
-    :return: dictionary of indices per head
+    :return:
     """
     # --- argument checking
     if no_outputs <= 0:
@@ -394,16 +312,13 @@ def model_output_indices(
 
     return {
         ENCODER_STR: [
-            i for i in range(0 * int(no_outputs_tmp / 4), 1 * int(no_outputs_tmp / 4))
+            i for i in range(0, int(no_outputs_tmp / 3))
         ],
         DECODER_STR: [
-            i for i in range(1 * int(no_outputs_tmp / 4), 2 * int(no_outputs_tmp / 4))
-        ],
-        NOISE_ESTIMATION_STR: [
-            i for i in range(2 * int(no_outputs_tmp / 4), 3 * int(no_outputs_tmp / 4))
+            i for i in range(int(no_outputs_tmp / 3), 2 * int(no_outputs_tmp / 3))
         ],
         DENOISER_STR: [
-            i for i in range(3 * int(no_outputs_tmp / 4), 4 * int(no_outputs_tmp / 4))
+            i for i in range(2 * int(no_outputs_tmp / 3), no_outputs_tmp)
         ],
         VARIATIONAL_AUTOENCODER_STR: [no_outputs-1]
     }
