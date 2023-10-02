@@ -253,9 +253,7 @@ def train_loop(
         @tf.function(reduce_retracing=True, jit_compile=False)
         def test_denoiser_step(n: tf.Tensor) -> tf.Tensor:
             results = ckpt.hydra(n, training=False)
-            x = results[denoiser_index[0]]
-            y = results[noise_estimation_index[0]]
-            return (n * y) + (x * (1.0 - y))
+            return results[denoiser_index[0]]
 
         if ckpt.step == 0:
             tf.summary.trace_on(graph=True, profiler=False)
