@@ -330,11 +330,23 @@ def train_loop(
 
                     for i in range(1, len(denoiser_index), 1):
                         tmp_gt_image = \
-                            tf.image.resize(
-                                images=tmp_gt_image,
-                                size=sizes[i],
-                                method=tf.image.ResizeMethod.LANCZOS5
-                            )
+                            tf.nn.avg_pool2d(
+                                tmp_gt_image,
+                                ksize=(3, 3),
+                                strides=(2, 2),
+                                padding="SAME")
+                        tmp_gt_image = \
+                            tf.round(
+                                tf.clip_by_value(
+                                    tmp_gt_image,
+                                    clip_value_min=0.0,
+                                    clip_value_max=255.0))
+                        # tmp_gt_image = \
+                        #     tf.image.resize(
+                        #         images=tmp_gt_image,
+                        #         size=sizes[i],
+                        #         method=tf.image.ResizeMethod.LANCZOS5
+                        #     )
                         scale_gt_image_batch.append(tmp_gt_image)
 
                     with tf.GradientTape() as tape:
