@@ -423,17 +423,18 @@ def train_loop(
                 if (ckpt.step % visualization_every) == 0:
                     tf.summary.image(name="train/input", data=input_image_batch / 255,
                                      max_outputs=visualization_number, step=ckpt.step)
-                    tf.summary.image(name="train/noisy", data=noisy_image_batch / 255,
+                    tf.summary.image(name="train/input_noisy", data=noisy_image_batch / 255,
                                      max_outputs=visualization_number, step=ckpt.step)
-                    tf.summary.image(name="train/denoised", data=prediction_denoiser[0] / 255,
+                    tf.summary.image(name="train/input_denoised", data=prediction_denoiser[0] / 255,
                                      max_outputs=visualization_number, step=ckpt.step)
-                    for i, d in enumerate(scale_gt_image_batch):
-                        tf.summary.image(name=f"debug/input/scale_{i}", data=d / 255,
-                                         max_outputs=visualization_number, step=ckpt.step)
 
-                    for i, d in enumerate(prediction_denoiser):
-                        tf.summary.image(name=f"debug/output/scale_{i}", data=d / 255,
-                                         max_outputs=visualization_number, step=ckpt.step)
+                    for i in range(len(prediction_denoiser)):
+                        tf.summary.image(name=f"debug/scale_{i}",
+                                         data=tf.concat(
+                                             values=[scale_gt_image_batch[i]/255, prediction_denoiser[i]/255],
+                                             axis=2),
+                                         max_outputs=visualization_number,
+                                         step=ckpt.step)
 
                     # --- add gradient activity
                     gradient_activity = \
@@ -468,9 +469,10 @@ def train_loop(
                 test_done = False
                 while not test_done:
                     try:
-                        (input_image_batch,
-                         noisy_image_batch) = dataset_test.get_next()
-                        predictions = test_denoiser_step(noisy_image_batch)
+                        (input_image_batch, noisy_image_batch) = \
+                            dataset_test.get_next()
+                        predictions = \
+                            test_denoiser_step(noisy_image_batch)
 
                         # compute the loss value for this mini-batch
                         d = \
@@ -491,10 +493,10 @@ def train_loop(
                             tf.summary.image(name="test/input", data=input_image_batch / 255,
                                              max_outputs=visualization_number, step=ckpt.step)
                             # noisy batch
-                            tf.summary.image(name="test/noisy", data=noisy_image_batch / 255,
+                            tf.summary.image(name="test/input_noisy", data=noisy_image_batch / 255,
                                              max_outputs=visualization_number, step=ckpt.step)
                             # denoised batch
-                            tf.summary.image(name=f"test/denoised", data=predictions / 255,
+                            tf.summary.image(name=f"test/input_denoised", data=predictions / 255,
                                              max_outputs=visualization_number, step=ckpt.step)
 
                         test_done = True

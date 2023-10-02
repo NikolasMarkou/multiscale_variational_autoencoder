@@ -36,6 +36,10 @@ from .constants import *
 
 # ---------------------------------------------------------------------
 
+DEFAULT_RANGE = (-0.2, +0.2)
+
+# ---------------------------------------------------------------------
+
 
 def collage(
         images_batch):
@@ -94,7 +98,7 @@ def draw_figure_to_buffer(
 def visualize_gradient_boxplot(
         gradients: List,
         trainable_variables: List,
-        y_limits: Tuple[float, float] = (-0.1, +0.1),
+        y_limits: Tuple[float, float] = DEFAULT_RANGE,
         figsize: Tuple[int, int] = DEFAULT_NON_SYMMETRIC_FIGSIZE,
         dpi: int = DEFAULT_DPI,
         expand_dims: bool = True) -> np.ndarray:
@@ -165,7 +169,7 @@ def visualize_gradient_boxplot(
 
 def visualize_weights_boxplot(
         trainable_variables: List,
-        y_limits: Tuple[float, float] = (-0.2, +0.2),
+        y_limits: Tuple[float, float] = DEFAULT_RANGE,
         figsize: Tuple[int, int] = DEFAULT_NON_SYMMETRIC_FIGSIZE,
         dpi: int = DEFAULT_DPI,
         expand_dims: bool = True) -> np.ndarray:
@@ -237,7 +241,7 @@ def visualize_weights_boxplot(
 def visualize_weights_heatmap(
         trainable_variables: List,
         no_bins: int = 21,
-        y_limits: Tuple[float, float] = (-0.2, +0.2),
+        y_limits: Tuple[float, float] = DEFAULT_RANGE,
         figsize: Tuple[int, int] = DEFAULT_NON_SYMMETRIC_FIGSIZE,
         dpi: int = DEFAULT_DPI,
         expand_dims: bool = True) -> np.ndarray:
