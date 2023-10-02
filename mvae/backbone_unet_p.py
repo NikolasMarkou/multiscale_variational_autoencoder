@@ -22,7 +22,8 @@ def builder(
         input_dims,
         width: int = 1,
         levels: int = 5,
-        kernel_size: int = 7,
+        backbone_kernel_size: int = 7,
+        kernel_size: int = 3,
         filters: int = 32,
         filters_level_multiplier: float = 2.0,
         activation: str = "gelu",
@@ -43,7 +44,8 @@ def builder(
     :param input_dims: Models input dimensions
     :param width:
     :param levels: number of levels to go down
-    :param kernel_size: kernel size of base convolutional layer
+    :param backbone_kernel_size: kernel size of backbone encoder convolutional layer
+    :param kernel_size: kernel size of decoder convolutional layer
     :param filters_level_multiplier: every down level increase the number of filters by a factor of
     :param filters: filters of base convolutional layer
     :param activation: activation of the convolutional layers
@@ -64,6 +66,12 @@ def builder(
     logger.info("building unet_pp backbone")
     if len(kwargs) > 0:
         logger.info(f"parameters not used: {kwargs}")
+
+    if backbone_kernel_size <= 0:
+        raise ValueError("backbone_kernel_size must be > 0")
+
+    if kernel_size <= 0:
+        kernel_size = backbone_kernel_size
 
     # --- setup parameters
     bn_params = None
@@ -191,6 +199,7 @@ def builder(
                 # first ever
                 params = copy.deepcopy(base_conv_params)
                 params["filters"] = max(32, filters)
+                params["kernel_size"] = (backbone_kernel_size, backbone_kernel_size)
                 x = \
                     conv2d_wrapper(
                         input_layer=x,
@@ -202,19 +211,23 @@ def builder(
                 x = \
                     tf.keras.layers.MaxPooling2D(
                         pool_size=(2, 2), padding="same", strides=(2, 2))(x)
+                params = copy.deepcopy(conv_params_res_1[i])
+                params["kernel_size"] = (backbone_kernel_size, backbone_kernel_size)
                 x = \
                     conv2d_wrapper(
                         input_layer=x,
                         bn_post_params=bn_params,
                         ln_post_params=ln_params,
-                        conv_params=conv_params_res_1[i])
+                        conv_params=params)
             else:
+                params = copy.deepcopy(conv_params_res_1[i])
+                params["kernel_size"] = (kernel_size, kernel_size)
                 x = \
                     conv2d_wrapper(
                         input_layer=x,
                         bn_post_params=bn_params,
                         ln_post_params=ln_params,
-                        conv_params=conv_params_res_1[i])
+                        conv_params=params)
             x = \
                 conv2d_wrapper(
                     input_layer=x,
