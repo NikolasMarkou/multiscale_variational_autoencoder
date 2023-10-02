@@ -341,12 +341,6 @@ def train_loop(
                                     tmp_gt_image,
                                     clip_value_min=0.0,
                                     clip_value_max=255.0))
-                        # tmp_gt_image = \
-                        #     tf.image.resize(
-                        #         images=tmp_gt_image,
-                        #         size=sizes[i],
-                        #         method=tf.image.ResizeMethod.LANCZOS5
-                        #     )
                         scale_gt_image_batch.append(tmp_gt_image)
 
                     with tf.GradientTape() as tape:
@@ -433,18 +427,33 @@ def train_loop(
 
                 # --- add image prediction for tensorboard
                 if (ckpt.step % visualization_every) == 0:
-                    tf.summary.image(name="train/input", data=input_image_batch / 255,
-                                     max_outputs=visualization_number, step=ckpt.step)
-                    tf.summary.image(name="train/input_noisy", data=noisy_image_batch / 255,
-                                     max_outputs=visualization_number, step=ckpt.step)
-                    tf.summary.image(name="train/input_denoised", data=prediction_denoiser[0] / 255,
-                                     max_outputs=visualization_number, step=ckpt.step)
+                    x_error = \
+                        tf.clip_by_value(
+                            tf.abs(input_image_batch - prediction_denoiser[0]),
+                            clip_value_min=0.0,
+                            clip_value_max=255.0
+                        )
+                    x_collage = \
+                        tf.concat(
+                            values=[
+                                tf.concat(
+                                     values=[input_image_batch, noisy_image_batch],
+                                     axis=2),
+                                tf.concat(
+                                    values=[prediction_denoiser[0], x_error],
+                                    axis=2)
+                            ],
+                            axis=1)
+                    tf.summary.image(name="train/collage",
+                                     data=x_collage / 255,
+                                     max_outputs=visualization_number,
+                                     step=ckpt.step)
 
                     for i in range(len(prediction_denoiser)):
                         tf.summary.image(name=f"debug/scale_{i}",
                                          data=tf.concat(
-                                             values=[scale_gt_image_batch[i]/255, prediction_denoiser[i]/255],
-                                             axis=2),
+                                             values=[scale_gt_image_batch[i], prediction_denoiser[i]],
+                                             axis=2) / 255,
                                          max_outputs=visualization_number,
                                          step=ckpt.step)
 
