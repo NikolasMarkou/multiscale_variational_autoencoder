@@ -499,7 +499,7 @@ def train_loop(
                         d = \
                             denoiser_loss_fn(
                                 input_batch=input_image_batch,
-                                predicted_batch=predictions)
+                                predicted_batch=prediction_denoiser)
                         tf.summary.scalar(name=f"test/mae",
                                           data=d[MAE_LOSS_STR],
                                           step=ckpt.step)
