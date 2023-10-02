@@ -151,16 +151,14 @@ def loss_function_builder(
                     images=input_batch,
                     size=tf.shape(predicted_batch)[1:3],
                     method=tf.image.ResizeMethod.BILINEAR)
+
         # --- loss prediction on mse
         mse_prediction_loss = \
-            tf.constant(0.0, dtype=tf.float32)
-        if use_mse:
-            mse_prediction_loss += \
-                rmse(original=input_batch,
-                     prediction=predicted_batch)
+            rmse(original=input_batch,
+                 prediction=predicted_batch)
+
         return {
-            TOTAL_LOSS_STR:
-                mse_prediction_loss * mse_multiplier,
+            TOTAL_LOSS_STR: mse_prediction_loss,
             MSE_LOSS_STR: mse_prediction_loss,
         }
 
