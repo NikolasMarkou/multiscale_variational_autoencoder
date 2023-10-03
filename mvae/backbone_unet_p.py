@@ -30,6 +30,7 @@ def builder(
         use_bn: bool = True,
         use_ln: bool = False,
         use_bias: bool = False,
+        use_scale_diffs: bool = False,
         kernel_regularizer="l2",
         kernel_initializer="glorot_normal",
         dropout_rate: float = -1,
@@ -54,6 +55,7 @@ def builder(
     :param use_bn: use batch normalization
     :param use_ln: use layer normalization
     :param use_bias: use bias (bias free means this should be off)
+    :param use_scale_diffs: remove per scale diffs
     :param kernel_regularizer: Kernel weight regularizer
     :param kernel_initializer: Kernel weight initializer
     :param multiple_scale_outputs:
@@ -208,6 +210,14 @@ def builder(
                         conv_params=params)
             elif j == 0:
                 # new level
+                if use_scale_diffs:
+                    node_level = (i-1, 0)
+                    x_down_up = \
+                        tf.keras.layers.AveragePooling2D(
+                            pool_size=(3, 3), padding="same", strides=(2, 2))(x)
+                    x_down_up = tf.keras.layers.UpSampling2D(size=(2, 2))(x_down_up)
+                    nodes_output[node_level] = \
+                        nodes_output[node_level] - tf.no_gradient(x_down_up)
                 x = \
                     tf.keras.layers.MaxPooling2D(
                         pool_size=(2, 2), padding="same", strides=(2, 2))(x)
