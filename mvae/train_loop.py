@@ -22,7 +22,10 @@ from .utilities_checkpoints import \
     create_checkpoint, \
     model_weights_from_checkpoint
 from .models import model_builder, model_output_indices
-from .utilities import load_config, save_config
+from .utilities import \
+    load_config, \
+    save_config, \
+    depthwise_gaussian_kernel
 from .visualize import \
     visualize_weights_boxplot, \
     visualize_weights_heatmap, \
@@ -256,10 +259,11 @@ def train_loop(
             tf.summary.flush()
             tf.summary.trace_off()
 
-        sizes = [
-            (int(input_shape[0] / (2 ** i)), int(input_shape[1] / (2 ** i)))
-            for i in range(len(denoiser_index))
-        ]
+        gaussian_kernel = \
+            depthwise_gaussian_kernel(
+                channels=input_shape[-1],
+                size=(5, 5),
+                nsig=(2.0, 2.0))
 
         # ---
         finished_training = False
@@ -329,12 +333,21 @@ def train_loop(
                     tmp_gt_image = input_image_batch
 
                     for i in range(1, len(denoiser_index), 1):
-                        tmp_gt_image = \
-                            tf.nn.avg_pool2d(
-                                tmp_gt_image,
-                                ksize=(3, 3),
-                                strides=(2, 2),
+                        # tmp_gt_image = \
+                        #     tf.nn.avg_pool2d(
+                        #         tmp_gt_image,
+                        #         ksize=(3, 3),
+                        #         strides=(2, 2),
+                        #         padding="SAME")
+                        tmp_gt_image =  \
+                            tf.nn.depthwise_conv2d(
+                                input=tmp_gt_image,
+                                filter=gaussian_kernel,
+                                strides=(1, 2, 2, 1),
+                                data_format=None,
+                                dilations=None,
                                 padding="SAME")
+
                         tmp_gt_image = \
                             tf.round(
                                 tf.clip_by_value(
