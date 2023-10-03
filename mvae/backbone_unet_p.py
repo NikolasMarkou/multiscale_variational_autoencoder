@@ -214,11 +214,9 @@ def builder(
                     node_level = (i-1, 0)
                     x_down_up = \
                         tf.keras.layers.AveragePooling2D(
-                            pool_size=(kernel_size, kernel_size),
+                            pool_size=(5, 5),
                             padding="same",
-                            strides=(2, 2))(x)
-                    x_down_up = \
-                        tf.keras.layers.UpSampling2D(size=(2, 2))(x_down_up)
+                            strides=(1, 1))(x)
                     x_down_up = tf.stop_gradient(x_down_up)
                     nodes_output[node_level] = \
                         nodes_output[node_level] - x_down_up
