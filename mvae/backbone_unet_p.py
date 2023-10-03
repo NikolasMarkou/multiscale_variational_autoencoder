@@ -219,7 +219,7 @@ def builder(
                             strides=(2, 2))(x)
                     x_down_up = \
                         tf.keras.layers.UpSampling2D(size=(2, 2))(x_down_up)
-                    x_down_up = tf.no_gradient(x_down_up)
+                    x_down_up = tf.stop_gradient(x_down_up)
                     nodes_output[node_level] = \
                         nodes_output[node_level] - x_down_up
                 x = \
