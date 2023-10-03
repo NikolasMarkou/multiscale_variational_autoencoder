@@ -528,8 +528,7 @@ def depthwise_gaussian_kernel(
         nsig: Tuple[float, float] = (2.0, 2.0)):
     def gaussian_kernel(
             size: Tuple[int, int],
-            nsig: Tuple[float, float],
-            dtype: np.float64) -> np.ndarray:
+            nsig: Tuple[float, float]) -> np.ndarray:
         """
         builds a 2D Gaussian kernel array
 
@@ -546,7 +545,7 @@ def depthwise_gaussian_kernel(
                 stop=np.abs(nsig[i]),
                 num=size[i],
                 endpoint=True,
-                dtype=dtype)
+                dtype=np.float32)
             for i in range(2)
         ]
         x, y = np.meshgrid(kern1d[0], kern1d[1])
