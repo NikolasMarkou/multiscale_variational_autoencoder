@@ -525,7 +525,8 @@ def random_crops(
 def depthwise_gaussian_kernel(
         channels: int = 3,
         size: Tuple[int, int] = (5, 5),
-        nsig: Tuple[float, float] = (2.0, 2.0)):
+        nsig: Tuple[float, float] = (2.0, 2.0),
+        dtype: np.dtype = np.float64):
     def gaussian_kernel(
             size: Tuple[int, int],
             nsig: Tuple[float, float]) -> np.ndarray:
@@ -545,7 +546,7 @@ def depthwise_gaussian_kernel(
                 stop=np.abs(nsig[i]),
                 num=size[i],
                 endpoint=True,
-                dtype=np.float32)
+                dtype=dtype)
             for i in range(2)
         ]
         x, y = np.meshgrid(kern1d[0], kern1d[1])
@@ -554,7 +555,7 @@ def depthwise_gaussian_kernel(
         g = np.exp(-((d - mu) ** 2 / (2.0 * (sigma ** 2))))
         return g / g.sum()
 
-    def kernel_init(shape, dtype):
+    def kernel_init(shape):
         logger.info(f"building gaussian kernel with size: {shape}")
         kernel = np.zeros(shape)
         kernel_channel = \
@@ -568,6 +569,6 @@ def depthwise_gaussian_kernel(
     # [filter_height, filter_width, in_channels, channel_multiplier]
     return kernel_init(
         shape=(size[0], size[1], channels, 1),
-        dtype=tf.float32)
+        dtype=dtype)
 
 # ---------------------------------------------------------------------
