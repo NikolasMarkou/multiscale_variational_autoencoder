@@ -216,8 +216,9 @@ def builder(
                         tf.keras.layers.AveragePooling2D(
                             pool_size=(3, 3), padding="same", strides=(2, 2))(x)
                     x_down_up = tf.keras.layers.UpSampling2D(size=(2, 2))(x_down_up)
+                    x_down_up = tf.no_gradient(x_down_up)
                     nodes_output[node_level] = \
-                        nodes_output[node_level] - tf.no_gradient(x_down_up)
+                        nodes_output[node_level] - x_down_up
                 x = \
                     tf.keras.layers.MaxPooling2D(
                         pool_size=(2, 2), padding="same", strides=(2, 2))(x)
