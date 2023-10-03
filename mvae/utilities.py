@@ -535,7 +535,6 @@ def depthwise_gaussian_kernel(
 
         :param size: size of of the grid
         :param nsig: max value out of the gaussian on the xy axis
-        :param dtype: number type
         :return: 2d gaussian grid
         """
         assert len(nsig) == 2

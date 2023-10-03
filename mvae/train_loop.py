@@ -265,6 +265,7 @@ def train_loop(
                 size=(5, 5),
                 nsig=(2.0, 2.0),
                 dtype=np.float32)
+        gaussian_kernel = gaussian_kernel.astype('float32')
 
         # ---
         finished_training = False
