@@ -349,9 +349,8 @@ def builder(
             x = x_input[0]
         elif len(x_input) > 0:
             if use_scale_diffs:
-                x = tf.keras.layers.Add()(x_input)
-            else:
-                x = tf.keras.layers.Concatenate()(x_input)
+                x_input.append(tf.keras.layers.Add()(x_input))
+            x = tf.keras.layers.Concatenate()(x_input)
         else:
             raise ValueError("this must never happen")
 
