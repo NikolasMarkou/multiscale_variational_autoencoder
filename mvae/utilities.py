@@ -568,7 +568,6 @@ def depthwise_gaussian_kernel(
 
     # [filter_height, filter_width, in_channels, channel_multiplier]
     return kernel_init(
-        shape=(size[0], size[1], channels, 1),
-        dtype=dtype)
+        shape=(size[0], size[1], channels, 1))
 
 # ---------------------------------------------------------------------
