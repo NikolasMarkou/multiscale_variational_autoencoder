@@ -263,7 +263,8 @@ def train_loop(
             depthwise_gaussian_kernel(
                 channels=input_shape[-1],
                 size=(5, 5),
-                nsig=(2.0, 2.0))
+                nsig=(2.0, 2.0),
+                dtype=tf.float32)
 
         # ---
         finished_training = False
