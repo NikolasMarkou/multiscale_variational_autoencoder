@@ -208,7 +208,7 @@ def builder(
                         bn_post_params=bn_params,
                         ln_post_params=ln_params,
                         conv_params=params)
-            elif j == 0:
+            elif i > 0 and j == 0:
                 # new level
                 if use_scale_diffs:
                     node_level = (i-1, 0)
