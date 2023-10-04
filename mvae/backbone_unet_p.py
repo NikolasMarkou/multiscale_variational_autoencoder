@@ -404,6 +404,8 @@ def builder(
                         signal_layer=x,
                         hard_sigmoid_version=False,
                         learn_to_turn_off=False,
+                        bn_params=bn_params,
+                        ln_params=ln_params,
                         dropout_params=dropout_params)
             x = \
                 conv2d_wrapper(
