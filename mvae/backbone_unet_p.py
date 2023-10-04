@@ -15,7 +15,7 @@ from .constants import *
 from .custom_logger import logger
 from .utilities import conv2d_wrapper
 from .custom_layers import GaussianFilter
-from .layer_blocks import skip_squeeze_and_excite_block
+from .layer_blocks import skip_squeeze_and_excite_block, self_attention_block
 
 # ---------------------------------------------------------------------
 
@@ -304,12 +304,11 @@ def builder(
         params = copy.deepcopy(conv_params_res_3[0])
         params["kernel_size"] = (1, 1)
         control_layer = nodes_output[(levels - 1, 1)]
-        control_layer = \
-            conv2d_wrapper(
+        control_layer = tf.keras.layers.Concatenate(axis=-1)([
+            self_attention_block(
                 input_layer=control_layer,
-                bn_post_params=bn_params,
-                ln_post_params=ln_params,
-                conv_params=params)
+                conv_params=conv_params_res_3[-1])
+        ])
         control_layer = \
             tf.keras.layers.GlobalAvgPool2D(keepdims=True)(control_layer)
 
