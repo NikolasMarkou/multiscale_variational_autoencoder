@@ -86,6 +86,7 @@ def skip_squeeze_and_excite_block(
         signal_layer,
         r_ratio: float = 0.25,
         use_bias: bool = False,
+        flatten: bool = True,
         hard_sigmoid_version: bool = False,
         learn_to_turn_off: bool = False,
         kernel_regularizer: str = "l2",
@@ -129,7 +130,9 @@ def skip_squeeze_and_excite_block(
     )
 
     x = control_layer
-    x = tf.keras.layers.GlobalAvgPool2D(keepdims=True)(x)
+
+    if flatten:
+        x = tf.keras.layers.GlobalAvgPool2D(keepdims=True)(x)
 
     x = \
         conv2d_wrapper(

@@ -400,6 +400,7 @@ def builder(
                     skip_squeeze_and_excite_block(
                         control_layer=control_layer,
                         signal_layer=x,
+                        flatten=False,
                         hard_sigmoid_version=False,
                         learn_to_turn_off=False,
                         bn_params=bn_params,
