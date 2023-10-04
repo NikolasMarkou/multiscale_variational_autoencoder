@@ -379,6 +379,7 @@ def builder(
             control_layer_tmp = \
                 tf.keras.layers.GlobalAvgPool2D(keepdims=True)(
                     nodes_output[(node[0]+1, 1)])
+
             if control_layer is None:
                 control_layer = control_layer_tmp
             else:
@@ -397,15 +398,13 @@ def builder(
                     conv_params=conv_params_res_1[node[0]])
             # pass global information here
             if use_squeeze_excite:
-                if dropout_params is not None:
-                    control_layer_tmp = (
-                        tf.keras.layers.Dropout(rate=dropout_params["rate"])(control_layer))
                 x = \
                     skip_squeeze_and_excite_block(
                         control_layer=control_layer_tmp,
                         signal_layer=x,
                         hard_sigmoid_version=False,
-                        learn_to_turn_off=False)
+                        learn_to_turn_off=False,
+                        dropout_params=dropout_params)
             x = \
                 conv2d_wrapper(
                     input_layer=x,

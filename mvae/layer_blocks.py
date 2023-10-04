@@ -89,7 +89,8 @@ def skip_squeeze_and_excite_block(
         hard_sigmoid_version: bool = False,
         learn_to_turn_off: bool = False,
         kernel_regularizer: str = "l2",
-        kernel_initializer: str = "glorot_normal"):
+        kernel_initializer: str = "glorot_normal",
+        dropout_params: Dict = None):
     """
     Skip Squeeze-and-Excitation Networks (2019)
     https://arxiv.org/abs/1709.01507
@@ -119,6 +120,9 @@ def skip_squeeze_and_excite_block(
 
     # small leak to let the gradient flow
     x = tf.keras.layers.LeakyReLU(alpha=0.1)(x)
+
+    if dropout_params is not None:
+        x = tf.keras.layers.Dropout(rate=dropout_params["rate"])(x)
 
     if hard_sigmoid_version:
         x = \
