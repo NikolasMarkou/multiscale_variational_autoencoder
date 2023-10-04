@@ -1,13 +1,12 @@
 import os
 import json
 import copy
-import pathlib
 import itertools
 import numpy as np
 from enum import Enum
 import tensorflow as tf
 from pathlib import Path
-from typing import List, Tuple, Union, Dict, Iterable
+from typing import Tuple, Union, Dict, Iterable
 
 # ---------------------------------------------------------------------
 # local imports
@@ -524,28 +523,28 @@ def random_crops(
 
 def depthwise_gaussian_kernel(
         channels: int = 3,
-        size: Tuple[int, int] = (5, 5),
+        kernel_size: Tuple[int, int] = (5, 5),
         nsig: Tuple[float, float] = (2.0, 2.0),
         dtype: np.dtype = np.float64):
     def gaussian_kernel(
-            size: Tuple[int, int],
-            nsig: Tuple[float, float]) -> np.ndarray:
+            _kernel_size: Tuple[int, int],
+            _nsig: Tuple[float, float]) -> np.ndarray:
         """
         builds a 2D Gaussian kernel array
 
-        :param size: size of of the grid
-        :param nsig: max value out of the gaussian on the xy axis
+        :param _kernel_size: size of the grid
+        :param _nsig: max value out of the gaussian on the xy axis
         :return: 2d gaussian grid
         """
-        assert len(nsig) == 2
-        assert len(size) == 2
+        assert len(_nsig) == 2
+        assert len(_kernel_size) == 2
         kern1d = [
             np.linspace(
-                start=-np.abs(nsig[i]),
-                stop=np.abs(nsig[i]),
-                num=size[i],
+                start=-np.abs(_nsig[i]),
+                stop=np.abs(_nsig[i]),
+                num=_kernel_size[i],
                 endpoint=True,
-                dtype=dtype)
+                dtype=np.float64)
             for i in range(2)
         ]
         x, y = np.meshgrid(kern1d[0], kern1d[1])
@@ -559,14 +558,16 @@ def depthwise_gaussian_kernel(
         kernel = np.zeros(shape)
         kernel_channel = \
             gaussian_kernel(
-                size=(shape[0], shape[1]),
-                nsig=nsig)
+                _kernel_size=(shape[0], shape[1]),
+                _nsig=nsig)
         for i in range(shape[2]):
             kernel[:, :, i, 0] = kernel_channel
         return kernel
 
     # [filter_height, filter_width, in_channels, channel_multiplier]
-    return kernel_init(
-        shape=(size[0], size[1], channels, 1))
+    result = kernel_init(
+        shape=(kernel_size[0], kernel_size[1], channels, 1))
+
+    return result.astype(dtype=dtype)
 
 # ---------------------------------------------------------------------

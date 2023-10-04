@@ -262,7 +262,7 @@ def train_loop(
         gaussian_kernel = \
             depthwise_gaussian_kernel(
                 channels=input_shape[-1],
-                size=(5, 5),
+                kernel_size=(5, 5),
                 nsig=(2.0, 2.0),
                 dtype=np.float32)
         gaussian_kernel = gaussian_kernel.astype('float32')
@@ -316,7 +316,6 @@ def train_loop(
                     finished_training = True
 
             total_denoiser_loss = tf.constant(0.0, dtype=tf.float32)
-            total_denoiser_multiplier = tf.constant(0.0, dtype=tf.float32)
 
             # --- iterate over the batches of the dataset
             while not finished_training and \
@@ -335,25 +334,17 @@ def train_loop(
                     tmp_gt_image = input_image_batch
 
                     for i in range(1, len(denoiser_index), 1):
-                        # tmp_gt_image = \
-                        #     tf.nn.avg_pool2d(
-                        #         tmp_gt_image,
-                        #         ksize=(3, 3),
-                        #         strides=(2, 2),
-                        #         padding="SAME")
-                        tmp_gt_image =  \
-                            tf.nn.depthwise_conv2d(
-                                input=tmp_gt_image,
-                                filter=gaussian_kernel,
-                                strides=(1, 2, 2, 1),
-                                data_format=None,
-                                dilations=None,
-                                padding="SAME")
-
+                        # downsample, clip and round
                         tmp_gt_image = \
                             tf.round(
                                 tf.clip_by_value(
-                                    tmp_gt_image,
+                                    tf.nn.depthwise_conv2d(
+                                        input=tmp_gt_image,
+                                        filter=gaussian_kernel,
+                                        strides=(1, 2, 2, 1),
+                                        data_format=None,
+                                        dilations=None,
+                                        padding="SAME"),
                                     clip_value_min=0.0,
                                     clip_value_max=255.0))
                         scale_gt_image_batch.append(tmp_gt_image)
@@ -375,11 +366,9 @@ def train_loop(
                         ]
 
                         total_denoiser_loss *= 0.0
-                        total_denoiser_multiplier *= 0.0
                         for i, s in enumerate(all_denoiser_loss):
                             depth_weight = float(output_discount_factor ** (float(i) * percentage_done))
                             total_denoiser_loss += s[TOTAL_LOSS_STR] * depth_weight
-                            total_denoiser_multiplier += depth_weight
 
                         # combine losses
                         model_loss = model_loss_fn(model=ckpt.hydra)

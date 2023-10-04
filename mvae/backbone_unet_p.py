@@ -15,6 +15,7 @@ from .constants import *
 from .custom_logger import logger
 from .utilities import conv2d_wrapper
 from .custom_layers import GaussianFilter
+from .layer_blocks import skip_squeeze_and_excite_block
 
 # ---------------------------------------------------------------------
 
@@ -32,6 +33,7 @@ def builder(
         use_ln: bool = False,
         use_bias: bool = False,
         use_laplacian: bool = False,
+        use_squeeze_excite: bool = False,
         kernel_regularizer="l2",
         kernel_initializer="glorot_normal",
         dropout_rate: float = -1,
@@ -297,6 +299,20 @@ def builder(
         nodes_output[(i, 0)] = decoder_inputs[i]
     nodes_output[(levels - 1, 1)] = nodes_output[(levels - 1, 0)]
 
+    control_layer = None
+    if use_squeeze_excite:
+        params = copy.deepcopy(conv_params_res_3[0])
+        params["kernel_size"] = (1, 1)
+        control_layer = nodes_output[(levels - 1, 1)]
+        control_layer = \
+            conv2d_wrapper(
+                input_layer=control_layer,
+                bn_post_params=bn_params,
+                ln_post_params=ln_params,
+                conv_params=params)
+        control_layer = \
+            tf.keras.layers.GlobalAvgPool2D(keepdims=True)(control_layer)
+
     # --- move up
     while len(nodes_to_visit) > 0:
         node = nodes_to_visit.pop(0)
@@ -359,6 +375,16 @@ def builder(
 
         # --- convnext block
         x_skip = None
+
+        # pass global information here
+        if use_squeeze_excite:
+            x = \
+                skip_squeeze_and_excite_block(
+                    control_layer=control_layer,
+                    signal_layer=x,
+                    hard_sigmoid_version=True,
+                    learn_to_turn_off=True)
+
         for j in range(width):
             x = \
                 conv2d_wrapper(

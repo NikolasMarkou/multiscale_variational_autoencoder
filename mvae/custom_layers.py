@@ -4,11 +4,6 @@ from typing import Dict, Tuple, Union, List
 
 # ---------------------------------------------------------------------
 
-from .custom_logger import logger
-
-
-# ---------------------------------------------------------------------
-
 
 class Mish(tf.keras.layers.Layer):
     """
@@ -69,7 +64,7 @@ class GaussianFilter(tf.keras.layers.Layer):
         self._kernel = \
             depthwise_gaussian_kernel(
                 channels=input_shape[-1],
-                size=self._kernel_size,
+                kernel_size=self._kernel_size,
                 nsig=self._sigma).astype('float32')
 
     def get_config(self):
