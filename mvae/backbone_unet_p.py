@@ -33,6 +33,7 @@ def builder(
         use_ln: bool = False,
         use_bias: bool = False,
         use_laplacian: bool = False,
+        use_self_attention: bool = False,
         use_squeeze_excite: bool = False,
         kernel_regularizer="l2",
         kernel_initializer="glorot_normal",
@@ -59,6 +60,8 @@ def builder(
     :param use_ln: use layer normalization
     :param use_bias: use bias (bias free means this should be off)
     :param use_laplacian: remove per scale diffs
+    :param use_self_attention:
+    :param use_squeeze_excite:
     :param kernel_regularizer: Kernel weight regularizer
     :param kernel_initializer: Kernel weight initializer
     :param multiple_scale_outputs:
@@ -299,18 +302,23 @@ def builder(
         nodes_output[(i, 0)] = decoder_inputs[i]
     nodes_output[(levels - 1, 1)] = nodes_output[(levels - 1, 0)]
 
+    # ---  self attention block
+    if use_self_attention:
+        nodes_output[(levels - 1, 1)] = \
+            tf.keras.layers.Concatenate(axis=-1)([
+                self_attention_block(
+                    input_layer=nodes_output[(levels - 1, 1)],
+                    conv_params=conv_params_res_3[-1])
+            ])
+
+    # --- squeeze and excite preparation
     control_layer = None
     if use_squeeze_excite:
         params = copy.deepcopy(conv_params_res_3[0])
         params["kernel_size"] = (1, 1)
-        control_layer = nodes_output[(levels - 1, 1)]
-        control_layer = tf.keras.layers.Concatenate(axis=-1)([
-            self_attention_block(
-                input_layer=control_layer,
-                conv_params=conv_params_res_3[-1])
-        ])
         control_layer = \
-            tf.keras.layers.GlobalAvgPool2D(keepdims=True)(control_layer)
+            tf.keras.layers.GlobalAvgPool2D(keepdims=True)(
+                nodes_output[(levels - 1, 1)])
 
     # --- move up
     while len(nodes_to_visit) > 0:
@@ -375,15 +383,6 @@ def builder(
         # --- convnext block
         x_skip = None
 
-        # pass global information here
-        if use_squeeze_excite:
-            x = \
-                skip_squeeze_and_excite_block(
-                    control_layer=control_layer,
-                    signal_layer=x,
-                    hard_sigmoid_version=True,
-                    learn_to_turn_off=True)
-
         for j in range(width):
             x = \
                 conv2d_wrapper(
@@ -391,6 +390,14 @@ def builder(
                     bn_post_params=bn_params,
                     ln_post_params=ln_params,
                     conv_params=conv_params_res_1[node[0]])
+            # pass global information here
+            if use_squeeze_excite:
+                x = \
+                    skip_squeeze_and_excite_block(
+                        control_layer=control_layer,
+                        signal_layer=x,
+                        hard_sigmoid_version=True,
+                        learn_to_turn_off=True)
             x = \
                 conv2d_wrapper(
                     input_layer=x,
