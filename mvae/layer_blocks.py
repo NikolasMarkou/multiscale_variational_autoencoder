@@ -90,6 +90,8 @@ def skip_squeeze_and_excite_block(
         learn_to_turn_off: bool = False,
         kernel_regularizer: str = "l2",
         kernel_initializer: str = "glorot_normal",
+        bn_params: Dict = None,
+        ln_params: Dict = None,
         dropout_params: Dict = None):
     """
     Skip Squeeze-and-Excitation Networks (2019)
@@ -110,17 +112,21 @@ def skip_squeeze_and_excite_block(
     x = control_layer
     x = tf.keras.layers.GlobalAvgPool2D(keepdims=True)(x)
 
-    x = \
-        tf.keras.layers.Conv2D(
-            kernel_size=(1, 1),
-            filters=channels_squeeze,
-            use_bias=use_bias,
-            kernel_regularizer=kernel_regularizer,
-            kernel_initializer=kernel_initializer,
-            activation="linear")(x)
+    params = dict(
+        kernel_size=(1, 1),
+        filters=channels_squeeze,
+        use_bias=use_bias,
+        kernel_regularizer=kernel_regularizer,
+        kernel_initializer=kernel_initializer,
+        activation="leaky_relu"
+    )
 
-    # small leak to let the gradient flow
-    x = tf.keras.layers.LeakyReLU(alpha=0.1)(x)
+    x = \
+        conv2d_wrapper(
+            input_layer=x,
+            bn_post_params=bn_params,
+            ln_post_params=ln_params,
+            conv_params=params)
 
     if dropout_params is not None:
         x = tf.keras.layers.Dropout(rate=dropout_params["rate"])(x)
