@@ -397,6 +397,9 @@ def builder(
                     conv_params=conv_params_res_1[node[0]])
             # pass global information here
             if use_squeeze_excite:
+                if dropout_params is not None:
+                    control_layer = (
+                        tf.keras.layers.Dropout(rate=dropout_params["rate"])(control_layer))
                 x = \
                     skip_squeeze_and_excite_block(
                         control_layer=control_layer,
