@@ -5,7 +5,7 @@ from typing import Dict, Tuple, Union, List
 # ---------------------------------------------------------------------
 
 from .custom_logger import logger
-from .utilities import depthwise_gaussian_kernel
+
 
 # ---------------------------------------------------------------------
 
@@ -65,6 +65,7 @@ class GaussianFilter(tf.keras.layers.Layer):
         self._kernel = None
 
     def build(self, input_shape):
+        from .utilities import depthwise_gaussian_kernel
         # [filter_height, filter_width, in_channels, channel_multiplier]
         self._kernel = \
             depthwise_gaussian_kernel(
