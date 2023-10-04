@@ -66,10 +66,9 @@ class GaussianFilter(tf.keras.layers.Layer):
 
     def build(self, input_shape):
         from .utilities import depthwise_gaussian_kernel
-        # [filter_height, filter_width, in_channels, channel_multiplier]
         self._kernel = \
             depthwise_gaussian_kernel(
-                channels=input_shape[2],
+                channels=input_shape[-1],
                 size=self._kernel_size,
                 nsig=self._sigma).astype('float32')
 
