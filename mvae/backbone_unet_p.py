@@ -400,7 +400,7 @@ def builder(
             if use_squeeze_excite:
                 x = \
                     skip_squeeze_and_excite_block(
-                        control_layer=control_layer_tmp,
+                        control_layer=control_layer,
                         signal_layer=x,
                         hard_sigmoid_version=False,
                         learn_to_turn_off=False,
