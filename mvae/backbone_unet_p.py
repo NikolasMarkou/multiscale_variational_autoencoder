@@ -401,8 +401,8 @@ def builder(
                     skip_squeeze_and_excite_block(
                         control_layer=control_layer,
                         signal_layer=x,
-                        hard_sigmoid_version=True,
-                        learn_to_turn_off=True)
+                        hard_sigmoid_version=False,
+                        learn_to_turn_off=False)
             x = \
                 conv2d_wrapper(
                     input_layer=x,
