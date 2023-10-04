@@ -313,12 +313,6 @@ def builder(
 
     # --- squeeze and excite preparation
     control_layer = None
-    if use_squeeze_excite:
-        params = copy.deepcopy(conv_params_res_3[-1])
-        params["kernel_size"] = (1, 1)
-        control_layer = \
-            tf.keras.layers.GlobalAvgPool2D(keepdims=True)(
-                nodes_output[(levels - 1, 1)])
 
     # --- move up
     while len(nodes_to_visit) > 0:
@@ -374,14 +368,25 @@ def builder(
         if len(x_input) == 1:
             x = x_input[0]
         elif len(x_input) > 0:
-            # if use_laplacian:
-            #     x_input.append(tf.keras.layers.Add()(x_input))
             x = tf.keras.layers.Concatenate()(x_input)
         else:
             raise ValueError("this must never happen")
 
         # --- convnext block
         x_skip = None
+
+        if use_squeeze_excite:
+            control_layer_tmp = \
+                tf.keras.layers.GlobalAvgPool2D(keepdims=True)(
+                    nodes_output[(node[0]+1, 1)])
+            if control_layer is None:
+                control_layer = control_layer_tmp
+            else:
+                control_layer = \
+                    tf.keras.layers.Concatenate(axis=-1)([
+                        control_layer,
+                        control_layer_tmp
+                    ])
 
         for j in range(width):
             x = \
