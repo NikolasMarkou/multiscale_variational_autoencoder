@@ -109,10 +109,8 @@ def skip_squeeze_and_excite_block(
     channels_squeeze = max(1, int(round(channels * r_ratio)))
     channels_output = tf.keras.backend.int_shape(signal_layer)[-1]
 
-    x = control_layer
-    x = tf.keras.layers.GlobalAvgPool2D(keepdims=True)(x)
-
-    params = dict(
+    # ---
+    params_1 = dict(
         kernel_size=(1, 1),
         filters=channels_squeeze,
         use_bias=use_bias,
@@ -121,25 +119,35 @@ def skip_squeeze_and_excite_block(
         activation="leaky_relu"
     )
 
+    params_2 = dict(
+        kernel_size=(1, 1),
+        filters=channels_output,
+        use_bias=use_bias,
+        kernel_regularizer=kernel_regularizer,
+        kernel_initializer=kernel_initializer,
+        activation="linear"
+    )
+
+    x = control_layer
+    x = tf.keras.layers.GlobalAvgPool2D(keepdims=True)(x)
+
     x = \
         conv2d_wrapper(
             input_layer=x,
             bn_post_params=bn_params,
             ln_post_params=ln_params,
-            conv_params=params)
+            conv_params=params_1)
 
     if dropout_params is not None:
         x = tf.keras.layers.Dropout(rate=dropout_params["rate"])(x)
 
     if hard_sigmoid_version:
         x = \
-            tf.keras.layers.Conv2D(
-                kernel_size=(1, 1),
-                filters=channels_output,
-                use_bias=use_bias,
-                kernel_regularizer=kernel_regularizer,
-                kernel_initializer=kernel_initializer,
-                activation="linear")(x)
+            conv2d_wrapper(
+                input_layer=x,
+                bn_post_params=None,
+                ln_post_params=None,
+                conv_params=params_2)
         if learn_to_turn_off:
             # all channels on by default, learns to shut them off
             x = 2.5 - tf.nn.relu(x)
@@ -147,13 +155,12 @@ def skip_squeeze_and_excite_block(
     else:
         # default
         x = \
-            tf.keras.layers.Conv2D(
-                kernel_size=(1, 1),
-                filters=channels_output,
-                use_bias=use_bias,
-                kernel_regularizer=kernel_regularizer,
-                kernel_initializer=kernel_initializer,
-                activation="sigmoid")(x)
+            conv2d_wrapper(
+                input_layer=x,
+                bn_post_params=None,
+                ln_post_params=None,
+                conv_params=params_2)
+        x = tf.keras.activations.sigmoid(x)
 
     return tf.math.multiply(x, signal_layer)
 
