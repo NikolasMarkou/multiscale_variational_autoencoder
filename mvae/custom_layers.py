@@ -45,7 +45,7 @@ class GaussianFilter(tf.keras.layers.Layer):
     def __init__(
             self,
             kernel_size: Tuple[int, int] = (5, 5),
-            strides: Tuple[int, int] = [1, 1, 1, 1],
+            strides: Tuple[int, int] = [1, 1],
             sigma: Tuple[float, float] = (1.0, 1.0),
             name: str = None,
             **kwargs):
@@ -55,10 +55,10 @@ class GaussianFilter(tf.keras.layers.Layer):
             **kwargs)
         if len(kernel_size) != 2:
             raise ValueError("kernel size must be length 2")
-        if len(strides) != 4:
-            raise ValueError("strides size must be length 2")
         if len(sigma) != 2:
             raise ValueError("sigma size must be length 2")
+        if len(strides) == 2:
+            strides = [1] + list(strides) + [1]
         self._kernel_size = kernel_size
         self._strides = strides
         self._sigma = sigma

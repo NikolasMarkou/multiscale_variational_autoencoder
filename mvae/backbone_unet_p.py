@@ -14,6 +14,7 @@ from typing import List, Dict, Union, Tuple
 from .constants import *
 from .custom_logger import logger
 from .utilities import conv2d_wrapper
+from .custom_layers import GaussianFilter
 
 # ---------------------------------------------------------------------
 
@@ -213,11 +214,13 @@ def builder(
                 if use_scale_diffs:
                     node_level = (i-1, 0)
                     x_down_up = \
-                        tf.keras.layers.AveragePooling2D(
-                            pool_size=(5, 5),
-                            padding="same",
-                            strides=(1, 1))(x)
-                    x_down_up = tf.stop_gradient(x_down_up)
+                        GaussianFilter(kernel_size=(5, 5), strides=(1, 1))(x)
+                    # x_down_up = \
+                    #     tf.keras.layers.AveragePooling2D(
+                    #         pool_size=(5, 5),
+                    #         padding="same",
+                    #         strides=(1, 1))(x)
+                    # x_down_up = tf.stop_gradient(x_down_up)
                     nodes_output[node_level] = \
                         nodes_output[node_level] - x_down_up
                 x = \
