@@ -105,6 +105,7 @@ def skip_squeeze_and_excite_block(
         raise ValueError("r_ratio should be > 0.0")
     channels = tf.keras.backend.int_shape(control_layer)[-1]
     channels_squeeze = max(1, int(round(channels * r_ratio)))
+    channels_output = tf.keras.backend.int_shape(signal_layer)[-1]
 
     x = control_layer
     x = tf.keras.layers.GlobalAvgPool2D(keepdims=True)(x)
@@ -128,7 +129,7 @@ def skip_squeeze_and_excite_block(
         x = \
             tf.keras.layers.Conv2D(
                 kernel_size=(1, 1),
-                filters=channels,
+                filters=channels_output,
                 use_bias=use_bias,
                 kernel_regularizer=kernel_regularizer,
                 kernel_initializer=kernel_initializer,
@@ -142,7 +143,7 @@ def skip_squeeze_and_excite_block(
         x = \
             tf.keras.layers.Conv2D(
                 kernel_size=(1, 1),
-                filters=channels,
+                filters=channels_output,
                 use_bias=use_bias,
                 kernel_regularizer=kernel_regularizer,
                 kernel_initializer=kernel_initializer,
