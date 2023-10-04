@@ -305,11 +305,9 @@ def builder(
     # ---  self attention block
     if use_self_attention:
         nodes_output[(levels - 1, 1)] = \
-            tf.keras.layers.Concatenate(axis=-1)([
-                self_attention_block(
-                    input_layer=nodes_output[(levels - 1, 1)],
-                    conv_params=conv_params_res_3[-1])
-            ])
+            self_attention_block(
+                input_layer=nodes_output[(levels - 1, 1)],
+                conv_params=conv_params_res_3[-1])
 
     # --- squeeze and excite preparation
     control_layer = None
