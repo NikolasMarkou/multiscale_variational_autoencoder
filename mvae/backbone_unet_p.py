@@ -397,7 +397,7 @@ def builder(
                     ln_post_params=ln_params,
                     conv_params=conv_params_res_1[node[0]])
             # pass global information here
-            if use_squeeze_excite:
+            if j == 0 and use_squeeze_excite:
                 x = \
                     skip_squeeze_and_excite_block(
                         control_layer=control_layer,
