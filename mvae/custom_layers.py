@@ -5,6 +5,7 @@ from typing import Dict, Tuple, Union, List
 # ---------------------------------------------------------------------
 
 from .custom_logger import logger
+from .utilities import depthwise_gaussian_kernel
 
 # ---------------------------------------------------------------------
 
@@ -54,7 +55,7 @@ class GaussianFilter(tf.keras.layers.Layer):
             **kwargs)
         if len(kernel_size) != 2:
             raise ValueError("kernel size must be length 2")
-        if len(strides) != 2:
+        if len(strides) != 4:
             raise ValueError("strides size must be length 2")
         if len(sigma) != 2:
             raise ValueError("sigma size must be length 2")
@@ -64,38 +65,12 @@ class GaussianFilter(tf.keras.layers.Layer):
         self._kernel = None
 
     def build(self, input_shape):
-        def gaussian_kernel(
-                size: Tuple[int, int],
-                nsig: Tuple[float, float],
-                dtype: np.float64) -> np.ndarray:
-            kern1d = [
-                np.linspace(
-                    start=-np.abs(nsig[i]),
-                    stop=np.abs(nsig[i]),
-                    num=size[i],
-                    endpoint=True,
-                    dtype=dtype)
-                for i in range(2)
-            ]
-            x, y = np.meshgrid(kern1d[0], kern1d[1])
-            d = np.sqrt(x * x + y * y)
-            sigma, mu = 1.0, 0.0
-            g = np.exp(-((d - mu) ** 2 / (2.0 * (sigma ** 2))))
-            return g / g.sum()
-        def kernel_init(shape, dtype):
-            logger.info(f"building gaussian kernel with size: {shape}")
-            kernel = np.zeros(shape)
-            kernel_channel = \
-                gaussian_kernel(
-                    size=(shape[0], shape[1]),
-                    nsig=self._sigma)
-            for i in range(shape[2]):
-                kernel[:, :, i, 0] = kernel_channel
-            return kernel
         # [filter_height, filter_width, in_channels, channel_multiplier]
         self._kernel = \
-            kernel_init(
-                shape=(self._kernel_size[0], self._kernel_size[1], input_shape[-1], 1))
+            depthwise_gaussian_kernel(
+                channels=input_shape[2],
+                size=self._kernel_size,
+                nsig=self._sigma).astype('float32')
 
     def get_config(self):
         return {
