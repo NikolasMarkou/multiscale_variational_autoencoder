@@ -314,7 +314,7 @@ def builder(
     # --- squeeze and excite preparation
     control_layer = None
     if use_squeeze_excite:
-        params = copy.deepcopy(conv_params_res_3[0])
+        params = copy.deepcopy(conv_params_res_3[-1])
         params["kernel_size"] = (1, 1)
         control_layer = \
             tf.keras.layers.GlobalAvgPool2D(keepdims=True)(
