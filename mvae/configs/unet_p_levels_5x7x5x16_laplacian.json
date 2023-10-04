@@ -16,7 +16,7 @@
 				"use_bn": true,
 				"use_ln": false,
 				"use_bias": false,
-				"use_scale_diffs": true,
+				"use_laplacian": true,
 				"multiple_scale_outputs": true,
 				"kernel_regularizer": "l2",
 				"kernel_initializer": "glorot_normal",

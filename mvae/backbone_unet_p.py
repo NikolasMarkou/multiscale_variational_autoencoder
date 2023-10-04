@@ -31,7 +31,7 @@ def builder(
         use_bn: bool = True,
         use_ln: bool = False,
         use_bias: bool = False,
-        use_scale_diffs: bool = False,
+        use_laplacian: bool = False,
         kernel_regularizer="l2",
         kernel_initializer="glorot_normal",
         dropout_rate: float = -1,
@@ -56,7 +56,7 @@ def builder(
     :param use_bn: use batch normalization
     :param use_ln: use layer normalization
     :param use_bias: use bias (bias free means this should be off)
-    :param use_scale_diffs: remove per scale diffs
+    :param use_laplacian: remove per scale diffs
     :param kernel_regularizer: Kernel weight regularizer
     :param kernel_initializer: Kernel weight initializer
     :param multiple_scale_outputs:
@@ -211,21 +211,21 @@ def builder(
                         conv_params=params)
             elif i > 0 and j == 0:
                 # new level
-                if use_scale_diffs:
+                if use_laplacian:
                     node_level = (i-1, 0)
                     x_down_up = \
-                        GaussianFilter(kernel_size=(5, 5), strides=(1, 1))(x)
-                    # x_down_up = \
-                    #     tf.keras.layers.AveragePooling2D(
-                    #         pool_size=(5, 5),
-                    #         padding="same",
-                    #         strides=(1, 1))(x)
-                    # x_down_up = tf.stop_gradient(x_down_up)
+                        GaussianFilter(
+                            kernel_size=(5, 5),
+                            strides=(1, 1))(x)
                     nodes_output[node_level] = \
                         nodes_output[node_level] - x_down_up
-                x = \
-                    tf.keras.layers.MaxPooling2D(
-                        pool_size=(2, 2), padding="same", strides=(2, 2))(x)
+                    x = \
+                        tf.keras.layers.MaxPooling2D(
+                            pool_size=(1, 1), padding="same", strides=(2, 2))(x_down_up)
+                else:
+                    x = \
+                        tf.keras.layers.MaxPooling2D(
+                            pool_size=(2, 2), padding="same", strides=(2, 2))(x)
                 params = copy.deepcopy(conv_params_res_1[i])
                 params["kernel_size"] = (backbone_kernel_size, backbone_kernel_size)
                 x = \
@@ -351,7 +351,7 @@ def builder(
         if len(x_input) == 1:
             x = x_input[0]
         elif len(x_input) > 0:
-            if use_scale_diffs:
+            if use_laplacian:
                 x_input.append(tf.keras.layers.Add()(x_input))
             x = tf.keras.layers.Concatenate()(x_input)
         else:
