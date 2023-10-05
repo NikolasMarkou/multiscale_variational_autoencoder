@@ -244,10 +244,8 @@ def builder(
                             kernel_size=(5, 5),
                             strides=(1, 1))(x)
                     nodes_output[node_level] = \
-                        nodes_output[node_level] - x_down_up
-                    x = \
-                        tf.keras.layers.MaxPooling2D(
-                            pool_size=(1, 1), padding="same", strides=(2, 2))(x_down_up)
+                        nodes_output[node_level] - tf.stop_gradient(x_down_up)
+                    x = x_down_up[:, ::2, ::2, :]
                 else:
                     x = \
                         tf.keras.layers.MaxPooling2D(
