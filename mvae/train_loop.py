@@ -330,8 +330,8 @@ def train_loop(
                         epoch_finished_training = True
                         break
 
-                    for x, y in [(input_image_batch, noisy_image_batch),
-                                 (input_image_batch, input_image_batch)]:
+                    for x, y in [(input_image_batch, input_image_batch),
+                                 (input_image_batch, noisy_image_batch)]:
                         scale_gt_image_batch = [x]
                         tmp_gt_image = x
 
