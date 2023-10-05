@@ -137,7 +137,7 @@ def builder(
         filters_level = \
             int(round(filters * max(1, filters_level_multiplier ** i)))
         # 96 is the max for convnext
-        filters_level = min(96, filters_level)
+        filters_level = max(96, filters_level)
         # conv2d params when moving horizontally the scale
         params = copy.deepcopy(base_conv_params)
         params["filters"] = filters_level
@@ -284,8 +284,6 @@ def builder(
                     bn_post_params=bn_params,
                     ln_post_params=ln_params,
                     conv_params=conv_params_res_2[i])
-            if dropout_2d_params is not None:
-                x = tf.keras.layers.SpatialDropout2D(rate=dropout_2d_params["rate"])(x)
             x = \
                 conv2d_wrapper(
                     input_layer=x,
@@ -307,6 +305,9 @@ def builder(
         if dropout_params is not None:
             nodes_output[k] = (
                 tf.keras.layers.Dropout(rate=dropout_params["rate"])(nodes_output[k]))
+        if dropout_2d_params is not None:
+            nodes_output[k] = (
+                tf.keras.layers.SpatialDropout2D(rate=dropout_2d_params["rate"])(nodes_output[k]))
 
     nodes_visited.add((levels - 1, 1))
     nodes_output[(levels - 1, 1)] = nodes_output[(levels - 1, 0)]
@@ -381,13 +382,12 @@ def builder(
                 pass
             elif d[0] > node[0]:
                 # lower level, upscale
-                # x = conv2d_wrapper(
-                #     input_layer=x,
-                #     bn_params=bn_params,
-                #     ln_params=ln_params,
-                #     conv_params=conv_params_up[node[0]],
-                #     conv_type=ConvType.CONV2D_TRANSPOSE)
-                x = tf.keras.layers.UpSampling2D(size=(2, 2), interpolation="nearest")(x)
+                x = conv2d_wrapper(
+                    input_layer=x,
+                    bn_params=bn_params,
+                    ln_params=ln_params,
+                    conv_params=conv_params_up[node[0]],
+                    conv_type=ConvType.CONV2D_TRANSPOSE)
             else:
                 raise ValueError(f"node: {node}, dependencies: {dependencies}, "
                                  f"should not supposed to be here")
@@ -450,8 +450,6 @@ def builder(
                     bn_post_params=bn_params,
                     ln_post_params=ln_params,
                     conv_params=conv_params_res_2[node[0]])
-            if dropout_2d_params is not None:
-                x = tf.keras.layers.SpatialDropout2D(rate=dropout_2d_params["rate"])(x)
             x = \
                 conv2d_wrapper(
                     input_layer=x,
