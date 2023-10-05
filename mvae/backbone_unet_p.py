@@ -220,14 +220,24 @@ def builder(
             shape=input_dims)
     x = encoder_input_layer
 
+    # first ever
+    params = copy.deepcopy(base_conv_params)
+    params["filters"] = max(32, filters)
+    params["activation"] = activation
+    params["kernel_size"] = (backbone_kernel_size, backbone_kernel_size)
+    x = \
+        conv2d_wrapper(
+            input_layer=x,
+            bn_post_params=None,
+            ln_post_params=None,
+            conv_params=params)
+
     # all the down sampling, backbone
     for i in range(levels):
         x_skip = None
         for j in range(width):
-            if i == 0 and j == 0:
-                # first ever
-                params = copy.deepcopy(base_conv_params)
-                params["filters"] = max(32, filters)
+            if i == 0:
+                params = copy.deepcopy(conv_params_res_1[i])
                 params["kernel_size"] = (backbone_kernel_size, backbone_kernel_size)
                 x = \
                     conv2d_wrapper(
