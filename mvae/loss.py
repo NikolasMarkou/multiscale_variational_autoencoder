@@ -156,7 +156,6 @@ def loss_function_builder(
         # --- loss prediction on mae
         mae_prediction_loss = \
             tf.constant(0.0, dtype=tf.float32)
-
         if use_mae:
             mae_prediction_loss += \
                 mae(original=input_batch,
@@ -165,7 +164,8 @@ def loss_function_builder(
                     cutoff=cutoff)
 
         # --- loss ssim
-        ssim_loss = tf.constant(0.0, dtype=tf.float32)
+        ssim_loss = (
+            tf.constant(0.0, dtype=tf.float32))
         if use_ssim:
             ssim_loss = \
                 tf.reduce_mean(
