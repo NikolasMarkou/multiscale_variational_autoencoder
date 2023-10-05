@@ -383,8 +383,8 @@ def builder(
                 # lower level, upscale
                 x = conv2d_wrapper(
                     input_layer=x,
-                    bn_post_params=None,
-                    ln_post_params=None,
+                    bn_params=bn_params,
+                    ln_params=ln_params,
                     conv_params=conv_params_up[node[0]],
                     conv_type=ConvType.CONV2D_TRANSPOSE)
             else:
