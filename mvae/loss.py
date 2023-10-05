@@ -143,15 +143,15 @@ def loss_function_builder(
             input_batch: tf.Tensor,
             predicted_batch: tf.Tensor) -> Dict[str, tf.Tensor]:
 
-        # --- resize input to match prediction in case they are different sizes
-        if tf.reduce_any(
-                tf.shape(input_batch) != tf.shape(predicted_batch)):
-            # this must be bilinear or nearest for speed during training,
-            input_batch = \
-                tf.image.resize(
-                    images=input_batch,
-                    size=tf.shape(predicted_batch)[1:3],
-                    method=tf.image.ResizeMethod.BILINEAR)
+        # # --- resize input to match prediction in case they are different sizes
+        # if tf.reduce_any(
+        #         tf.shape(input_batch) != tf.shape(predicted_batch)):
+        #     # this must be bilinear or nearest for speed during training,
+        #     input_batch = \
+        #         tf.image.resize(
+        #             images=input_batch,
+        #             size=tf.shape(predicted_batch)[1:3],
+        #             method=tf.image.ResizeMethod.BILINEAR)
 
         # --- loss prediction on mae
         mae_prediction_loss = \

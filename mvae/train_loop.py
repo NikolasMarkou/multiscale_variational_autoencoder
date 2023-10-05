@@ -266,6 +266,7 @@ def train_loop(
                 nsig=(2.0, 2.0),
                 dtype=np.float32).astype('float32')
         gaussian_kernel = tf.constant(gaussian_kernel, dtype=tf.float32)
+        depth_percentage = tf.constant(1.0 / float(len(denoiser_index)), dtype=tf.float32)
 
         # ---
         finished_training = False

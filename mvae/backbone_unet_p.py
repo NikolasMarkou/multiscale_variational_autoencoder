@@ -228,8 +228,8 @@ def builder(
     x = \
         conv2d_wrapper(
             input_layer=x,
-            bn_post_params=None,
-            ln_post_params=None,
+            bn_post_params=bn_params,
+            ln_post_params=ln_params,
             conv_params=params)
 
     # all the down sampling, backbone
@@ -286,8 +286,8 @@ def builder(
             x = \
                 conv2d_wrapper(
                     input_layer=x,
-                    bn_post_params=None,
-                    ln_post_params=None,
+                    bn_post_params=bn_params,
+                    ln_post_params=ln_params,
                     conv_params=conv_params_res_3[i])
             if j > 0 and x_skip is not None:
                 x = x + x_skip
@@ -383,8 +383,8 @@ def builder(
                 # lower level, upscale
                 x = conv2d_wrapper(
                     input_layer=x,
-                    bn_params=bn_params,
-                    ln_params=ln_params,
+                    bn_post_params=bn_params,
+                    ln_post_params=ln_params,
                     conv_params=conv_params_up[node[0]],
                     conv_type=ConvType.CONV2D_TRANSPOSE)
             else:
