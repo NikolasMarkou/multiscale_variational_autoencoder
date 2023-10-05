@@ -387,7 +387,10 @@ def builder(
         if len(x_input) == 1:
             x = x_input[0]
         elif len(x_input) > 0:
-            x = tf.keras.layers.Concatenate()(x_input)
+            if use_laplacian:
+                x = tf.keras.layers.Add()(x_input)
+            else:
+                x = tf.keras.layers.Concatenate()(x_input)
         else:
             raise ValueError("this must never happen")
 
