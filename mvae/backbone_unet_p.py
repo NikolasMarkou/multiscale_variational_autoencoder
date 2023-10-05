@@ -15,7 +15,12 @@ from .constants import *
 from .custom_logger import logger
 from .utilities import conv2d_wrapper
 from .custom_layers import GaussianFilter
-from .layer_blocks import skip_squeeze_and_excite_block, self_attention_block
+from .layer_blocks import (
+    skip_squeeze_and_excite_block,
+    self_attention_block)
+from .regularizers import (
+    SoftOrthogonalConstraintRegularizer,
+    SoftOrthonormalConstraintRegularizer)
 
 # ---------------------------------------------------------------------
 
@@ -35,6 +40,7 @@ def builder(
         use_laplacian: bool = False,
         use_self_attention: bool = False,
         use_squeeze_excite: bool = False,
+        use_orthonormal_projections: bool = False,
         kernel_regularizer="l2",
         kernel_initializer="glorot_normal",
         dropout_rate: float = -1,
@@ -62,6 +68,7 @@ def builder(
     :param use_laplacian: remove per scale diffs
     :param use_self_attention:
     :param use_squeeze_excite:
+    :param use_orthonormal_projections: if True use orthonormal projections on the 1x1 kernels
     :param kernel_regularizer: Kernel weight regularizer
     :param kernel_initializer: Kernel weight initializer
     :param multiple_scale_outputs:
@@ -151,16 +158,30 @@ def builder(
 
         # 2nd residual conv
         params = copy.deepcopy(base_conv_params)
-        params["kernel_size"] = 1
+        params["kernel_size"] = (1, 1)
         params["activation"] = activation
         params["filters"] = filters_level * 4
+        if use_orthonormal_projections:
+            logger.info("added SoftOrthonormalConstraintRegularizer")
+            params["kernel_regularizer"] = \
+                SoftOrthonormalConstraintRegularizer(
+                    lambda_coefficient=0.1,
+                    l1_coefficient=0.0,
+                    l2_coefficient=0.0001)
         conv_params_res_2.append(params)
 
         # 3rd residual conv
         params = copy.deepcopy(base_conv_params)
-        params["kernel_size"] = 1
+        params["kernel_size"] = (1, 1)
         params["activation"] = "linear"
         params["filters"] = filters_level
+        if use_orthonormal_projections:
+            logger.info("added SoftOrthonormalConstraintRegularizer")
+            params["kernel_regularizer"] = \
+                SoftOrthonormalConstraintRegularizer(
+                    lambda_coefficient=0.1,
+                    l1_coefficient=0.0,
+                    l2_coefficient=0.0001)
         conv_params_res_3.append(params)
 
         # conv2d params when moving up the scale
