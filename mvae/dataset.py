@@ -1,4 +1,5 @@
 import copy
+import numpy as np
 import tensorflow as tf
 from pprint import pformat
 from collections import namedtuple
@@ -10,7 +11,7 @@ from typing import Dict, Callable, Iterator, Tuple
 
 from .file_operations import *
 from .custom_logger import logger
-from .utilities import random_crops
+from .utilities import random_crops, depthwise_gaussian_kernel
 
 # ---------------------------------------------------------------------
 
@@ -116,7 +117,13 @@ def dataset_builder(
 
     additional_noise = tf.constant(additional_noise, dtype=tf.float32)
     multiplicative_noise = tf.constant(multiplicative_noise, dtype=tf.float32)
-
+    gaussian_kernel = \
+        depthwise_gaussian_kernel(
+            channels=input_shape[-1],
+            kernel_size=(5, 5),
+            nsig=(2.0, 2.0),
+            dtype=np.float32).astype('float32')
+    gaussian_kernel = tf.constant(gaussian_kernel, dtype=tf.float32)
     # --- set random seed to get the same result
     tf.random.set_seed(0)
 
@@ -297,18 +304,21 @@ def dataset_builder(
                     false_fn=lambda: noisy_batch
                 )
 
-        # # --- blur to embed noise
-        # if use_random_blur:
-        #     noisy_batch = \
-        #         tf.cond(
-        #             pred=random_option_blur,
-        #             true_fn=lambda:
-        #             tfa.image.gaussian_filter2d(
-        #                 image=noisy_batch,
-        #                 sigma=0.5,
-        #                 filter_shape=(5, 5)),
-        #             false_fn=lambda: noisy_batch
-        #         )
+        # --- blur to embed noise
+        if use_random_blur:
+            noisy_batch = \
+                tf.cond(
+                    pred=random_option_blur,
+                    true_fn=lambda:
+                        tf.nn.depthwise_conv2d(
+                            input=noisy_batch,
+                            filter=gaussian_kernel,
+                            strides=(1, 2, 2, 1),
+                            data_format=None,
+                            dilations=None,
+                            padding="SAME"),
+                    false_fn=lambda: noisy_batch
+                )
 
         # --- round values to nearest integer
         if round_values:

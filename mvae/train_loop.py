@@ -264,8 +264,8 @@ def train_loop(
                 channels=input_shape[-1],
                 kernel_size=(5, 5),
                 nsig=(2.0, 2.0),
-                dtype=np.float32)
-        gaussian_kernel = gaussian_kernel.astype('float32')
+                dtype=np.float32).astype('float32')
+        gaussian_kernel = tf.constant(gaussian_kernel, dtype=tf.float32)
 
         # ---
         finished_training = False
