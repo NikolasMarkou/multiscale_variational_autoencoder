@@ -249,13 +249,13 @@ def builder(
                 # new level
                 if use_laplacian:
                     node_level = (i-1, 0)
-                    x_down_up = \
+                    x_blurred = \
                         GaussianFilter(
                             kernel_size=(5, 5),
                             strides=(1, 1))(x)
                     nodes_output[node_level] = \
-                        nodes_output[node_level] - tf.stop_gradient(x_down_up)
-                    x = x_down_up[:, ::2, ::2, :]
+                        nodes_output[node_level] - tf.stop_gradient(x_blurred)
+                    x = x_blurred[:, ::2, ::2, :]
                 else:
                     x = \
                         tf.keras.layers.MaxPooling2D(
@@ -395,10 +395,7 @@ def builder(
         if len(x_input) == 1:
             x = x_input[0]
         elif len(x_input) > 0:
-            if use_laplacian:
-                x = tf.keras.layers.Add()(x_input)
-            else:
-                x = tf.keras.layers.Concatenate()(x_input)
+            x = tf.keras.layers.Concatenate()(x_input)
         else:
             raise ValueError("this must never happen")
 

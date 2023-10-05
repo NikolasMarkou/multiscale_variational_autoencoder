@@ -12,14 +12,16 @@
 				"filters": 16,
 				"filters_level_multiplier": 2.0,
 				"activation": "leaky_relu",
-				"use_bn": false,
-				"use_ln": true,
+				"use_bn": true,
+				"use_ln": false,
 				"use_bias": false,
+				"use_laplacian": false,
+				"use_squeeze_excite": false,
 				"multiple_scale_outputs": true,
 				"kernel_regularizer": "l2",
 				"kernel_initializer": "glorot_normal",
 				"dropout_rate": 0.5,
-				"spatial_dropout_rate": 0.25
+				"spatial_dropout_rate": 0.0
 			}
 		},
 		"denoiser": {
@@ -81,7 +83,7 @@
 		"random_left_right": true,
 		"input_shape": [256, 256, 3],
 		"multiplicative_noise": [0.05, 0.1],
-		"additional_noise": [1, 5, 10, 20, 30],
+		"additional_noise": [5, 10, 20, 30],
 		"inputs": [
 			{
 				"directory": "/media/data1_4tb/datasets/div2k/train"

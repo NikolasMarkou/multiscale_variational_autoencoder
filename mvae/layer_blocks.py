@@ -106,7 +106,7 @@ def skip_squeeze_and_excite_block(
     # --- argument checking
     if r_ratio <= 0.0:
         raise ValueError("r_ratio should be > 0.0")
-    channels = tf.keras.backend.int_shape(control_layer)[-1]
+    channels = tf.keras.backend.int_shape(signal_layer)[-1]
     channels_squeeze = max(1, int(round(channels * r_ratio)))
     channels_output = tf.keras.backend.int_shape(signal_layer)[-1]
 
