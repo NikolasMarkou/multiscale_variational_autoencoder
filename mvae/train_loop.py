@@ -418,9 +418,6 @@ def train_loop(
                     tf.summary.scalar(name=f"debug/scale_{i}/ssim",
                                       data=d[SSIM_LOSS_STR],
                                       step=ckpt.step)
-                    tf.summary.scalar(name=f"debug/scale_{i}/total",
-                                      data=d[TOTAL_LOSS_STR],
-                                      step=ckpt.step)
                 # model
                 tf.summary.scalar(name="loss/regularization",
                                   data=model_loss[REGULARIZATION_LOSS_STR],
