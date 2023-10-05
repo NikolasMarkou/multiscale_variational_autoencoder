@@ -36,6 +36,12 @@ VARIATIONAL_AUTOENCODER_STR = "variational_autoencoder"
 
 # ---------------------------------------------------------------------
 
+L1_COEFFICIENT_STR = "l1_coefficient"
+L2_COEFFICIENT_STR = "l2_coefficient"
+LAMBDA_COEFFICIENT_STR = "lambda_coefficient"
+
+# ---------------------------------------------------------------------
+
 BATCH_SIZE_STR = "batch_size"
 INPUT_SHAPE_STR = "input_shape"
 INPUT_TENSOR_STR = "input_tensor"
