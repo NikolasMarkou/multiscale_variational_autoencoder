@@ -313,7 +313,7 @@ def dataset_builder(
                         tf.nn.depthwise_conv2d(
                             input=noisy_batch,
                             filter=gaussian_kernel,
-                            strides=(1, 2, 2, 1),
+                            strides=(1, 1, 1, 1),
                             data_format=None,
                             dilations=None,
                             padding="SAME"),
