@@ -398,9 +398,17 @@ def builder(
         x_skip = None
 
         if use_squeeze_excite:
+            control_layer_tmp = (
+                nodes_output)[(node[0]+1, 1)]
+            control_layer_tmp = (
+                conv2d_wrapper(
+                    input_layer=control_layer_tmp,
+                    bn_params=bn_params,
+                    ln_params=ln_params,
+                    conv_params=conv_params_res_3[0]))
             control_layer_tmp = \
                 tf.keras.layers.GlobalAvgPool2D(keepdims=True)(
-                    nodes_output[(node[0]+1, 1)])
+                    control_layer_tmp)
 
             if control_layer is None:
                 control_layer = control_layer_tmp
@@ -427,8 +435,8 @@ def builder(
                         flatten=False,
                         hard_sigmoid_version=False,
                         learn_to_turn_off=False,
-                        bn_params=bn_params,
-                        ln_params=ln_params,
+                        bn_params=None,
+                        ln_params=None,
                         dropout_params=dropout_params)
             x = \
                 conv2d_wrapper(
