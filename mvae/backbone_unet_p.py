@@ -13,8 +13,8 @@ from typing import List, Dict, Union, Tuple
 
 from .constants import *
 from .custom_logger import logger
-from .utilities import conv2d_wrapper
 from .custom_layers import GaussianFilter
+from .utilities import conv2d_wrapper, ConvType
 from .layer_blocks import (
     skip_squeeze_and_excite_block,
     self_attention_block)
@@ -187,8 +187,8 @@ def builder(
         # conv2d params when moving up the scale
         params = copy.deepcopy(base_conv_params)
         params["filters"] = filters_level
-        params["kernel_size"] = (3, 3)
-        params["strides"] = (1, 1)
+        params["kernel_size"] = (2, 2)
+        params["strides"] = (2, 2)
         params["activation"] = conv_params_res_3[-1]["activation"]
         conv_params_up.append(params)
 
@@ -381,13 +381,12 @@ def builder(
                 pass
             elif d[0] > node[0]:
                 # lower level, upscale
-                x = tf.keras.layers.UpSampling2D(
-                    size=(2, 2), interpolation="nearest")(x)
                 x = conv2d_wrapper(
                     input_layer=x,
                     bn_post_params=None,
                     ln_post_params=None,
-                    conv_params=conv_params_up[node[0]])
+                    conv_params=conv_params_up[node[0]],
+                    conv_type=ConvType.CONV2D_TRANSPOSE)
             else:
                 raise ValueError(f"node: {node}, dependencies: {dependencies}, "
                                  f"should not supposed to be here")
