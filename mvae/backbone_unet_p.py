@@ -138,8 +138,8 @@ def builder(
     for i in range(levels):
         filters_level = \
             int(round(filters * max(1, filters_level_multiplier ** i)))
-        # 96 is the max for convnext
-        filters_level = min(96, filters_level)
+        # # 96 is the max for convnext
+        # filters_level = min(96, filters_level)
         # conv2d params when moving horizontally the scale
         params = copy.deepcopy(base_conv_params)
         params["filters"] = filters_level
