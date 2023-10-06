@@ -387,8 +387,8 @@ def builder(
                     input_layer=x,
                     bn_params=bn_params,
                     ln_params=ln_params,
-                    ln_post_params=ln_params,
-                    bn_post_params=bn_params,
+                    ln_post_params=None,
+                    bn_post_params=None,
                     conv_params=conv_params_up[node[0]],
                     conv_type=ConvType.CONV2D_TRANSPOSE)
             else:
