@@ -311,7 +311,7 @@ def builder(
         if dropout_2d_params is not None:
             nodes_output[k] = (
                 tf.keras.layers.SpatialDropout2D(rate=dropout_2d_params["rate"])(nodes_output[k]))
-        if use_random_on_off:
+        if use_random_on_off and k != (levels-1, 0):
             nodes_output[k] = RandomOnOff(rate=0.5)(nodes_output[k])
 
     nodes_visited.add((levels - 1, 1))
