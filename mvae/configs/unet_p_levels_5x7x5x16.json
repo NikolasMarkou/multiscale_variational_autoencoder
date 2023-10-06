@@ -10,7 +10,7 @@
 				"backbone_kernel_size": 7,
 				"kernel_size": 5,
 				"filters": 16,
-				"filters_level_multiplier": 1.5,
+				"filters_level_multiplier": 2.0,
 				"activation": "leaky_relu",
 				"use_bn": false,
 				"use_ln": true,
