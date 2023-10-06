@@ -269,7 +269,7 @@ def train_loop(
         model_loss_multiplier = tf.constant(1.0, dtype=tf.float32)
         depth_weight = [
             tf.constant(1.0, dtype=tf.float32)
-            for i in len(denoiser_index)
+            for _ in range(len(denoiser_index))
         ]
 
         # ---
@@ -299,14 +299,14 @@ def train_loop(
             if ckpt.epoch == 0:
                 depth_weight = [
                     tf.constant(1.0 / float(i + 1), dtype=tf.float32)
-                    for i in len(denoiser_index)
+                    for i in range(len(denoiser_index))
                 ]
                 depth_weight = depth_weight[::-1]
                 depth_weight[-1] = tf.constant(1.0, dtype=tf.float32)
             else:
                 depth_weight = [
                     tf.constant(float(output_discount_factor ** (float(i) * percentage_done)), dtype=tf.float32)
-                    for i in len(denoiser_index)
+                    for i in range(len(denoiser_index))
                 ]
 
             depth_weight_str = [
