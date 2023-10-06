@@ -287,12 +287,6 @@ def builder(
                     bn_post_params=bn_params,
                     ln_post_params=ln_params,
                     conv_params=conv_params_res_2[i])
-            if dropout_params is not None:
-                x = (
-                    tf.keras.layers.Dropout(rate=dropout_params["rate"])(x))
-            if dropout_2d_params is not None:
-                x = (
-                    tf.keras.layers.SpatialDropout2D(rate=dropout_2d_params["rate"])(x))
             x = \
                 conv2d_wrapper(
                     input_layer=x,
@@ -311,6 +305,12 @@ def builder(
     x = None
 
     for k in nodes_output.keys():
+        if dropout_params is not None:
+            nodes_output[k] = (
+                tf.keras.layers.Dropout(rate=dropout_params["rate"])(nodes_output[k]))
+        if dropout_2d_params is not None:
+            nodes_output[k] = (
+                tf.keras.layers.SpatialDropout2D(rate=dropout_2d_params["rate"])(nodes_output[k]))
         if use_random_on_off:
             nodes_output[k] = RandomOnOff(rate=0.5)(nodes_output[k])
 
