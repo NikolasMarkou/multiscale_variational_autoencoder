@@ -191,6 +191,7 @@ def builder(
         params["kernel_size"] = (2, 2)
         params["strides"] = (2, 2)
         params["activation"] = conv_params_res_3[-1]["activation"]
+        params["kernel_regularizer"] = tf.keras.regularizers.L2(l2=0.00001)
         conv_params_up.append(params)
 
     # --- book keeping
