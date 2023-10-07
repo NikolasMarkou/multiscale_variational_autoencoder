@@ -154,7 +154,7 @@ def builder(
                 padding="same",
                 use_bias=use_bias,
                 activation="linear",
-                depthwise_regularizer=kernel_regularizer,
+                depthwise_regularizer=tf.keras.initializers.GlorotNormal(),
                 depthwise_initializer=kernel_initializer
             )
         conv_params_res_1.append(params)
@@ -164,6 +164,7 @@ def builder(
         params["kernel_size"] = (1, 1)
         params["activation"] = activation
         params["filters"] = filters_level * 4
+        params["kernel_initializer"] = tf.keras.initializers.HeNormal()
         if use_orthonormal_projections:
             logger.info("added SoftOrthonormalConstraintRegularizer")
             params["kernel_regularizer"] = \
@@ -177,6 +178,7 @@ def builder(
         params = copy.deepcopy(base_conv_params)
         params["kernel_size"] = (1, 1)
         params["activation"] = "linear"
+        params["kernel_initializer"] = tf.keras.initializers.GlorotNormal()
         params["filters"] = filters_level
         if use_orthonormal_projections:
             logger.info("added SoftOrthonormalConstraintRegularizer")
@@ -193,6 +195,7 @@ def builder(
         params["kernel_size"] = (2, 2)
         params["strides"] = (2, 2)
         params["activation"] = conv_params_res_3[-1]["activation"]
+        params["kernel_initializer"] = tf.keras.initializers.GlorotUniform()
         params["kernel_regularizer"] = tf.keras.regularizers.L2(l2=0.00001)
         conv_params_up.append(params)
 

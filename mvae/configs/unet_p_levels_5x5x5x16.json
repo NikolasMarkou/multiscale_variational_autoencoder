@@ -7,7 +7,7 @@
 			"parameters": {
 				"width": 1,
 				"levels": 5,
-				"backbone_kernel_size": 7,
+				"backbone_kernel_size": 5,
 				"kernel_size": 5,
 				"filters": 16,
 				"filters_level_multiplier": 2.0,
