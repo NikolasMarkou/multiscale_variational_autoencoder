@@ -146,7 +146,7 @@ def train_loop(
     visualization_number = train_config.get("visualization_number", 5)
 
     # --- train the model
-    with (tf.summary.create_file_writer(model_dir).as_default()):
+    with ((tf.summary.create_file_writer(model_dir).as_default())):
         # --- write configuration in tensorboard
         tf.summary.text("config", pformat(config), step=0)
 
@@ -330,7 +330,14 @@ def train_loop(
                 tf.constant(0.0, dtype=tf.float32)
                 for _ in range(len(trainable_variables))
             ]
-
+            prediction_denoiser = [
+                tf.constant(0.0, dtype=tf.float32)
+                for _ in denoiser_index
+            ]
+            all_denoiser_loss = [
+                None
+                for _ in denoiser_index
+            ]
             # --- check if total steps reached
             if total_steps != -1:
                 if total_steps <= ckpt.step:
@@ -378,33 +385,32 @@ def train_loop(
                             predictions = \
                                 train_denoiser_step(y)
 
-                            prediction_denoiser = [
-                                predictions[i] for i in denoiser_index
-                            ]
-
                             # compute the loss value for this mini-batch
-                            all_denoiser_loss = [
-                                denoiser_loss_fn(
-                                    input_batch=scale_gt_image_batch[i],
-                                    predicted_batch=prediction_denoiser[i])
-                                for i in range(len(prediction_denoiser))
-                            ]
-
                             total_denoiser_loss *= 0.0
-                            for i, s in enumerate(all_denoiser_loss):
-                                total_denoiser_loss += s[TOTAL_LOSS_STR] * depth_weight[i]
+                            for i, s in enumerate(denoiser_index):
+                                tmp_prediction = predictions[s]
+                                tmp_loss = \
+                                    denoiser_loss_fn(
+                                        input_batch=scale_gt_image_batch[i],
+                                        predicted_batch=tmp_prediction)
+                                total_denoiser_loss += \
+                                    tmp_loss[TOTAL_LOSS_STR] * \
+                                    float(output_discount_factor ** (float(i) * percentage_done))
+                                all_denoiser_loss[i] = tmp_loss
+                                prediction_denoiser[i] = tmp_prediction
 
                             # combine losses
                             model_loss = model_loss_fn(model=ckpt.hydra)
-                            total_loss = \
-                                total_denoiser_loss + \
-                                model_loss[TOTAL_LOSS_STR] * model_loss_multiplier
+                            total_loss = total_denoiser_loss + model_loss[TOTAL_LOSS_STR]
 
                             gradient = \
                                 tape.gradient(
                                     target=total_loss,
                                     sources=trainable_variables)
 
+                            del model_loss
+                            del total_loss
+                            del predictions
                         for i, grad in enumerate(gradient):
                             gradients[i] += grad
                         del gradient
@@ -437,12 +443,12 @@ def train_loop(
                 tf.summary.scalar(name=f"train/total",
                                   data=all_denoiser_loss[0][TOTAL_LOSS_STR],
                                   step=ckpt.step)
-                for i, d in enumerate(all_denoiser_loss):
+                for i, loss_train in enumerate(all_denoiser_loss):
                     tf.summary.scalar(name=f"debug/scale_{i}/mae",
-                                      data=d[MAE_LOSS_STR],
+                                      data=loss_train[MAE_LOSS_STR],
                                       step=ckpt.step)
                     tf.summary.scalar(name=f"debug/scale_{i}/ssim",
-                                      data=d[SSIM_LOSS_STR],
+                                      data=loss_train[SSIM_LOSS_STR],
                                       step=ckpt.step)
                 # model
                 tf.summary.scalar(name="loss/regularization",
@@ -470,19 +476,23 @@ def train_loop(
                                     values=[prediction_denoiser[0], x_error],
                                     axis=2)
                             ],
-                            axis=1)
+                            axis=1) / 255
                     tf.summary.image(name="train/collage",
-                                     data=x_collage / 255,
+                                     data=x_collage,
                                      max_outputs=visualization_number,
                                      step=ckpt.step)
+                    del x_error
+                    del x_collage
 
                     for i in range(len(prediction_denoiser)):
+                        x_collage = tf.concat(
+                                 values=[scale_gt_image_batch[i], prediction_denoiser[i]],
+                                 axis=2) / 255
                         tf.summary.image(name=f"debug/scale_{i}",
-                                         data=tf.concat(
-                                             values=[scale_gt_image_batch[i], prediction_denoiser[i]],
-                                             axis=2) / 255,
+                                         data=x_collage,
                                          max_outputs=visualization_number,
                                          step=ckpt.step)
+                        del x_collage
 
                     # --- add gradient activity
                     gradient_activity = \
@@ -494,6 +504,7 @@ def train_loop(
                                      max_outputs=visualization_number,
                                      step=ckpt.step,
                                      description="gradient activity")
+                    del gradient_activity
 
                     # --- add weights distribution
                     weights_boxplot = \
@@ -504,6 +515,8 @@ def train_loop(
                                      max_outputs=visualization_number,
                                      step=ckpt.step,
                                      description="weights boxplot")
+                    del weights_boxplot
+
                     weights_heatmap = \
                         visualize_weights_heatmap(
                             trainable_variables=trainable_variables) / 255
@@ -512,6 +525,7 @@ def train_loop(
                                      max_outputs=visualization_number,
                                      step=ckpt.step,
                                      description="weights heatmap")
+                    del weights_heatmap
 
                 # --- test
                 test_done = False
@@ -523,18 +537,18 @@ def train_loop(
                             test_denoiser_step(noisy_image_batch)
 
                         # compute the loss value for this mini-batch
-                        d = \
+                        loss_test = \
                             denoiser_loss_fn(
                                 input_batch=input_image_batch,
                                 predicted_batch=prediction_denoiser)
                         tf.summary.scalar(name=f"test/mae",
-                                          data=d[MAE_LOSS_STR],
+                                          data=loss_test[MAE_LOSS_STR],
                                           step=ckpt.step)
                         tf.summary.scalar(name=f"test/ssim",
-                                          data=d[SSIM_LOSS_STR],
+                                          data=loss_test[SSIM_LOSS_STR],
                                           step=ckpt.step)
                         tf.summary.scalar(name=f"test/total",
-                                          data=d[TOTAL_LOSS_STR],
+                                          data=loss_test[TOTAL_LOSS_STR],
                                           step=ckpt.step)
 
                         if (ckpt.step % visualization_every) == 0:
@@ -554,12 +568,18 @@ def train_loop(
                                             values=[prediction_denoiser, x_error],
                                             axis=2)
                                     ],
-                                    axis=1)
+                                    axis=1) / 255
                             tf.summary.image(name="test/collage",
-                                             data=x_collage / 255,
+                                             data=x_collage,
                                              max_outputs=visualization_number,
                                              step=ckpt.step)
+                            del x_error
+                            del x_collage
                         test_done = True
+                        del loss_test
+                        del input_image_batch
+                        del noisy_image_batch
+                        del prediction_denoiser
                     except tf.errors.OutOfRangeError:
                         dataset_test = iter(dataset.testing)
 
