@@ -324,8 +324,9 @@ def builder(
     nodes_output[(levels - 1, 1)] = nodes_output[(levels - 1, 0)]
 
     for k in nodes_output.keys():
+        depth = k[0]
         nodes_output[k] = \
-            tf.keras.layers.Layer(name=f"backbone_level_{str(k)}")(nodes_output[k])
+            tf.keras.layers.Layer(name=f"backbone_level_{depth}")(nodes_output[k])
 
     # --- create encoder
     model_encoder = tf.keras.Model(
