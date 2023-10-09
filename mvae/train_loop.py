@@ -418,7 +418,6 @@ def train_loop(
                                     target=total_loss,
                                     sources=trainable_variables)
 
-                            del total_loss
                             del predictions
                         for i, grad in enumerate(gradient):
                             gradients[i] += grad
