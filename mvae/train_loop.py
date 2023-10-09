@@ -146,7 +146,7 @@ def train_loop(
     visualization_number = train_config.get("visualization_number", 5)
 
     # --- train the model
-    with ((((tf.summary.create_file_writer(model_dir).as_default())))):
+    with ((tf.summary.create_file_writer(model_dir).as_default())):
         # --- write configuration in tensorboard
         tf.summary.text("config", pformat(config), step=0)
 
@@ -580,7 +580,7 @@ def train_loop(
                                             values=[input_image_batch_test, noisy_image_batch_test],
                                             axis=2),
                                         tf.concat(
-                                            values=[prediction_denoiser, x_error],
+                                            values=[prediction_denoiser_test, x_error],
                                             axis=2)
                                     ],
                                     axis=1) / 255
