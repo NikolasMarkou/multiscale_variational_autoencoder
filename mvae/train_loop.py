@@ -146,7 +146,7 @@ def train_loop(
     visualization_number = train_config.get("visualization_number", 5)
 
     # --- train the model
-    with ((tf.summary.create_file_writer(model_dir).as_default())):
+    with ((((tf.summary.create_file_writer(model_dir).as_default())))):
         # --- write configuration in tensorboard
         tf.summary.text("config", pformat(config), step=0)
 
@@ -360,8 +360,16 @@ def train_loop(
                         epoch_finished_training = True
                         break
 
-                    for x, y in [(input_image_batch, input_image_batch),
-                                 (input_image_batch, noisy_image_batch)]:
+                    expanded_data = [
+                        (input_image_batch, input_image_batch),
+                        (input_image_batch, noisy_image_batch)
+                    ]
+
+                    for t in expanded_data:
+                        # input
+                        x = t[0]
+                        # target
+                        y = t[1]
                         scale_gt_image_batch = [x]
                         tmp_gt_image = x
 
@@ -395,24 +403,28 @@ def train_loop(
                                         predicted_batch=tmp_prediction)
                                 total_denoiser_loss += \
                                     tmp_loss[TOTAL_LOSS_STR] * \
-                                    float(output_discount_factor ** (float(i) * percentage_done))
+                                    depth_weight[i]
                                 all_denoiser_loss[i] = tmp_loss
                                 prediction_denoiser[i] = tmp_prediction
 
                             # combine losses
                             model_loss = model_loss_fn(model=ckpt.hydra)
-                            total_loss = total_denoiser_loss + model_loss[TOTAL_LOSS_STR]
+                            total_loss = \
+                                total_denoiser_loss + \
+                                model_loss[TOTAL_LOSS_STR] * model_loss_multiplier
 
                             gradient = \
                                 tape.gradient(
                                     target=total_loss,
                                     sources=trainable_variables)
 
-                            del model_loss
                             del total_loss
                             del predictions
                         for i, grad in enumerate(gradient):
                             gradients[i] += grad
+
+                        del x
+                        del y
                         del gradient
 
                 # average out gradients
@@ -526,6 +538,10 @@ def train_loop(
                                      step=ckpt.step,
                                      description="weights heatmap")
                     del weights_heatmap
+
+                # ---
+                del input_image_batch
+                del noisy_image_batch
 
                 # --- test
                 test_done = False
