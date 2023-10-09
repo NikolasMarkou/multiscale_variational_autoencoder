@@ -255,7 +255,7 @@ def train_loop(
                 step=ckpt.step,
                 name="train/model_hydra")
 
-            _ = test_denoiser_step(iter(dataset.training).get_next())
+            _ = test_denoiser_step(iter(dataset.training).get_next()[0])
 
             tf.summary.trace_export(
                 step=ckpt.step,
