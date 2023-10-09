@@ -323,6 +323,10 @@ def builder(
     nodes_visited.add((levels - 1, 1))
     nodes_output[(levels - 1, 1)] = nodes_output[(levels - 1, 0)]
 
+    for k in nodes_output.keys():
+        nodes_output[k] = \
+            tf.keras.layers.Layer(name=f"backbone_level_{str(k)}")(nodes_output[k])
+
     # --- create encoder
     model_encoder = tf.keras.Model(
         name=f"{name}_encoder",
