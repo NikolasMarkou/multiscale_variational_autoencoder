@@ -321,7 +321,7 @@ def visualize_weights_heatmap(
     # of ax and the padding between cax and ax will be fixed at 0.05 inch.
     divider = make_axes_locatable(ax)
     cax = divider.append_axes("right", size="5%", pad=0.05, aspect=10)
-    fig.colorbar(im, cax=cax, ax=ax)
+    fig.colorbar(im, cax=cax)
 
     ax.set_title("weights distribution per layer")
     fig.tight_layout()
