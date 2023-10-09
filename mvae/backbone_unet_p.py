@@ -253,14 +253,18 @@ def builder(
                 # new level
                 if use_laplacian:
                     node_level = (i-1, 0)
+                    # gaussian blur
                     x_blurred = \
                         GaussianFilter(
                             kernel_size=(5, 5),
                             strides=(1, 1))(x)
+                    # laplacian
                     nodes_output[node_level] = \
                         nodes_output[node_level] - tf.stop_gradient(x_blurred)
+                    # half resolution
                     x = x_blurred[:, ::2, ::2, :]
                 else:
+                    # max pooling, half resolution
                     x = \
                         tf.keras.layers.MaxPooling2D(
                             pool_size=(2, 2), padding="same", strides=(2, 2))(x)
@@ -353,7 +357,9 @@ def builder(
     # --- move up
     while len(nodes_to_visit) > 0:
         node = nodes_to_visit.pop(0)
-        logger.info(f"node: [{node}, nodes_visited: {nodes_visited}, nodes_to_visit: {nodes_to_visit}")
+        logger.info(f"node: [{node}, "
+                    f"nodes_visited: {nodes_visited}, "
+                    f"nodes_to_visit: {nodes_to_visit}")
         logger.info(f"dependencies: {nodes_dependencies[node]}")
         # make sure a node is not visited twice
         if node in nodes_visited:
@@ -380,7 +386,9 @@ def builder(
 
         x_input = []
 
-        logger.debug(f"node: [{node}], dependencies: {dependencies}")
+        logger.debug(f"node: [{node}], "
+                     f"dependencies: {dependencies}")
+
         for d in dependencies:
             logger.debug(f"processing dependency: {d}")
             x = nodes_output[d]
@@ -397,8 +405,13 @@ def builder(
                     bn_post_params=None,
                     conv_params=conv_params_up[node[0]],
                     conv_type=ConvType.CONV2D_TRANSPOSE)
+                if dropout_params is not None:
+                    x = tf.keras.layers.Dropout(rate=dropout_params["rate"])(x)
+                if dropout_2d_params is not None:
+                    x = tf.keras.layers.SpatialDropout2D(rate=dropout_2d_params["rate"])(x)
             else:
-                raise ValueError(f"node: {node}, dependencies: {dependencies}, "
+                raise ValueError(f"node: {node}, "
+                                 f"dependencies: {dependencies}, "
                                  f"should not supposed to be here")
             x_input.append(x)
 
@@ -500,6 +513,14 @@ def builder(
     # reverse it so the deepest output is first
     # otherwise we will get the most shallow output
     output_layers = output_layers[::-1]
+
+    for i, o in enumerate(output_layers):
+        if bn_params is not None:
+            output_layers[i] = \
+                tf.keras.layers.BatchNormalization(**bn_params)(output_layers[i])
+        if ln_params is not None:
+            output_layers[i] = \
+                tf.keras.layers.LayerNormalization(**ln_params)(output_layers[i])
 
     # --- create decoder
     model_decoder = tf.keras.Model(

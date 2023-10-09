@@ -6,6 +6,7 @@ import numpy as np
 import tensorflow as tf
 from sklearn import metrics
 from typing import Union, List, Tuple
+from mpl_toolkits.axes_grid1 import make_axes_locatable
 
 # ---------------------------------------------------------------------
 
@@ -296,7 +297,7 @@ def visualize_weights_heatmap(
     plt.ioff()
     fig = plt.figure(figsize=figsize, dpi=dpi)
     ax = fig.add_subplot(111)
-    _ = \
+    im = \
         ax.imshow(
             weights_flat,
             cmap="viridis",
@@ -309,7 +310,6 @@ def visualize_weights_heatmap(
         rotation=30,
         fontsize=fontsize,
         ha="right")
-
     ax.set_yticks(
         np.arange(no_bins),
         labels=bins_space
@@ -317,6 +317,12 @@ def visualize_weights_heatmap(
     ax.set_yticklabels(
         ax.get_yticklabels(),
         fontsize=fontsize)
+    # create an axes on the right side of ax. The width of cax will be 5%
+    # of ax and the padding between cax and ax will be fixed at 0.05 inch.
+    divider = make_axes_locatable(ax)
+    cax = divider.append_axes("right", size="5%", pad=0.05, aspect=10)
+    fig.colorbar(im, cax=cax, ax=ax)
+
     ax.set_title("weights distribution per layer")
     fig.tight_layout()
     fig_buffer = draw_figure_to_buffer(fig=fig, dpi=dpi)

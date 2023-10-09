@@ -121,7 +121,6 @@ def train_loop(
         raise ValueError(f"output_discount_factor [{output_discount_factor}] "
                          f"must be between 0.0 and 1.0")
     #
-    ssl_epochs = train_config.get("ssl_epochs", -1)
     epochs = train_config["epochs"]
     gpu_batches_per_step = int(train_config.get("gpu_batches_per_step", 1))
     if gpu_batches_per_step <= 0:
@@ -250,12 +249,18 @@ def train_loop(
         if ckpt.step == 0:
             tf.summary.trace_on(graph=True, profiler=False)
 
-            # run a single step
             _ = train_denoiser_step(iter(dataset.training).get_next()[0])
 
             tf.summary.trace_export(
                 step=ckpt.step,
-                name="model_hydra")
+                name="train/model_hydra")
+
+            _ = test_denoiser_step(iter(dataset.training).get_next())
+
+            tf.summary.trace_export(
+                step=ckpt.step,
+                name="test/model_hydra")
+
             tf.summary.flush()
             tf.summary.trace_off()
 
@@ -264,7 +269,7 @@ def train_loop(
                 channels=input_shape[-1],
                 kernel_size=(5, 5),
                 nsig=(2.0, 2.0),
-                dtype=np.float32).astype('float32')
+                dtype=np.float32)
         gaussian_kernel = tf.constant(gaussian_kernel, dtype=tf.float32)
         model_loss_multiplier = tf.constant(1.0, dtype=tf.float32)
         depth_weight = [
@@ -305,7 +310,8 @@ def train_loop(
                 depth_weight[-1] = tf.constant(1.0, dtype=tf.float32)
             else:
                 depth_weight = [
-                    tf.constant(float(output_discount_factor ** (float(i) * percentage_done)), dtype=tf.float32)
+                    tf.constant(float(output_discount_factor ** (float(i) * percentage_done)),
+                                dtype=tf.float32)
                     for i in range(len(denoiser_index))
                 ]
 
