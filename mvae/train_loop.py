@@ -546,16 +546,16 @@ def train_loop(
                 test_done = False
                 while not test_done:
                     try:
-                        (input_image_batch, noisy_image_batch) = \
+                        (input_image_batch_test, noisy_image_batch_test) = \
                             dataset_test.get_next()
-                        prediction_denoiser = \
-                            test_denoiser_step(noisy_image_batch)
+                        prediction_denoiser_test = \
+                            test_denoiser_step(noisy_image_batch_test)
 
                         # compute the loss value for this mini-batch
                         loss_test = \
                             denoiser_loss_fn(
-                                input_batch=input_image_batch,
-                                predicted_batch=prediction_denoiser)
+                                input_batch=input_image_batch_test,
+                                predicted_batch=prediction_denoiser_test)
                         tf.summary.scalar(name=f"test/mae",
                                           data=loss_test[MAE_LOSS_STR],
                                           step=ckpt.step)
@@ -569,7 +569,7 @@ def train_loop(
                         if (ckpt.step % visualization_every) == 0:
                             x_error = \
                                 tf.clip_by_value(
-                                    tf.abs(input_image_batch - prediction_denoiser),
+                                    tf.abs(input_image_batch_test - prediction_denoiser_test),
                                     clip_value_min=0.0,
                                     clip_value_max=255.0
                                 )
@@ -577,7 +577,7 @@ def train_loop(
                                 tf.concat(
                                     values=[
                                         tf.concat(
-                                            values=[input_image_batch, noisy_image_batch],
+                                            values=[input_image_batch_test, noisy_image_batch_test],
                                             axis=2),
                                         tf.concat(
                                             values=[prediction_denoiser, x_error],
@@ -592,9 +592,9 @@ def train_loop(
                             del x_collage
                         test_done = True
                         del loss_test
-                        del input_image_batch
-                        del noisy_image_batch
-                        del prediction_denoiser
+                        del input_image_batch_test
+                        del noisy_image_batch_test
+                        del prediction_denoiser_test
                     except tf.errors.OutOfRangeError:
                         dataset_test = iter(dataset.testing)
 
