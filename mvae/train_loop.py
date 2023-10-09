@@ -247,20 +247,21 @@ def train_loop(
             return results[denoiser_index[0]]
 
         if ckpt.step == 0:
+            # trace train network
             tf.summary.trace_on(graph=True, profiler=False)
-
             _ = train_denoiser_step(iter(dataset.training).get_next()[0])
-
             tf.summary.trace_export(
                 step=ckpt.step,
                 name="train/model_hydra")
+            tf.summary.flush()
+            tf.summary.trace_off()
 
+            # trace test network
+            tf.summary.trace_on(graph=True, profiler=False)
             _ = test_denoiser_step(iter(dataset.training).get_next()[0])
-
             tf.summary.trace_export(
                 step=ckpt.step,
                 name="test/model_hydra")
-
             tf.summary.flush()
             tf.summary.trace_off()
 
