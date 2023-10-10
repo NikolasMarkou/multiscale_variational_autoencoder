@@ -280,11 +280,12 @@ def visualize_weights_heatmap(
         weights_flat[i, :] =\
             np.histogram(np.clip(w.numpy().flatten(), a_min=y_limits[0], a_max=y_limits[1]),
                          bins=bins,
-                         density=True,
+                         density=False,
                          range=y_limits)[0]
+        # normalize so sum is 1.0
+        weights_flat[i, :] = weights_flat[i, :] / np.sum(weights_flat[i, :])
     weights_flat = np.transpose(weights_flat)
-    # normalize from 0.0 to 1.0
-    weights_flat = weights_flat / 100.0
+
     bins_space = [
         "{:.2f}".format(b)
         for b in
