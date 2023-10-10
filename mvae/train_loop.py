@@ -428,6 +428,8 @@ def train_loop(
                         del y
                         del gradient
 
+                    del expanded_data
+
                 # average out gradients
                 for i in range(len(gradients)):
                     gradients[i] /= float(gpu_batches_per_step * 2)
