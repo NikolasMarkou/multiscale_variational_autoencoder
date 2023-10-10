@@ -58,7 +58,7 @@
 	},
 	"loss": {
 		"model": {
-			"regularization": 0.05
+			"regularization": 0.01
 		},
 		"autoencoder": {
 
