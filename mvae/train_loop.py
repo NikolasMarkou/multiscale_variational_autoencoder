@@ -89,14 +89,6 @@ def train_loop(
         tf.function(
             func=loss_fn_map[MODEL_LOSS_FN_STR],
             reduce_retracing=True)
-    denoiser_loss_fn = \
-        tf.function(
-            func=loss_fn_map[DENOISER_LOSS_FN_STR],
-            input_signature=[
-                tf.TensorSpec(shape=[batch_size, None, None, input_shape[-1]], dtype=tf.float32),
-                tf.TensorSpec(shape=[batch_size, None, None, input_shape[-1]], dtype=tf.float32),
-            ],
-            reduce_retracing=True)
 
     # --- build optimizer
     optimizer, lr_schedule = \
@@ -236,6 +228,19 @@ def train_loop(
 
         logger.info(f"model number of outputs: \n"
                     f"{pformat(model_no_outputs)}")
+
+        denoiser_loss_fn = [
+            tf.function(
+                func=copy.deepcopy(loss_fn_map[DENOISER_LOSS_FN_STR]),
+                jit_compile=True,
+                input_signature=[
+                    tf.TensorSpec(shape=[batch_size, None, None, input_shape[-1]], dtype=tf.float32),
+                    tf.TensorSpec(shape=[batch_size, None, None, input_shape[-1]], dtype=tf.float32),
+                ],
+                reduce_retracing=True)
+
+            for _ in denoiser_index
+        ]
 
         @tf.function(reduce_retracing=True, jit_compile=False)
         def train_denoiser_step(n: tf.Tensor) -> List[tf.Tensor]:
@@ -405,7 +410,7 @@ def train_loop(
                             for i, s in enumerate(denoiser_index):
                                 tmp_prediction = predictions[s]
                                 tmp_loss = \
-                                    denoiser_loss_fn(
+                                    denoiser_loss_fn[i](
                                         input_batch=scale_gt_image_batch[i],
                                         predicted_batch=tmp_prediction)
                                 total_denoiser_loss += \
@@ -488,8 +493,8 @@ def train_loop(
                         tf.concat(
                             values=[
                                 tf.concat(
-                                     values=[input_image_batch, noisy_image_batch],
-                                     axis=2),
+                                    values=[input_image_batch, noisy_image_batch],
+                                    axis=2),
                                 tf.concat(
                                     values=[prediction_denoiser[0], x_error],
                                     axis=2)
@@ -504,8 +509,8 @@ def train_loop(
 
                     for i in range(len(prediction_denoiser)):
                         x_collage = tf.concat(
-                                 values=[scale_gt_image_batch[i], prediction_denoiser[i]],
-                                 axis=2) / 255
+                            values=[scale_gt_image_batch[i], prediction_denoiser[i]],
+                            axis=2) / 255
                         tf.summary.image(name=f"debug/scale_{i}",
                                          data=x_collage,
                                          max_outputs=visualization_number,
@@ -560,7 +565,7 @@ def train_loop(
 
                         # compute the loss value for this mini-batch
                         loss_test = \
-                            denoiser_loss_fn(
+                            denoiser_loss_fn[0](
                                 input_batch=input_image_batch_test,
                                 predicted_batch=prediction_denoiser_test)
                         tf.summary.scalar(name=f"test/mae",
