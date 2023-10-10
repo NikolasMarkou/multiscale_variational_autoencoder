@@ -92,8 +92,7 @@ def skip_squeeze_and_excite_block(
         kernel_regularizer: str = "l2",
         kernel_initializer: str = "glorot_normal",
         bn_params: Dict = None,
-        ln_params: Dict = None,
-        dropout_params: Dict = None):
+        ln_params: Dict = None):
     """
     Skip Squeeze-and-Excitation Networks (2019)
     https://arxiv.org/abs/1709.01507
@@ -140,9 +139,6 @@ def skip_squeeze_and_excite_block(
             bn_post_params=bn_params,
             ln_post_params=ln_params,
             conv_params=params_1)
-
-    if dropout_params is not None:
-        x = tf.keras.layers.Dropout(rate=dropout_params["rate"])(x)
 
     if hard_sigmoid_version:
         x = \

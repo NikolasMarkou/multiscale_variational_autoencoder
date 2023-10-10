@@ -402,18 +402,18 @@ def builder(
                 pass
             elif d[0] > node[0]:
                 # lower level, upscale
-                x = conv2d_wrapper(
-                    input_layer=x,
-                    bn_params=bn_params,
-                    ln_params=ln_params,
-                    ln_post_params=None,
-                    bn_post_params=None,
-                    conv_params=conv_params_up[node[0]],
-                    conv_type=ConvType.CONV2D_TRANSPOSE)
                 if dropout_params is not None:
                     x = tf.keras.layers.Dropout(rate=dropout_params["rate"])(x)
                 if dropout_2d_params is not None:
                     x = tf.keras.layers.SpatialDropout2D(rate=dropout_2d_params["rate"])(x)
+                x = conv2d_wrapper(
+                    input_layer=x,
+                    bn_params=None,
+                    ln_params=None,
+                    ln_post_params=None,
+                    bn_post_params=None,
+                    conv_params=conv_params_up[node[0]],
+                    conv_type=ConvType.CONV2D_TRANSPOSE)
             else:
                 raise ValueError(f"node: {node}, "
                                  f"dependencies: {dependencies}, "
@@ -466,11 +466,10 @@ def builder(
                         control_layer=control_layer,
                         signal_layer=x,
                         flatten=False,
-                        hard_sigmoid_version=False,
+                        hard_sigmoid_version=True,
                         learn_to_turn_off=False,
                         bn_params=None,
-                        ln_params=None,
-                        dropout_params=dropout_params)
+                        ln_params=None)
             x = \
                 conv2d_wrapper(
                     input_layer=x,
@@ -518,14 +517,6 @@ def builder(
     # reverse it so the deepest output is first
     # otherwise we will get the most shallow output
     output_layers = output_layers[::-1]
-
-    for i, o in enumerate(output_layers):
-        if bn_params is not None:
-            output_layers[i] = \
-                tf.keras.layers.BatchNormalization(**bn_params)(output_layers[i])
-        if ln_params is not None:
-            output_layers[i] = \
-                tf.keras.layers.LayerNormalization(**ln_params)(output_layers[i])
 
     # --- create decoder
     model_decoder = tf.keras.Model(

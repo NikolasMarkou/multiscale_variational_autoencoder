@@ -373,7 +373,10 @@ def build_normalize_model(
 
     :return: normalization model
     """
-    model_input = tf.keras.Input(shape=input_dims)
+    model_input = (
+        tf.keras.Input(
+            shape=input_dims,
+            name=INPUT_TENSOR_STR))
 
     # --- normalize input
     # from [min_value, max_value] to [-0.5, +0.5]
@@ -409,7 +412,10 @@ def build_denormalize_model(
 
     :return: denormalization model
     """
-    model_input = tf.keras.Input(shape=input_dims)
+    model_input = (
+        tf.keras.Input(
+            shape=input_dims,
+            name=INPUT_TENSOR_STR))
 
     # --- denormalize input
     # from [-0.5, +0.5] to [v0, v1] range

@@ -280,9 +280,12 @@ def visualize_weights_heatmap(
         weights_flat[i, :] =\
             np.histogram(np.clip(w.numpy().flatten(), a_min=y_limits[0], a_max=y_limits[1]),
                          bins=bins,
-                         density=True,
+                         density=False,
                          range=y_limits)[0]
+        # normalize so sum is 1.0
+        weights_flat[i, :] = weights_flat[i, :] / np.sum(weights_flat[i, :])
     weights_flat = np.transpose(weights_flat)
+
     bins_space = [
         "{:.2f}".format(b)
         for b in
@@ -320,8 +323,13 @@ def visualize_weights_heatmap(
     # create an axes on the right side of ax. The width of cax will be 5%
     # of ax and the padding between cax and ax will be fixed at 0.05 inch.
     divider = make_axes_locatable(ax)
+    # color bar axis
     cax = divider.append_axes("right", size="5%", pad=0.05, aspect=10)
-    fig.colorbar(im, cax=cax)
+    # add color bar here
+    cbar = matplotlib.colorbar.ColorbarBase(
+        cax, cmap="viridis", norm=matplotlib.colors.Normalize(vmin=0.0, vmax=1.0))
+    # change label param here (it was too big)
+    cbar.ax.tick_params(labelsize=fontsize)
 
     ax.set_title("weights distribution per layer")
     fig.tight_layout()

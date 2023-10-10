@@ -277,7 +277,6 @@ def train_loop(
                 nsig=(2.0, 2.0),
                 dtype=np.float32)
         gaussian_kernel = tf.constant(gaussian_kernel, dtype=tf.float32)
-        model_loss_multiplier = tf.constant(1.0, dtype=tf.float32)
         depth_weight = [
             tf.constant(1.0, dtype=tf.float32)
             for _ in range(len(denoiser_index))
@@ -302,24 +301,19 @@ def train_loop(
             else:
                 percentage_done = 0.0
 
-            if ckpt.epoch == 0:
-                model_loss_multiplier = tf.constant(0.01, dtype=tf.float32)
-            else:
-                model_loss_multiplier = tf.constant(1.0, dtype=tf.float32)
+            # adjust weights per depth
+            sum_depth_weight = tf.constant(0.0, dtype=tf.float32)
+            depth_weight = [
+                tf.constant(float(output_discount_factor ** (float(i) * percentage_done)),
+                            dtype=tf.float32)
+                for i in range(len(denoiser_index))
+            ]
 
-            if ckpt.epoch == 0:
-                depth_weight = [
-                    tf.constant(1.0 / float(i + 1), dtype=tf.float32)
-                    for i in range(len(denoiser_index))
-                ]
-                depth_weight = depth_weight[::-1]
-                depth_weight[-1] = tf.constant(1.0, dtype=tf.float32)
-            else:
-                depth_weight = [
-                    tf.constant(float(output_discount_factor ** (float(i) * percentage_done)),
-                                dtype=tf.float32)
-                    for i in range(len(denoiser_index))
-                ]
+            for i in range(len(denoiser_index)):
+                sum_depth_weight += depth_weight[i]
+
+            for i in range(len(denoiser_index)):
+                depth_weight[i] /= sum_depth_weight
 
             depth_weight_str = [
                 "{0:.2f}".format(depth_weight[i])
@@ -350,6 +344,7 @@ def train_loop(
                 None
                 for _ in denoiser_index
             ]
+
             # --- check if total steps reached
             if total_steps != -1:
                 if total_steps <= ckpt.step:
@@ -423,7 +418,7 @@ def train_loop(
                             model_loss = model_loss_fn(model=ckpt.hydra)
                             total_loss = \
                                 total_denoiser_loss + \
-                                model_loss[TOTAL_LOSS_STR] * model_loss_multiplier
+                                model_loss[TOTAL_LOSS_STR]
 
                             gradient = \
                                 tape.gradient(
@@ -437,6 +432,8 @@ def train_loop(
                         del x
                         del y
                         del gradient
+
+                    del expanded_data
 
                 # average out gradients
                 for i in range(len(gradients)):
