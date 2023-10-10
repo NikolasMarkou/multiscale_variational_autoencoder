@@ -327,7 +327,6 @@ def visualize_weights_heatmap(
     # add color bar here
     cbar = matplotlib.colorbar.ColorbarBase(
         cax, cmap="viridis", norm=matplotlib.colors.Normalize(vmin=0.0, vmax=1.0))
-    cbar.set_clim(0.0, 1.0)
     # change label param here (it was too big)
     cbar.ax.tick_params(labelsize=fontsize)
 
