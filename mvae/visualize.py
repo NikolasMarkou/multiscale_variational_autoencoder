@@ -283,6 +283,8 @@ def visualize_weights_heatmap(
                          density=True,
                          range=y_limits)[0]
     weights_flat = np.transpose(weights_flat)
+    # normalize from 0.0 to 1.0
+    weights_flat = weights_flat / 100.0
     bins_space = [
         "{:.2f}".format(b)
         for b in
@@ -321,7 +323,8 @@ def visualize_weights_heatmap(
     # of ax and the padding between cax and ax will be fixed at 0.05 inch.
     divider = make_axes_locatable(ax)
     cax = divider.append_axes("right", size="5%", pad=0.05, aspect=10)
-    fig.colorbar(im, cax=cax)
+    cbar = fig.colorbar(im, cax=cax)
+    cbar.ax.tick_params(labelsize=fontsize)
 
     ax.set_title("weights distribution per layer")
     fig.tight_layout()
