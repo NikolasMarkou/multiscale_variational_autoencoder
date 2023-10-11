@@ -303,7 +303,7 @@ def train_loop(
             # adjust weights per depth
             sum_depth_weight = tf.constant(0.0, dtype=tf.float32)
             depth_weight = [
-                tf.constant(float(output_discount_factor ** (float(i) * percentage_done)),
+                tf.constant(float(output_discount_factor ** (float(i) * percentage_done + 1.0)),
                             dtype=tf.float32)
                 for i in range(len(denoiser_index))
             ]
