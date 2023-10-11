@@ -274,7 +274,6 @@ def train_loop(
             depthwise_gaussian_kernel(
                 channels=input_shape[-1],
                 kernel_size=(5, 5),
-                nsig=(2.0, 2.0),
                 dtype=np.float32)
         gaussian_kernel = tf.constant(gaussian_kernel, dtype=tf.float32)
         depth_weight = [

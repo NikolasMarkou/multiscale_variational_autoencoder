@@ -41,7 +41,6 @@ class GaussianFilter(tf.keras.layers.Layer):
             self,
             kernel_size: Tuple[int, int] = (5, 5),
             strides: Tuple[int, int] = [1, 1],
-            sigma: Tuple[float, float] = (1.0, 1.0),
             name: str = None,
             **kwargs):
         super(GaussianFilter, self).__init__(
@@ -56,7 +55,7 @@ class GaussianFilter(tf.keras.layers.Layer):
             strides = [1] + list(strides) + [1]
         self._kernel_size = kernel_size
         self._strides = strides
-        self._sigma = sigma
+        self._sigma = ((kernel_size[0] - 1) / 2, (kernel_size[1] - 1) / 2)
         self._kernel = None
 
     def build(self, input_shape):
@@ -65,7 +64,7 @@ class GaussianFilter(tf.keras.layers.Layer):
             depthwise_gaussian_kernel(
                 channels=input_shape[-1],
                 kernel_size=self._kernel_size,
-                nsig=self._sigma).astype('float32')
+                nsig=self._sigma).astype("float32")
 
     def get_config(self):
         return {
