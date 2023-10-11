@@ -105,7 +105,7 @@ def rmse(
 
 
 def loss_function_builder(
-        config: Dict) -> Callable:
+        config: Dict) -> Dict[str, Callable]:
     """
     Constructs the loss function of the denoiser and variational autoencoder
 
@@ -130,7 +130,7 @@ def loss_function_builder(
     model_params = config.get(MODEL_STR, None)
     regularization_multiplier = model_params.get("regularization", 1.0)
 
-    def model_loss(model):
+    def model_loss(model) -> Dict[str, tf.Tensor]:
         regularization_loss = \
             tf.add_n(model.losses)
         return {
@@ -167,14 +167,14 @@ def loss_function_builder(
         ssim_loss = (
             tf.constant(0.0, dtype=tf.float32))
         if use_ssim:
-            ssim_loss = \
+            ssim_loss += \
+                1.0 - \
                 tf.reduce_mean(
                     tf.image.ssim(
                         input_batch,
                         predicted_batch,
                         max_val=255.0,
                         filter_size=7))
-            ssim_loss = 1.0 - ssim_loss
 
         # --- loss prediction on mse
         mse_prediction_loss = \
@@ -199,7 +199,7 @@ def loss_function_builder(
     # ----
     return {
         MODEL_LOSS_FN_STR: model_loss,
-        DENOISER_LOSS_FN_STR: denoiser_loss,
+        DENOISER_LOSS_FN_STR: denoiser_loss
     }
 
 # ---------------------------------------------------------------------

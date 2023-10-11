@@ -168,9 +168,9 @@ def builder(
             logger.info("added SoftOrthonormalConstraintRegularizer")
             params["kernel_regularizer"] = \
                 SoftOrthonormalConstraintRegularizer(
-                    lambda_coefficient=0.1,
+                    lambda_coefficient=0.01,
                     l1_coefficient=0.0,
-                    l2_coefficient=0.0001)
+                    l2_coefficient=0.00001)
         conv_params_res_2.append(params)
 
         # 3rd residual conv
@@ -182,9 +182,9 @@ def builder(
             logger.info("added SoftOrthonormalConstraintRegularizer")
             params["kernel_regularizer"] = \
                 SoftOrthonormalConstraintRegularizer(
-                    lambda_coefficient=0.1,
+                    lambda_coefficient=0.01,
                     l1_coefficient=0.0,
-                    l2_coefficient=0.0001)
+                    l2_coefficient=0.00001)
         conv_params_res_3.append(params)
 
         # conv2d params when moving up the scale
@@ -423,7 +423,10 @@ def builder(
         if len(x_input) == 1:
             x = x_input[0]
         elif len(x_input) > 0:
-            x = tf.keras.layers.Concatenate()(x_input)
+            if use_laplacian:
+                x = tf.keras.layers.Add()(x_input)
+            else:
+                x = tf.keras.layers.Concatenate()(x_input)
         else:
             raise ValueError("this must never happen")
 
