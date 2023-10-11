@@ -49,8 +49,6 @@ class GaussianFilter(tf.keras.layers.Layer):
             **kwargs)
         if len(kernel_size) != 2:
             raise ValueError("kernel size must be length 2")
-        if len(sigma) != 2:
-            raise ValueError("sigma size must be length 2")
         if len(strides) == 2:
             strides = [1] + list(strides) + [1]
         self._kernel_size = kernel_size
