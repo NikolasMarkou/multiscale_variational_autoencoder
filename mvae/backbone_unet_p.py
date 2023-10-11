@@ -260,7 +260,7 @@ def builder(
                             strides=(1, 1))(x)
                     # laplacian
                     nodes_output[node_level] = \
-                        nodes_output[node_level] - tf.stop_gradient(x_blurred)
+                        nodes_output[node_level] - x_blurred
                     # half resolution
                     x = x_blurred[:, ::2, ::2, :]
                 else:
