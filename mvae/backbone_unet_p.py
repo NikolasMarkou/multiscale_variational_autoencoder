@@ -408,8 +408,8 @@ def builder(
                     x = tf.keras.layers.SpatialDropout2D(rate=dropout_2d_params["rate"])(x)
                 x = conv2d_wrapper(
                     input_layer=x,
-                    bn_params=None,
-                    ln_params=None,
+                    bn_params=bn_params,
+                    ln_params=ln_params,
                     ln_post_params=None,
                     bn_post_params=None,
                     conv_params=conv_params_up[node[0]],
