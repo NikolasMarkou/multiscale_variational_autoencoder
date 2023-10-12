@@ -125,12 +125,31 @@ def model_builder(
         config_denoisers.append(tmp_config_denoiser)
 
     # --- denoiser heads
-    model_denoisers = [
-        model_denoiser_builder(
-            config=config_denoisers[i],
-            name=f"denoiser_head_{i}")
-        for i in range(decoder_no_outputs)
-    ]
+    # check whether all the denoisers have the same input channels
+    def is_true_fn(c) -> bool:
+        return c[INPUT_SHAPE_STR][-1] == config_denoisers[0][INPUT_SHAPE_STR][-1]
+
+    common_model = all([is_true_fn(c) for c in config_denoisers])
+
+    if common_model:
+        logger.info("creating a common denoiser for each output")
+        denoiser = (
+            model_denoiser_builder(
+                config=config_denoisers[0],
+                name=f"denoiser_head_{0}"))
+        model_denoisers = [
+            denoiser
+            for _ in range(decoder_no_outputs)
+        ]
+    else:
+        logger.info("creating a different denoiser for each output")
+        model_denoisers = [
+            model_denoiser_builder(
+                config=config_denoisers[i],
+                name=f"denoiser_head_{i}")
+            for i in range(decoder_no_outputs)
+        ]
+
     denoisers_mid = [
         backbone_results.denormalizer(
             model_denoisers[i](decoding_results[i]), training=False)
