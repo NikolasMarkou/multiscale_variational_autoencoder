@@ -521,6 +521,18 @@ def builder(
     # otherwise we will get the most shallow output
     output_layers = output_layers[::-1]
 
+    if bn_params is not None:
+        output_layers = [
+            tf.keras.layers.BatchNormalization(**bn_params)(o)
+            for o in output_layers
+        ]
+
+    if ln_params is not None:
+        output_layers = [
+            tf.keras.layers.LayerNormalization(**ln_params)(o)
+            for o in output_layers
+        ]
+
     # --- create decoder
     model_decoder = tf.keras.Model(
         name=f"{name}_decoder",
