@@ -1,3 +1,5 @@
+import copy
+
 import numpy as np
 import tensorflow as tf
 from typing import Dict, Tuple, Union, List
@@ -102,22 +104,19 @@ class RandomOnOff(tf.keras.layers.Layer):
         self._dropout = None
 
     def build(self, input_shape):
-        def init_w0_fn(shape, dtype):
-            return np.ones(shape, dtype=np.float32)
-
-        self._w0 = \
-            self.add_variable(
-                shape=[1],
-                trainable=False,
-                regularizer=None,
-                name="placeholder",
-                initializer=init_w0_fn)
-        self._dropout = tf.keras.layers.Dropout(rate=self._rate)
+        noise_shape = [1, ] * len(input_shape)
+        noise_shape[0] = input_shape[0]
+        self._dropout = (
+            tf.keras.layers.Dropout(
+                rate=self._rate,
+                noise_shape=noise_shape))
         super(RandomOnOff, self).build(input_shape)
 
     def call(self, inputs, training):
-        return self._dropout(
-            self._w0, training=training) * inputs
+        if training:
+            return self._dropout(
+                inputs, training=training)
+        return inputs
 
     def get_config(self):
         return {
