@@ -160,7 +160,7 @@ class RandomOnOffGradient(tf.keras.layers.Layer):
                 name="placeholder",
                 initializer=init_w0_fn)
         self._dropout = tf.keras.layers.Dropout(rate=self._rate)
-        super(RandomOnOff, self).build(input_shape)
+        super(RandomOnOffGradient, self).build(input_shape)
 
     def call(self, inputs, training):
         if training:
