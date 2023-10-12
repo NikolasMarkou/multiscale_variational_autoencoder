@@ -366,77 +366,69 @@ def train_loop(
                         epoch_finished_training = True
                         break
 
-                    expanded_data = [
-                        (input_image_batch, input_image_batch),
-                        (input_image_batch, noisy_image_batch)
-                    ]
+                    # input
+                    x = input_image_batch
+                    # target
+                    y = noisy_image_batch
+                    scale_gt_image_batch = [x]
+                    tmp_gt_image = x
 
-                    for t in expanded_data:
-                        # input
-                        x = t[0]
-                        # target
-                        y = t[1]
-                        scale_gt_image_batch = [x]
-                        tmp_gt_image = x
+                    for i in range(1, len(denoiser_index), 1):
+                        # downsample, clip and round
+                        tmp_gt_image = \
+                            tf.round(
+                                tf.clip_by_value(
+                                    tf.nn.depthwise_conv2d(
+                                        input=tmp_gt_image,
+                                        filter=gaussian_kernel,
+                                        strides=(1, 2, 2, 1),
+                                        data_format=None,
+                                        dilations=None,
+                                        padding="SAME"),
+                                    clip_value_min=0.0,
+                                    clip_value_max=255.0))
+                        scale_gt_image_batch.append(tmp_gt_image)
 
-                        for i in range(1, len(denoiser_index), 1):
-                            # downsample, clip and round
-                            tmp_gt_image = \
-                                tf.round(
-                                    tf.clip_by_value(
-                                        tf.nn.depthwise_conv2d(
-                                            input=tmp_gt_image,
-                                            filter=gaussian_kernel,
-                                            strides=(1, 2, 2, 1),
-                                            data_format=None,
-                                            dilations=None,
-                                            padding="SAME"),
-                                        clip_value_min=0.0,
-                                        clip_value_max=255.0))
-                            scale_gt_image_batch.append(tmp_gt_image)
+                    with tf.GradientTape() as tape:
+                        predictions = \
+                            train_denoiser_step(y)
 
-                        with tf.GradientTape() as tape:
-                            predictions = \
-                                train_denoiser_step(y)
+                        # compute the loss value for this mini-batch
+                        total_denoiser_loss *= 0.0
+                        for i, s in enumerate(denoiser_index):
+                            tmp_prediction = predictions[s]
+                            tmp_loss = \
+                                denoiser_loss_fn[i](
+                                    input_batch=scale_gt_image_batch[i],
+                                    predicted_batch=tmp_prediction)
+                            total_denoiser_loss += \
+                                tmp_loss[TOTAL_LOSS_STR] * \
+                                depth_weight[i]
+                            all_denoiser_loss[i] = tmp_loss
+                            prediction_denoiser[i] = tmp_prediction
 
-                            # compute the loss value for this mini-batch
-                            total_denoiser_loss *= 0.0
-                            for i, s in enumerate(denoiser_index):
-                                tmp_prediction = predictions[s]
-                                tmp_loss = \
-                                    denoiser_loss_fn[i](
-                                        input_batch=scale_gt_image_batch[i],
-                                        predicted_batch=tmp_prediction)
-                                total_denoiser_loss += \
-                                    tmp_loss[TOTAL_LOSS_STR] * \
-                                    depth_weight[i]
-                                all_denoiser_loss[i] = tmp_loss
-                                prediction_denoiser[i] = tmp_prediction
+                        # combine losses
+                        model_loss = model_loss_fn(model=ckpt.hydra)
+                        total_loss = \
+                            total_denoiser_loss + \
+                            model_loss[TOTAL_LOSS_STR]
 
-                            # combine losses
-                            model_loss = model_loss_fn(model=ckpt.hydra)
-                            total_loss = \
-                                total_denoiser_loss + \
-                                model_loss[TOTAL_LOSS_STR]
+                        gradient = \
+                            tape.gradient(
+                                target=total_loss,
+                                sources=trainable_variables)
 
-                            gradient = \
-                                tape.gradient(
-                                    target=total_loss,
-                                    sources=trainable_variables)
+                        del predictions
+                    for i, grad in enumerate(gradient):
+                        gradients[i] += grad
 
-                            del predictions
-                        for i, grad in enumerate(gradient):
-                            gradients[i] += grad
-
-                        del x
-                        del y
-                        del gradient
-
-                    del expanded_data
+                    del x
+                    del y
+                    del gradient
 
                 # average out gradients
                 for i in range(len(gradients)):
-                    gradients[i] /= float(gpu_batches_per_step * 2)
+                    gradients[i] /= float(gpu_batches_per_step)
 
                 # apply gradient to change weights
                 optimizer.apply_gradients(
