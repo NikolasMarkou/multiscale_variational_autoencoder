@@ -176,7 +176,9 @@ def builder(
         # 3rd residual conv
         params = copy.deepcopy(base_conv_params)
         params["kernel_size"] = (1, 1)
-        params["activation"] = "linear"
+        #params["activation"] = "linear"
+        params["activation"] = activation
+        params["groups"] = 4
         params["filters"] = filters_level
         if use_orthonormal_projections:
             logger.info("added SoftOrthonormalConstraintRegularizer")
