@@ -199,6 +199,7 @@ def conv2d_wrapper(
         ln_post_params: Dict = None,
         dropout_params: Dict = None,
         dropout_2d_params: Dict = None,
+        bias_epsilon: float = 0.01,
         conv_type: Union[ConvType, str] = ConvType.CONV2D):
     """
     wraps a conv2d with a preceding normalizer
@@ -214,6 +215,7 @@ def conv2d_wrapper(
     :param ln_post_params: layer normalization parameters after the conv, None to disable ln
     :param dropout_params: dropout parameters after the conv, None to disable it
     :param dropout_2d_params: dropout parameters after the conv, None to disable it
+    :param bias_epsilon: small bias to ground the weights (experimental)
     :param conv_type: if true use depthwise convolution,
 
     :return: transformed input
@@ -278,6 +280,10 @@ def conv2d_wrapper(
         x = tf.keras.layers.SeparableConv2D(**conv_params)(x)
     else:
         raise ValueError(f"don't know how to handle this [{conv_type}]")
+
+    # --- add a small value to ground the weights
+    if bias_epsilon is not None:
+        x = x + bias_epsilon
 
     # --- dropout
     if use_dropout:
