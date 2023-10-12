@@ -92,14 +92,55 @@ class RandomOnOff(tf.keras.layers.Layer):
 
     def __init__(self,
                  rate: float = 0.5,
-                 trainable: bool = False,
                  name=None,
                  **kwargs):
         super(RandomOnOff, self).__init__(
-            trainable=trainable,
+            trainable=False,
             name=name,
             **kwargs)
-        self._w0 = None
+        self._rate = rate
+        self._dropout = None
+        self._noise_shape = None
+
+    def build(self, input_shape):
+        noise_shape = [1, ] * len(input_shape)
+        noise_shape[0] = input_shape[0]
+        self._noise_shape = noise_shape
+        self._dropout = (
+            tf.keras.layers.Dropout(
+                rate=self._rate,
+                noise_shape=noise_shape))
+        super(RandomOnOff, self).build(input_shape)
+
+    def call(self, inputs, training):
+        if training:
+            return self._dropout(
+                inputs, training=training)
+        return inputs
+
+    def get_config(self):
+        return {
+            "rate": self._rate,
+            "noise_shape": self._noise_shape
+        }
+
+    def compute_output_shape(self, input_shape):
+        return input_shape
+
+# ---------------------------------------------------------------------
+
+
+class RandomOnOffBatch(tf.keras.layers.Layer):
+    """randomly drops the whole connection"""
+
+    def __init__(self,
+                 rate: float = 0.5,
+                 name=None,
+                 **kwargs):
+        super(RandomOnOffBatch, self).__init__(
+            trainable=False,
+            name=name,
+            **kwargs)
         self._rate = rate
         self._dropout = None
 
