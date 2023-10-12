@@ -13,10 +13,12 @@ from typing import List, Dict, Union, Tuple
 
 from .constants import *
 from .custom_logger import logger
-from .custom_layers import GaussianFilter
+from .custom_layers import \
+    GaussianFilter, \
+    RandomOnOffGradient, \
+    RandomOnOff
 from .utilities import conv2d_wrapper, ConvType
 from .layer_blocks import (
-    RandomOnOff,
     skip_squeeze_and_excite_block,
     self_attention_block)
 from .regularizers import (
@@ -313,7 +315,7 @@ def builder(
         if use_random_on_off:
             # last level does not get an on off
             if k != (levels-1, 0):
-                nodes_output[k] = RandomOnOff(rate=0.5)(nodes_output[k])
+                nodes_output[k] = RandomOnOffGradient(rate=0.5)(nodes_output[k])
 
     nodes_visited.add((levels - 1, 1))
     nodes_output[(levels - 1, 1)] = nodes_output[(levels - 1, 0)]
