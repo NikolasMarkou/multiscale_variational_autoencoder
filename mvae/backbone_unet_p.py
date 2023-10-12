@@ -176,9 +176,10 @@ def builder(
         # 3rd residual conv
         params = copy.deepcopy(base_conv_params)
         params["kernel_size"] = (1, 1)
-        #params["activation"] = "linear"
-        params["activation"] = activation
-        params["groups"] = 4
+        params["activation"] = "linear"
+        # TODO try these
+        #params["activation"] = activation
+        #params["groups"] = 4
         params["filters"] = filters_level
         if use_orthonormal_projections:
             logger.info("added SoftOrthonormalConstraintRegularizer")
@@ -195,7 +196,6 @@ def builder(
         params["kernel_size"] = (2, 2)
         params["strides"] = (2, 2)
         params["activation"] = conv_params_res_3[-1]["activation"]
-        params["kernel_regularizer"] = tf.keras.regularizers.L2(l2=0.00001)
         conv_params_up.append(params)
 
     # --- book keeping
@@ -523,17 +523,16 @@ def builder(
     # otherwise we will get the most shallow output
     output_layers = output_layers[::-1]
 
-    if bn_params is not None:
-        output_layers = [
-            tf.keras.layers.BatchNormalization(**bn_params)(o)
-            for o in output_layers
-        ]
-
-    if ln_params is not None:
-        output_layers = [
-            tf.keras.layers.LayerNormalization(**ln_params)(o)
-            for o in output_layers
-        ]
+    # IMPORTANT
+    # top layer output does not get a normalization layer
+    # intermediate output get a normalization layer
+    for i in range(1, len(output_layers)):
+        output_layers[i] = \
+            conv2d_wrapper(
+                input_layer=output_layers[i],
+                bn_params=bn_params,
+                ln_params=ln_params,
+                conv_params=conv_params_res_3[0])
 
     # --- create decoder
     model_decoder = tf.keras.Model(
