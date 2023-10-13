@@ -151,7 +151,8 @@ def builder(
                 use_bias=use_bias,
                 activation="linear",
                 depthwise_regularizer=kernel_regularizer,
-                depthwise_initializer=kernel_initializer
+                depthwise_initializer=kernel_initializer,
+                depthwise_constraint=tf.keras.constraints.UnitNorm(axis=[0, 1, 2])
             )
         conv_params_res_1.append(params)
 
