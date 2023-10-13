@@ -17,7 +17,7 @@
 				"use_bias": false,
 				"use_laplacian": true,
 				"use_squeeze_excite": false,
-				"use_orthonormal_projections": false,
+				"use_orthonormal_projections": true,
 				"multiple_scale_outputs": true,
 				"kernel_regularizer": "l2",
 				"kernel_initializer": "glorot_uniform",
