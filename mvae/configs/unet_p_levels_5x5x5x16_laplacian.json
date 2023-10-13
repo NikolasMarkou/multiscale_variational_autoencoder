@@ -17,10 +17,11 @@
 				"use_bias": false,
 				"use_laplacian": true,
 				"use_squeeze_excite": false,
+				"use_orthonormal_projections": false,
 				"multiple_scale_outputs": true,
 				"kernel_regularizer": "l2",
 				"kernel_initializer": "glorot_uniform",
-				"dropout_rate": 0.5,
+				"dropout_rate": -1.0,
 				"spatial_dropout_rate": -1.0
 			}
 		},
@@ -58,7 +59,7 @@
 	},
 	"loss": {
 		"model": {
-			"regularization": 0.05
+			"regularization": 0.025
 		},
 		"autoencoder": {
 

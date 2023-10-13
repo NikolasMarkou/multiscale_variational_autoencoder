@@ -72,6 +72,7 @@ def builder(
     :param use_laplacian: remove per scale diffs
     :param use_self_attention:
     :param use_squeeze_excite:
+    :param use_random_on_off:
     :param use_orthonormal_projections: if True use orthonormal projections on the 1x1 kernels
     :param kernel_regularizer: Kernel weight regularizer
     :param kernel_initializer: Kernel weight initializer
@@ -165,7 +166,7 @@ def builder(
                 SoftOrthonormalConstraintRegularizer(
                     lambda_coefficient=0.01,
                     l1_coefficient=0.0,
-                    l2_coefficient=0.00001)
+                    l2_coefficient=1e-5)
         conv_params_res_2.append(params)
 
         # 3rd residual conv
@@ -182,7 +183,7 @@ def builder(
                 SoftOrthonormalConstraintRegularizer(
                     lambda_coefficient=0.01,
                     l1_coefficient=0.0,
-                    l2_coefficient=0.00001)
+                    l2_coefficient=1e-5)
         conv_params_res_3.append(params)
 
         # conv2d params when moving up the scale
