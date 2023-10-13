@@ -199,7 +199,7 @@ def conv2d_wrapper(
         ln_post_params: Dict = None,
         dropout_params: Dict = None,
         dropout_2d_params: Dict = None,
-        bias_epsilon: float = 0.01,
+        bias_epsilon: float = None,
         conv_type: Union[ConvType, str] = ConvType.CONV2D):
     """
     wraps a conv2d with a preceding normalizer
