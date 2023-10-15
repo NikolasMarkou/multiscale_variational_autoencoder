@@ -365,13 +365,8 @@ def train_loop(
                     except tf.errors.OutOfRangeError:
                         epoch_finished_training = True
                         break
-
-                    # input
-                    x = input_image_batch
-                    # target
-                    y = noisy_image_batch
-                    scale_gt_image_batch = [x]
-                    tmp_gt_image = x
+                    scale_gt_image_batch = [input_image_batch]
+                    tmp_gt_image = input_image_batch
 
                     for i in range(1, len(denoiser_index), 1):
                         # downsample, clip and round
@@ -391,7 +386,7 @@ def train_loop(
 
                     with tf.GradientTape() as tape:
                         predictions = \
-                            train_denoiser_step(y)
+                            train_denoiser_step(noisy_image_batch)
 
                         # compute the loss value for this mini-batch
                         total_denoiser_loss *= 0.0
@@ -421,9 +416,6 @@ def train_loop(
                         del predictions
                     for i, grad in enumerate(gradient):
                         gradients[i] += grad
-
-                    del x
-                    del y
                     del gradient
 
                 # average out gradients
@@ -478,13 +470,13 @@ def train_loop(
                             clip_value_max=255.0
                         )
                     x_collage = \
-                        tf.concat(
-                            values=[
-                                tf.concat(
-                                    values=[input_image_batch, noisy_image_batch],
+                        np.concatenate(
+                            [
+                                np.concatenate(
+                                    [input_image_batch.numpy(), noisy_image_batch.numpy()],
                                     axis=2),
-                                tf.concat(
-                                    values=[prediction_denoiser[0], x_error],
+                                np.concatenate(
+                                    [prediction_denoiser[0].numpy(), x_error.numpy()],
                                     axis=2)
                             ],
                             axis=1) / 255
@@ -496,9 +488,10 @@ def train_loop(
                     del x_collage
 
                     for i in range(len(prediction_denoiser)):
-                        x_collage = tf.concat(
-                            values=[scale_gt_image_batch[i], prediction_denoiser[i]],
-                            axis=2) / 255
+                        x_collage = \
+				np.concatenate(
+                            		[scale_gt_image_batch[i].numpy(), prediction_denoiser[i].numpy()],
+                            		axis=2) / 255
                         tf.summary.image(name=f"debug/scale_{i}",
                                          data=x_collage,
                                          max_outputs=visualization_number,
@@ -574,13 +567,13 @@ def train_loop(
                                     clip_value_max=255.0
                                 )
                             x_collage = \
-                                tf.concat(
-                                    values=[
-                                        tf.concat(
-                                            values=[input_image_batch_test, noisy_image_batch_test],
+                                np.concatenate(
+                                    [
+                                        np.concatenate(
+                                            [input_image_batch_test.numpy(), noisy_image_batch_test.numpy()],
                                             axis=2),
-                                        tf.concat(
-                                            values=[prediction_denoiser_test, x_error],
+                                        np.concatenate(
+                                            [prediction_denoiser_test.numpy(), x_error.numpy()],
                                             axis=2)
                                     ],
                                     axis=1) / 255

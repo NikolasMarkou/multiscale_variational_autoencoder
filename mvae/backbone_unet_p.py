@@ -43,7 +43,7 @@ def builder(
         use_laplacian: bool = False,
         use_self_attention: bool = False,
         use_squeeze_excite: bool = False,
-        use_random_on_off: bool = True,
+        use_random_on_off: bool = False,
         use_orthonormal_projections: bool = False,
         kernel_regularizer="l2",
         kernel_initializer="glorot_normal",
@@ -259,7 +259,7 @@ def builder(
                             strides=(1, 1))(x)
                     # laplacian
                     nodes_output[node_level] = \
-                        nodes_output[node_level] - x_blurred
+                        tf.stop_gradient(nodes_output[node_level] - x_blurred)
                     # half resolution
                     x = x_blurred[:, ::2, ::2, :]
                 else:
