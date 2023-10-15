@@ -401,7 +401,13 @@ def train_loop(
                                     sources=trainable_variables)
                         for i, grad in enumerate(gradient):
                             gradients[i] += grad
+
+                        # clean out memory
                         del gradient
+                        del input_image_batch
+                        del noisy_image_batch
+                        del scale_gt_image_batch
+
                     except tf.errors.OutOfRangeError:
                         epoch_finished_training = True
                         break
