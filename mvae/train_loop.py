@@ -276,7 +276,7 @@ def train_loop(
                 kernel_size=(5, 5),
                 dtype=np.float32)
         gaussian_kernel = tf.constant(gaussian_kernel, dtype=tf.float32)
-        depth_weight = [0.0] * range(len(denoiser_index))
+        depth_weight = [0.0] * len(denoiser_index)
         finished_training = False
         trainable_variables = ckpt.hydra.trainable_variables
         gradients = [
@@ -296,6 +296,7 @@ def train_loop(
             for _ in denoiser_index
         ]
         total_loss = tf.constant(0.0, dtype=tf.float32)
+        total_denoiser_loss = tf.constant(0.0, dtype=tf.float32)
 
         while not finished_training and \
                 (total_epochs == -1 or ckpt.epoch < total_epochs):
@@ -340,8 +341,6 @@ def train_loop(
                     logger.info("total_steps reached [{0}]".format(
                         int(total_steps)))
                     finished_training = True
-
-            total_denoiser_loss = tf.constant(0.0, dtype=tf.float32)
 
             # --- iterate over the batches of the dataset
             while not finished_training and \
