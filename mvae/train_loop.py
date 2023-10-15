@@ -307,10 +307,6 @@ def train_loop(
             tf.constant(0.0, dtype=tf.float32)
             for _ in range(len(trainable_variables))
         ]
-        prediction_denoiser = [
-            None
-            for _ in denoiser_index
-        ]
         all_denoiser_loss = [
             None
             for _ in denoiser_index
@@ -367,9 +363,10 @@ def train_loop(
 
                 start_time_forward_backward = time.time()
 
-                for _ in range(gpu_batches_per_step):
+                for b in range(gpu_batches_per_step):
                     try:
-                        (input_image_batch, noisy_image_batch) = dataset_train.get_next()
+                        (input_image_batch, noisy_image_batch) = \
+                            dataset_train.get_next()
                         scale_gt_image_batch = \
                             downsample_step(input_image_batch)
 
@@ -402,8 +399,36 @@ def train_loop(
                         for i, grad in enumerate(gradient):
                             gradients[i] += grad
 
+                        if b == 0:
+                            # --- add loss summaries for tensorboard
+                            tf.summary.scalar(name=f"train/mae",
+                                              data=all_denoiser_loss[0][MAE_LOSS_STR],
+                                              step=ckpt.step)
+                            tf.summary.scalar(name=f"train/ssim",
+                                              data=all_denoiser_loss[0][SSIM_LOSS_STR],
+                                              step=ckpt.step)
+                            tf.summary.scalar(name=f"train/total",
+                                              data=all_denoiser_loss[0][TOTAL_LOSS_STR],
+                                              step=ckpt.step)
+
+                            for i, loss_train in enumerate(all_denoiser_loss):
+                                tf.summary.scalar(name=f"debug/scale_{i}/mae",
+                                                  data=loss_train[MAE_LOSS_STR],
+                                                  step=ckpt.step)
+                                tf.summary.scalar(name=f"debug/scale_{i}/ssim",
+                                                  data=loss_train[SSIM_LOSS_STR],
+                                                  step=ckpt.step)
+                            # model
+                            tf.summary.scalar(name="loss/regularization",
+                                              data=model_loss[REGULARIZATION_LOSS_STR],
+                                              step=ckpt.step)
+                            tf.summary.scalar(name="loss/total",
+                                              data=total_loss,
+                                              step=ckpt.step)
                         # clean out memory
                         del gradient
+                        del predictions
+                        del all_denoiser_loss
                         del input_image_batch
                         del noisy_image_batch
                         del scale_gt_image_batch
@@ -429,32 +454,6 @@ def train_loop(
                         gradients_moving_average[i] * 0.99 + \
                         gradients[i] * 0.01
                     gradients[i] *= 0.0
-
-                # --- add loss summaries for tensorboard
-                tf.summary.scalar(name=f"train/mae",
-                                  data=all_denoiser_loss[0][MAE_LOSS_STR],
-                                  step=ckpt.step)
-                tf.summary.scalar(name=f"train/ssim",
-                                  data=all_denoiser_loss[0][SSIM_LOSS_STR],
-                                  step=ckpt.step)
-                tf.summary.scalar(name=f"train/total",
-                                  data=all_denoiser_loss[0][TOTAL_LOSS_STR],
-                                  step=ckpt.step)
-
-                for i, loss_train in enumerate(all_denoiser_loss):
-                    tf.summary.scalar(name=f"debug/scale_{i}/mae",
-                                      data=loss_train[MAE_LOSS_STR],
-                                      step=ckpt.step)
-                    tf.summary.scalar(name=f"debug/scale_{i}/ssim",
-                                      data=loss_train[SSIM_LOSS_STR],
-                                      step=ckpt.step)
-                # model
-                tf.summary.scalar(name="loss/regularization",
-                                  data=model_loss[REGULARIZATION_LOSS_STR],
-                                  step=ckpt.step)
-                tf.summary.scalar(name="loss/total",
-                                  data=total_loss,
-                                  step=ckpt.step)
 
                 # --- add image prediction for tensorboard
                 # if (ckpt.step % visualization_every) == 0:
