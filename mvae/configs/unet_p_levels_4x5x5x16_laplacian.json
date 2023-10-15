@@ -16,6 +16,7 @@
 				"use_ln": false,
 				"use_bias": false,
 				"use_laplacian": true,
+				"use_random_on_off": false,
 				"use_squeeze_excite": false,
 				"use_orthonormal_projections": true,
 				"multiple_scale_outputs": true,

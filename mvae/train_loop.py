@@ -276,14 +276,26 @@ def train_loop(
                 kernel_size=(5, 5),
                 dtype=np.float32)
         gaussian_kernel = tf.constant(gaussian_kernel, dtype=tf.float32)
-        depth_weight = [
-            tf.constant(1.0, dtype=tf.float32)
-            for _ in range(len(denoiser_index))
-        ]
-
-        # ---
+        depth_weight = [0.0] * range(len(denoiser_index))
         finished_training = False
         trainable_variables = ckpt.hydra.trainable_variables
+        gradients = [
+            tf.constant(0.0, dtype=tf.float32)
+            for _ in range(len(trainable_variables))
+        ]
+        gradients_moving_average = [
+            tf.constant(0.0, dtype=tf.float32)
+            for _ in range(len(trainable_variables))
+        ]
+        prediction_denoiser = [
+            tf.constant(0.0, dtype=tf.float32)
+            for _ in denoiser_index
+        ]
+        all_denoiser_loss = [
+            None
+            for _ in denoiser_index
+        ]
+        total_loss = tf.constant(0.0, dtype=tf.float32)
 
         while not finished_training and \
                 (total_epochs == -1 or ckpt.epoch < total_epochs):
@@ -301,14 +313,9 @@ def train_loop(
                 percentage_done = 0.0
 
             # adjust weights per depth
-            sum_depth_weight = tf.constant(0.0, dtype=tf.float32)
-            depth_weight = [
-                tf.constant(float(output_discount_factor ** (float(i) * percentage_done)),
-                            dtype=tf.float32)
-                for i in range(len(denoiser_index))
-            ]
-
+            sum_depth_weight = 0.0
             for i in range(len(denoiser_index)):
+                depth_weight[i] = float(output_discount_factor ** (float(i) * percentage_done))
                 sum_depth_weight += depth_weight[i]
 
             for i in range(len(denoiser_index)):
@@ -326,23 +333,6 @@ def train_loop(
             epoch_finished_training = False
             dataset_train = iter(dataset.training)
             dataset_test = iter(dataset.testing)
-            total_loss = tf.constant(0.0, dtype=tf.float32)
-            gradients = [
-                tf.constant(0.0, dtype=tf.float32)
-                for _ in range(len(trainable_variables))
-            ]
-            gradients_moving_average = [
-                tf.constant(0.0, dtype=tf.float32)
-                for _ in range(len(trainable_variables))
-            ]
-            prediction_denoiser = [
-                tf.constant(0.0, dtype=tf.float32)
-                for _ in denoiser_index
-            ]
-            all_denoiser_loss = [
-                None
-                for _ in denoiser_index
-            ]
 
             # --- check if total steps reached
             if total_steps != -1:
@@ -462,78 +452,74 @@ def train_loop(
                                   step=ckpt.step)
 
                 # --- add image prediction for tensorboard
-                if (ckpt.step % visualization_every) == 0:
-                    x_error = \
-                        tf.clip_by_value(
-                            tf.abs(input_image_batch - prediction_denoiser[0]),
-                            clip_value_min=0.0,
-                            clip_value_max=255.0
-                        )
-                    x_collage = \
-                        np.concatenate(
-                            [
-                                np.concatenate(
-                                    [input_image_batch.numpy(), noisy_image_batch.numpy()],
-                                    axis=2),
-                                np.concatenate(
-                                    [prediction_denoiser[0].numpy(), x_error.numpy()],
-                                    axis=2)
-                            ],
-                            axis=1) / 255
-                    tf.summary.image(name="train/collage",
-                                     data=x_collage,
-                                     max_outputs=visualization_number,
-                                     step=ckpt.step)
-                    del x_error
-                    del x_collage
-
-                    for i in range(len(prediction_denoiser)):
-                        x_collage = \
-				np.concatenate(
-                            		[scale_gt_image_batch[i].numpy(), prediction_denoiser[i].numpy()],
-                            		axis=2) / 255
-                        tf.summary.image(name=f"debug/scale_{i}",
-                                         data=x_collage,
-                                         max_outputs=visualization_number,
-                                         step=ckpt.step)
-                        del x_collage
-
-                    # --- add gradient activity
-                    gradient_activity = \
-                        visualize_gradient_boxplot(
-                            gradients=gradients_moving_average,
-                            trainable_variables=trainable_variables) / 255
-                    tf.summary.image(name="weights/gradients",
-                                     data=gradient_activity,
-                                     max_outputs=visualization_number,
-                                     step=ckpt.step,
-                                     description="gradient activity")
-                    del gradient_activity
-
-                    # --- add weights distribution
-                    weights_boxplot = \
-                        visualize_weights_boxplot(
-                            trainable_variables=trainable_variables) / 255
-                    tf.summary.image(name="weights/boxplot",
-                                     data=weights_boxplot,
-                                     max_outputs=visualization_number,
-                                     step=ckpt.step,
-                                     description="weights boxplot")
-                    del weights_boxplot
-
-                    weights_heatmap = \
-                        visualize_weights_heatmap(
-                            trainable_variables=trainable_variables) / 255
-                    tf.summary.image(name="weights/heatmap",
-                                     data=weights_heatmap,
-                                     max_outputs=visualization_number,
-                                     step=ckpt.step,
-                                     description="weights heatmap")
-                    del weights_heatmap
-
-                # ---
-                del input_image_batch
-                del noisy_image_batch
+                # if (ckpt.step % visualization_every) == 0:
+                #     x_error = \
+                #         tf.clip_by_value(
+                #             tf.abs(input_image_batch - prediction_denoiser[0]),
+                #             clip_value_min=0.0,
+                #             clip_value_max=255.0
+                #         )
+                #     x_collage = \
+                #         np.concatenate(
+                #             [
+                #                 np.concatenate(
+                #                     [input_image_batch.numpy(), noisy_image_batch.numpy()],
+                #                     axis=2),
+                #                 np.concatenate(
+                #                     [prediction_denoiser[0].numpy(), x_error.numpy()],
+                #                     axis=2)
+                #             ],
+                #             axis=1) / 255
+                #     tf.summary.image(name="train/collage",
+                #                      data=x_collage,
+                #                      max_outputs=visualization_number,
+                #                      step=ckpt.step)
+                #     del x_error
+                #     del x_collage
+                #
+                #     for i in range(len(prediction_denoiser)):
+                #         x_collage = \
+                #             np.concatenate(
+                #             		[scale_gt_image_batch[i].numpy(), prediction_denoiser[i].numpy()],
+                #             		axis=2) / 255
+                #         tf.summary.image(name=f"debug/scale_{i}",
+                #                          data=x_collage,
+                #                          max_outputs=visualization_number,
+                #                          step=ckpt.step)
+                #         del x_collage
+                #
+                #     # --- add gradient activity
+                #     gradient_activity = \
+                #         visualize_gradient_boxplot(
+                #             gradients=gradients_moving_average,
+                #             trainable_variables=trainable_variables) / 255
+                #     tf.summary.image(name="weights/gradients",
+                #                      data=gradient_activity,
+                #                      max_outputs=visualization_number,
+                #                      step=ckpt.step,
+                #                      description="gradient activity")
+                #     del gradient_activity
+                #
+                #     # --- add weights distribution
+                #     weights_boxplot = \
+                #         visualize_weights_boxplot(
+                #             trainable_variables=trainable_variables) / 255
+                #     tf.summary.image(name="weights/boxplot",
+                #                      data=weights_boxplot,
+                #                      max_outputs=visualization_number,
+                #                      step=ckpt.step,
+                #                      description="weights boxplot")
+                #     del weights_boxplot
+                #
+                #     weights_heatmap = \
+                #         visualize_weights_heatmap(
+                #             trainable_variables=trainable_variables) / 255
+                #     tf.summary.image(name="weights/heatmap",
+                #                      data=weights_heatmap,
+                #                      max_outputs=visualization_number,
+                #                      step=ckpt.step,
+                #                      description="weights heatmap")
+                #     del weights_heatmap
 
                 # --- test
                 test_done = False
@@ -559,30 +545,30 @@ def train_loop(
                                           data=loss_test[TOTAL_LOSS_STR],
                                           step=ckpt.step)
 
-                        if (ckpt.step % visualization_every) == 0:
-                            x_error = \
-                                tf.clip_by_value(
-                                    tf.abs(input_image_batch_test - prediction_denoiser_test),
-                                    clip_value_min=0.0,
-                                    clip_value_max=255.0
-                                )
-                            x_collage = \
-                                np.concatenate(
-                                    [
-                                        np.concatenate(
-                                            [input_image_batch_test.numpy(), noisy_image_batch_test.numpy()],
-                                            axis=2),
-                                        np.concatenate(
-                                            [prediction_denoiser_test.numpy(), x_error.numpy()],
-                                            axis=2)
-                                    ],
-                                    axis=1) / 255
-                            tf.summary.image(name="test/collage",
-                                             data=x_collage,
-                                             max_outputs=visualization_number,
-                                             step=ckpt.step)
-                            del x_error
-                            del x_collage
+                        # if (ckpt.step % visualization_every) == 0:
+                        #     x_error = \
+                        #         tf.clip_by_value(
+                        #             tf.abs(input_image_batch_test - prediction_denoiser_test),
+                        #             clip_value_min=0.0,
+                        #             clip_value_max=255.0
+                        #         )
+                        #     x_collage = \
+                        #         np.concatenate(
+                        #             [
+                        #                 np.concatenate(
+                        #                     [input_image_batch_test.numpy(), noisy_image_batch_test.numpy()],
+                        #                     axis=2),
+                        #                 np.concatenate(
+                        #                     [prediction_denoiser_test.numpy(), x_error.numpy()],
+                        #                     axis=2)
+                        #             ],
+                        #             axis=1) / 255
+                        #     tf.summary.image(name="test/collage",
+                        #                      data=x_collage,
+                        #                      max_outputs=visualization_number,
+                        #                      step=ckpt.step)
+                        #     del x_error
+                        #     del x_collage
                         test_done = True
                         del loss_test
                         del input_image_batch_test
