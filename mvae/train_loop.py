@@ -297,6 +297,7 @@ def train_loop(
         ]
         total_loss = tf.constant(0.0, dtype=tf.float32)
         total_denoiser_loss = tf.constant(0.0, dtype=tf.float32)
+        scale_gt_image_batch = [None] * len(denoiser_index)
 
         while not finished_training and \
                 (total_epochs == -1 or ckpt.epoch < total_epochs):
@@ -354,16 +355,15 @@ def train_loop(
                     except tf.errors.OutOfRangeError:
                         epoch_finished_training = True
                         break
-                    scale_gt_image_batch = [input_image_batch]
-                    tmp_gt_image = input_image_batch
+                    scale_gt_image_batch[0] = input_image_batch
 
                     for i in range(1, len(denoiser_index), 1):
                         # downsample, clip and round
-                        tmp_gt_image = \
+                        scale_gt_image_batch[i] = \
                             tf.round(
                                 tf.clip_by_value(
                                     tf.nn.depthwise_conv2d(
-                                        input=tmp_gt_image,
+                                        input=scale_gt_image_batch[i-1],
                                         filter=gaussian_kernel,
                                         strides=(1, 2, 2, 1),
                                         data_format=None,
@@ -371,7 +371,6 @@ def train_loop(
                                         padding="SAME"),
                                     clip_value_min=0.0,
                                     clip_value_max=255.0))
-                        scale_gt_image_batch.append(tmp_gt_image)
 
                     with tf.GradientTape() as tape:
                         predictions = \
@@ -380,16 +379,15 @@ def train_loop(
                         # compute the loss value for this mini-batch
                         total_denoiser_loss *= 0.0
                         for i, s in enumerate(denoiser_index):
-                            tmp_prediction = predictions[s]
                             tmp_loss = \
                                 denoiser_loss_fn[i](
                                     input_batch=scale_gt_image_batch[i],
-                                    predicted_batch=tmp_prediction)
+                                    predicted_batch=predictions[s])
                             total_denoiser_loss += \
                                 tmp_loss[TOTAL_LOSS_STR] * \
                                 depth_weight[i]
                             all_denoiser_loss[i] = tmp_loss
-                            prediction_denoiser[i] = tmp_prediction
+                            prediction_denoiser[i] = predictions[s]
 
                         # combine losses
                         model_loss = model_loss_fn(model=ckpt.hydra)
@@ -405,6 +403,7 @@ def train_loop(
                         del predictions
                     for i, grad in enumerate(gradient):
                         gradients[i] += grad
+
                     del gradient
 
                 # average out gradients
@@ -544,30 +543,30 @@ def train_loop(
                                           data=loss_test[TOTAL_LOSS_STR],
                                           step=ckpt.step)
 
-                        # if (ckpt.step % visualization_every) == 0:
-                        #     x_error = \
-                        #         tf.clip_by_value(
-                        #             tf.abs(input_image_batch_test - prediction_denoiser_test),
-                        #             clip_value_min=0.0,
-                        #             clip_value_max=255.0
-                        #         )
-                        #     x_collage = \
-                        #         np.concatenate(
-                        #             [
-                        #                 np.concatenate(
-                        #                     [input_image_batch_test.numpy(), noisy_image_batch_test.numpy()],
-                        #                     axis=2),
-                        #                 np.concatenate(
-                        #                     [prediction_denoiser_test.numpy(), x_error.numpy()],
-                        #                     axis=2)
-                        #             ],
-                        #             axis=1) / 255
-                        #     tf.summary.image(name="test/collage",
-                        #                      data=x_collage,
-                        #                      max_outputs=visualization_number,
-                        #                      step=ckpt.step)
-                        #     del x_error
-                        #     del x_collage
+                        if (ckpt.step % visualization_every) == 0:
+                            x_error = \
+                                tf.clip_by_value(
+                                    tf.abs(input_image_batch_test - prediction_denoiser_test),
+                                    clip_value_min=0.0,
+                                    clip_value_max=255.0
+                                )
+                            x_collage = \
+                                np.concatenate(
+                                    [
+                                        np.concatenate(
+                                            [input_image_batch_test.numpy(), noisy_image_batch_test.numpy()],
+                                            axis=2),
+                                        np.concatenate(
+                                            [prediction_denoiser_test.numpy(), x_error.numpy()],
+                                            axis=2)
+                                    ],
+                                    axis=1) / 255
+                            tf.summary.image(name="test/collage",
+                                             data=x_collage,
+                                             max_outputs=visualization_number,
+                                             step=ckpt.step)
+                            del x_error
+                            del x_collage
                         test_done = True
                         del loss_test
                         del input_image_batch_test
