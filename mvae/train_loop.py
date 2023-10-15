@@ -315,12 +315,7 @@ def train_loop(
             None
             for _ in denoiser_index
         ]
-        scale_gt_image_batch = [
-            None
-            for _ in denoiser_index
-        ]
         total_denoiser_loss = tf.constant(0.0, dtype=tf.float32)
-
 
         while not finished_training and \
                 (total_epochs == -1 or ckpt.epoch < total_epochs):
@@ -375,44 +370,41 @@ def train_loop(
                 for _ in range(gpu_batches_per_step):
                     try:
                         (input_image_batch, noisy_image_batch) = dataset_train.get_next()
+                        scale_gt_image_batch = \
+                            downsample_step(input_image_batch)
+
+                        with tf.GradientTape() as tape:
+                            predictions = \
+                                train_denoiser_step(noisy_image_batch)
+
+                            # compute the loss value for this mini-batch
+                            total_denoiser_loss *= 0.0
+                            for i, s in enumerate(denoiser_index):
+                                all_denoiser_loss[i] = \
+                                    denoiser_loss_fn[i](
+                                        input_batch=scale_gt_image_batch[i],
+                                        predicted_batch=predictions[s])
+                                total_denoiser_loss += \
+                                    all_denoiser_loss[i][TOTAL_LOSS_STR] * \
+                                    depth_weight[i]
+
+                            # combine losses
+                            model_loss = \
+                                model_loss_fn(model=ckpt.hydra)
+                            total_loss = \
+                                total_denoiser_loss + \
+                                model_loss[TOTAL_LOSS_STR]
+
+                            gradient = \
+                                tape.gradient(
+                                    target=total_loss,
+                                    sources=trainable_variables)
+                        for i, grad in enumerate(gradient):
+                            gradients[i] += grad
+                        del gradient
                     except tf.errors.OutOfRangeError:
                         epoch_finished_training = True
                         break
-
-                    scale_gt_image_batch = \
-                        downsample_step(input_image_batch)
-
-                    with tf.GradientTape() as tape:
-                        predictions = \
-                            train_denoiser_step(noisy_image_batch)
-
-                        # compute the loss value for this mini-batch
-                        total_denoiser_loss *= 0.0
-                        for i, s in enumerate(denoiser_index):
-                            loss_i = \
-                                denoiser_loss_fn[i](
-                                    input_batch=scale_gt_image_batch[i],
-                                    predicted_batch=predictions[s])
-                            total_denoiser_loss += \
-                                loss_i[TOTAL_LOSS_STR] * \
-                                depth_weight[i]
-                            all_denoiser_loss[i] = loss_i
-                            prediction_denoiser[i] = predictions[s]
-
-                        # combine losses
-                        model_loss = \
-                            model_loss_fn(model=ckpt.hydra)
-                        total_loss = \
-                            total_denoiser_loss + \
-                            model_loss[TOTAL_LOSS_STR]
-
-                        gradient = \
-                            tape.gradient(
-                                target=total_loss,
-                                sources=trainable_variables)
-                    for i, grad in enumerate(gradient):
-                        gradients[i] += grad
-                    del gradient
 
                 # average out gradients
                 for i in range(len(gradients)):
@@ -580,6 +572,10 @@ def train_loop(
                         #     del x_error
                         #     del x_collage
                         test_done = True
+                        del loss_test
+                        del noisy_image_batch_test
+                        del input_image_batch_test
+                        del prediction_denoiser_test
                     except tf.errors.OutOfRangeError:
                         dataset_test = iter(dataset.testing)
 
