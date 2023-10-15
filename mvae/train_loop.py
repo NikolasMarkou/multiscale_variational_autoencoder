@@ -251,6 +251,26 @@ def train_loop(
             results = ckpt.hydra(n, training=False)
             return results[denoiser_index[0]]
 
+        @tf.function(reduce_retracing=True, jit_compile=False)
+        def downsample_step(n: tf.Tensor) -> List[tf.Tensor]:
+            scales = [n]
+
+            for _ in range(1, len(denoiser_index), 1):
+                # downsample, clip and round
+                scales.append(
+                    tf.round(
+                        tf.clip_by_value(
+                            tf.nn.depthwise_conv2d(
+                                input=scales[-1],
+                                filter=gaussian_kernel,
+                                strides=(1, 2, 2, 1),
+                                data_format=None,
+                                dilations=None,
+                                padding="SAME"),
+                            clip_value_min=0.0,
+                            clip_value_max=255.0)))
+            return scales
+
         if ckpt.step == 0:
             # trace train network
             tf.summary.trace_on(graph=True, profiler=False)
@@ -358,22 +378,9 @@ def train_loop(
                     except tf.errors.OutOfRangeError:
                         epoch_finished_training = True
                         break
-                    scale_gt_image_batch[0] = input_image_batch
 
-                    for i in range(1, len(denoiser_index), 1):
-                        # downsample, clip and round
-                        scale_gt_image_batch[i] = \
-                            tf.round(
-                                tf.clip_by_value(
-                                    tf.nn.depthwise_conv2d(
-                                        input=scale_gt_image_batch[i - 1],
-                                        filter=gaussian_kernel,
-                                        strides=(1, 2, 2, 1),
-                                        data_format=None,
-                                        dilations=None,
-                                        padding="SAME"),
-                                    clip_value_min=0.0,
-                                    clip_value_max=255.0))
+                    scale_gt_image_batch = \
+                        downsample_step(input_image_batch)
 
                     with tf.GradientTape() as tape:
                         predictions = \
@@ -391,7 +398,6 @@ def train_loop(
                                 depth_weight[i]
                             all_denoiser_loss[i] = loss_i
                             prediction_denoiser[i] = predictions[s]
-                            del loss_i
 
                         # combine losses
                         model_loss = \
@@ -404,11 +410,8 @@ def train_loop(
                             tape.gradient(
                                 target=total_loss,
                                 sources=trainable_variables)
-
-                        del predictions
                     for i, grad in enumerate(gradient):
                         gradients[i] += grad
-
                     del gradient
 
                 # average out gradients
@@ -577,10 +580,6 @@ def train_loop(
                         #     del x_error
                         #     del x_collage
                         test_done = True
-                        del loss_test
-                        del input_image_batch_test
-                        del noisy_image_batch_test
-                        del prediction_denoiser_test
                     except tf.errors.OutOfRangeError:
                         dataset_test = iter(dataset.testing)
 
