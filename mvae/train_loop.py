@@ -288,16 +288,19 @@ def train_loop(
             for _ in range(len(trainable_variables))
         ]
         prediction_denoiser = [
-            tf.constant(0.0, dtype=tf.float32)
+            None
             for _ in denoiser_index
         ]
         all_denoiser_loss = [
             None
             for _ in denoiser_index
         ]
-        total_loss = tf.constant(0.0, dtype=tf.float32)
+        scale_gt_image_batch = [
+            None
+            for _ in denoiser_index
+        ]
         total_denoiser_loss = tf.constant(0.0, dtype=tf.float32)
-        scale_gt_image_batch = [None] * len(denoiser_index)
+
 
         while not finished_training and \
                 (total_epochs == -1 or ckpt.epoch < total_epochs):
@@ -363,7 +366,7 @@ def train_loop(
                             tf.round(
                                 tf.clip_by_value(
                                     tf.nn.depthwise_conv2d(
-                                        input=scale_gt_image_batch[i-1],
+                                        input=scale_gt_image_batch[i - 1],
                                         filter=gaussian_kernel,
                                         strides=(1, 2, 2, 1),
                                         data_format=None,
@@ -379,18 +382,20 @@ def train_loop(
                         # compute the loss value for this mini-batch
                         total_denoiser_loss *= 0.0
                         for i, s in enumerate(denoiser_index):
-                            tmp_loss = \
+                            loss_i = \
                                 denoiser_loss_fn[i](
                                     input_batch=scale_gt_image_batch[i],
                                     predicted_batch=predictions[s])
                             total_denoiser_loss += \
-                                tmp_loss[TOTAL_LOSS_STR] * \
+                                loss_i[TOTAL_LOSS_STR] * \
                                 depth_weight[i]
-                            all_denoiser_loss[i] = tmp_loss
+                            all_denoiser_loss[i] = loss_i
                             prediction_denoiser[i] = predictions[s]
+                            del loss_i
 
                         # combine losses
-                        model_loss = model_loss_fn(model=ckpt.hydra)
+                        model_loss = \
+                            model_loss_fn(model=ckpt.hydra)
                         total_loss = \
                             total_denoiser_loss + \
                             model_loss[TOTAL_LOSS_STR]
@@ -434,6 +439,7 @@ def train_loop(
                 tf.summary.scalar(name=f"train/total",
                                   data=all_denoiser_loss[0][TOTAL_LOSS_STR],
                                   step=ckpt.step)
+
                 for i, loss_train in enumerate(all_denoiser_loss):
                     tf.summary.scalar(name=f"debug/scale_{i}/mae",
                                       data=loss_train[MAE_LOSS_STR],
@@ -461,10 +467,12 @@ def train_loop(
                 #         np.concatenate(
                 #             [
                 #                 np.concatenate(
-                #                     [input_image_batch.numpy(), noisy_image_batch.numpy()],
+                #                     [input_image_batch.numpy(),
+                #                      noisy_image_batch.numpy()],
                 #                     axis=2),
                 #                 np.concatenate(
-                #                     [prediction_denoiser[0].numpy(), x_error.numpy()],
+                #                     [prediction_denoiser[0].numpy(),
+                #                      x_error.numpy()],
                 #                     axis=2)
                 #             ],
                 #             axis=1) / 255
@@ -478,8 +486,9 @@ def train_loop(
                 #     for i in range(len(prediction_denoiser)):
                 #         x_collage = \
                 #             np.concatenate(
-                #             		[scale_gt_image_batch[i].numpy(), prediction_denoiser[i].numpy()],
-                #             		axis=2) / 255
+                #                 [scale_gt_image_batch[i].numpy(),
+                #                  prediction_denoiser[i].numpy()],
+                #                 axis=2) / 255
                 #         tf.summary.image(name=f"debug/scale_{i}",
                 #                          data=x_collage,
                 #                          max_outputs=visualization_number,
@@ -543,30 +552,30 @@ def train_loop(
                                           data=loss_test[TOTAL_LOSS_STR],
                                           step=ckpt.step)
 
-                        if (ckpt.step % visualization_every) == 0:
-                            x_error = \
-                                tf.clip_by_value(
-                                    tf.abs(input_image_batch_test - prediction_denoiser_test),
-                                    clip_value_min=0.0,
-                                    clip_value_max=255.0
-                                )
-                            x_collage = \
-                                np.concatenate(
-                                    [
-                                        np.concatenate(
-                                            [input_image_batch_test.numpy(), noisy_image_batch_test.numpy()],
-                                            axis=2),
-                                        np.concatenate(
-                                            [prediction_denoiser_test.numpy(), x_error.numpy()],
-                                            axis=2)
-                                    ],
-                                    axis=1) / 255
-                            tf.summary.image(name="test/collage",
-                                             data=x_collage,
-                                             max_outputs=visualization_number,
-                                             step=ckpt.step)
-                            del x_error
-                            del x_collage
+                        # if (ckpt.step % visualization_every) == 0:
+                        #     x_error = \
+                        #         tf.clip_by_value(
+                        #             tf.abs(input_image_batch_test - prediction_denoiser_test),
+                        #             clip_value_min=0.0,
+                        #             clip_value_max=255.0
+                        #         )
+                        #     x_collage = \
+                        #         np.concatenate(
+                        #             [
+                        #                 np.concatenate(
+                        #                     [input_image_batch_test.numpy(), noisy_image_batch_test.numpy()],
+                        #                     axis=2),
+                        #                 np.concatenate(
+                        #                     [prediction_denoiser_test.numpy(), x_error.numpy()],
+                        #                     axis=2)
+                        #             ],
+                        #             axis=1) / 255
+                        #     tf.summary.image(name="test/collage",
+                        #                      data=x_collage,
+                        #                      max_outputs=visualization_number,
+                        #                      step=ckpt.step)
+                        #     del x_error
+                        #     del x_collage
                         test_done = True
                         del loss_test
                         del input_image_batch_test
