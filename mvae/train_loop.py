@@ -253,7 +253,7 @@ def train_loop(
                 ],
                 reduce_retracing=True)
 
-        @tf.function(reduce_retracing=True, jit_compile=False, autograph=True)
+        @tf.function(reduce_retracing=True, jit_compile=True, autograph=False)
         def train_denoiser_step(n: tf.Tensor) -> List[tf.Tensor]:
             return ckpt.hydra(n, training=True)
 
