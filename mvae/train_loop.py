@@ -257,24 +257,18 @@ def train_loop(
         def train_denoiser_step(n: tf.Tensor) -> List[tf.Tensor]:
             return ckpt.hydra(n, training=True)
 
-        @tf.function(reduce_retracing=True, jit_compile=False)
+        @tf.function(reduce_retracing=True, jit_compile=False, autograph=False)
         def test_denoiser_step(n: tf.Tensor) -> tf.Tensor:
             results = ckpt.hydra(n, training=False)
             return results[denoiser_index[0]]
 
         @tf.function(reduce_retracing=True, jit_compile=False, autograph=False)
-        def downsample_step(n: tf.Tensor) -> tf.TensorArray:
-            scales = \
-                tf.TensorArray(
-                    dtype=tf.float32,
-                    size=denoiser_levels,
-                    dynamic_size=False,
-                    clear_after_read=False,
-                    infer_shape=False)
+        def downsample_step(n: tf.Tensor) -> List[tf.Tensor]:
+            scales = []
 
             n_scale = n
             for i in range(denoiser_levels):
-                scales.write(index=i, value=n_scale)
+                scales.append(n_scale)
                 # downsample, clip and round
                 n_scale = \
                     tf.round(
