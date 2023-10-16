@@ -248,14 +248,6 @@ def train_loop(
                 ],
                 reduce_retracing=True)
 
-        gaussian_kernel = \
-            tf.constant(
-                depthwise_gaussian_kernel(
-                    channels=input_shape[-1],
-                    kernel_size=(5, 5),
-                    dtype=np.float32),
-                dtype=tf.float32)
-
         @tf.function(reduce_retracing=True, jit_compile=False)
         def train_denoiser_step(n: tf.Tensor) -> List[tf.Tensor]:
             return ckpt.hydra(n, training=True)
@@ -314,7 +306,7 @@ def train_loop(
             for _ in range(len(trainable_variables))
         ]
         total_denoiser_loss = \
-            tf.Variable(0.0, dtype=tf.float32)
+            tf.constant(0.0, dtype=tf.float32)
 
         while not finished_training and \
                 (total_epochs == -1 or ckpt.epoch < total_epochs):
@@ -381,8 +373,7 @@ def train_loop(
                         downsample_step(input_image_batch)
 
                     # zero out loss
-                    total_denoiser_loss.assign(value=0.0)
-                    #total_denoiser_loss *= 0.0
+                    total_denoiser_loss *= 0.0
 
                     with tf.GradientTape() as tape:
                         predictions = \
@@ -394,9 +385,9 @@ def train_loop(
                                 denoiser_loss_fn(
                                     input_batch=scale_gt_image_batch[i],
                                     predicted_batch=predictions[idx])
-                            total_denoiser_loss.assign_add(
-                                loss_scale_i[TOTAL_LOSS_STR] *
-                                depth_weight[i])
+                            total_denoiser_loss += \
+                                loss_scale_i[TOTAL_LOSS_STR] * \
+                                depth_weight[i]
 
                         # combine losses
                         model_loss = \
@@ -412,6 +403,8 @@ def train_loop(
 
                         for i, grad in enumerate(gradient):
                             gradients[i] += grad / gpu_batches_per_step_constant
+
+                        del gradient
 
                 # apply gradient to change weights
                 optimizer.apply_gradients(
