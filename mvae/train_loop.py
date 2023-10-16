@@ -414,12 +414,12 @@ def train_loop(
                                 gradients[i] += (grad / gpu_batches_per_step_float)
                         del gradient
 
-                    # del model_loss
-                    # del total_loss
-                    # del predictions
-                    # del input_image_batch
-                    # del noisy_image_batch
-                    # del total_denoiser_loss
+                    del model_loss
+                    del total_loss
+                    del predictions
+                    del input_image_batch
+                    del noisy_image_batch
+                    del total_denoiser_loss
 
                 # apply gradient to change weights
                 optimizer.apply_gradients(
