@@ -381,7 +381,8 @@ def train_loop(
                     # zero out loss
                     total_denoiser_loss = 0.0
 
-                    with tf.GradientTape() as tape:
+                    with tf.GradientTape(persistent=False,
+                                         watch_accessed_variables=False) as tape:
                         predictions = \
                             train_denoiser_step(noisy_image_batch)
 
