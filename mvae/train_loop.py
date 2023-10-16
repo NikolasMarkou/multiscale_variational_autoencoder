@@ -311,7 +311,7 @@ def train_loop(
             for _ in range(len(trainable_variables))
         ]
         total_denoiser_loss = \
-            tf.Variable(initial_value=0.0, dtype=tf.float32, trainable=False)
+            tf.constant(0.0, dtype=tf.float32)
 
         while not finished_training and \
                 (total_epochs == -1 or ckpt.epoch < total_epochs):
@@ -375,17 +375,16 @@ def train_loop(
                                 train_denoiser_step(noisy_image_batch)
 
                             # compute the loss value for this mini-batch
-                            total_denoiser_loss.assign(0.0)
+                            total_denoiser_loss *= total_denoiser_loss
 
-                            all_denoiser_loss = []
                             for i in range(denoiser_levels):
-                                all_denoiser_loss.append(
+                                loss_scale_i = \
                                     denoiser_loss_fn[i](
                                         input_batch=scale_gt_image_batch[i],
-                                        predicted_batch=predictions[i]))
-                                total_denoiser_loss.assign_add(
-                                    all_denoiser_loss[-1][TOTAL_LOSS_STR] *
-                                    depth_weight[i])
+                                        predicted_batch=predictions[i])
+                                total_denoiser_loss += \
+                                    loss_scale_i[TOTAL_LOSS_STR] * \
+                                    depth_weight[i]
 
                             # combine losses
                             model_loss = \
