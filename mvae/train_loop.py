@@ -245,6 +245,7 @@ def train_loop(
         denoiser_loss_fn = \
             tf.function(
                 func=copy.deepcopy(loss_fn_map[DENOISER_LOSS_FN_STR]),
+                autograph=True,
                 jit_compile=False,
                 input_signature=[
                     tf.TensorSpec(shape=[batch_size, None, None, input_shape[-1]], dtype=tf.float32),
@@ -256,16 +257,16 @@ def train_loop(
         def train_denoiser_step(n: tf.Tensor) -> List[tf.Tensor]:
             return ckpt.hydra(n, training=True)
 
-        @tf.function(reduce_retracing=True, jit_compile=False, autograph=False)
+        @tf.function(reduce_retracing=True, jit_compile=False, autograph=True)
         def test_denoiser_step(n: tf.Tensor) -> tf.Tensor:
             results = ckpt.hydra(n, training=False)
             return results[denoiser_index[0]]
 
-        @tf.function(reduce_retracing=True, jit_compile=False, autograph=False)
+        @tf.function(reduce_retracing=True, jit_compile=False, autograph=True)
         def downsample_step(n: tf.Tensor) -> List[tf.Tensor]:
             scales = []
-
             n_scale = n
+
             for _ in range(denoiser_levels):
                 scales.append(n_scale)
                 # downsample, clip and round
@@ -379,12 +380,11 @@ def train_loop(
                         downsample_step(input_image_batch)
 
                     # zero out loss
-                    total_denoiser_loss = tf.constant(0.0, dtype=tf.float32)
-
                     with tf.GradientTape(persistent=False,
                                          watch_accessed_variables=False) as tape:
                         tape.watch(trainable_variables)
 
+                        total_denoiser_loss = 0.0
                         predictions = \
                             train_denoiser_step(noisy_image_batch)
 
