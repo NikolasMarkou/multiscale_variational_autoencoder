@@ -307,6 +307,10 @@ def train_loop(
         ]
         total_denoiser_loss = \
             tf.constant(0.0, dtype=tf.float32)
+        all_denoiser_loss = [
+            None
+            for _ in range(denoiser_levels)
+        ]
 
         while not finished_training and \
                 (total_epochs == -1 or ckpt.epoch < total_epochs):
@@ -361,6 +365,10 @@ def train_loop(
 
                 start_time_forward_backward = time.time()
 
+                # zero gradients to reuse it in the next iteration
+                for i in range(len(gradients)):
+                    gradients[i] *= 0.0
+
                 for _ in range(gpu_batches_per_step):
                     try:
                         (input_image_batch, noisy_image_batch) = \
@@ -388,6 +396,7 @@ def train_loop(
                             total_denoiser_loss += \
                                 loss_scale_i[TOTAL_LOSS_STR] * \
                                 depth_weight[i]
+                            all_denoiser_loss[i] = loss_scale_i
 
                         # combine losses
                         model_loss = \
@@ -401,9 +410,9 @@ def train_loop(
                                 target=total_loss,
                                 sources=trainable_variables)
 
+                        # aggregate gradients
                         for i, grad in enumerate(gradient):
                             gradients[i] += grad / gpu_batches_per_step_constant
-
                         del gradient
 
                 # apply gradient to change weights
@@ -413,82 +422,50 @@ def train_loop(
                         trainable_variables),
                     skip_gradients_aggregation=False)
 
-                # --- zero gradients to reuse it in the next iteration
-                for i in range(len(gradients)):
-                    gradients[i] *= 0.0
+                # --- add loss summaries for tensorboard
+                tf.summary.scalar(name=f"train/mae",
+                                  data=all_denoiser_loss[0][MAE_LOSS_STR],
+                                  step=ckpt.step)
+                tf.summary.scalar(name=f"train/ssim",
+                                  data=all_denoiser_loss[0][SSIM_LOSS_STR],
+                                  step=ckpt.step)
+                tf.summary.scalar(name=f"train/total",
+                                  data=all_denoiser_loss[0][TOTAL_LOSS_STR],
+                                  step=ckpt.step)
+                for i, loss_train in enumerate(all_denoiser_loss):
+                    tf.summary.scalar(name=f"debug/scale_{i}/mae",
+                                      data=loss_train[MAE_LOSS_STR],
+                                      step=ckpt.step)
+                # model
+                tf.summary.scalar(name="loss/regularization",
+                                  data=model_loss[REGULARIZATION_LOSS_STR],
+                                  step=ckpt.step)
+                tf.summary.scalar(name="loss/total",
+                                  data=total_loss,
+                                  step=ckpt.step)
 
                 # --- add image prediction for tensorboard
-                # if (ckpt.step % visualization_every) == 0:
-                #     x_error = \
-                #         tf.clip_by_value(
-                #             tf.abs(input_image_batch - prediction_denoiser[0]),
-                #             clip_value_min=0.0,
-                #             clip_value_max=255.0
-                #         )
-                #     x_collage = \
-                #         np.concatenate(
-                #             [
-                #                 np.concatenate(
-                #                     [input_image_batch.numpy(),
-                #                      noisy_image_batch.numpy()],
-                #                     axis=2),
-                #                 np.concatenate(
-                #                     [prediction_denoiser[0].numpy(),
-                #                      x_error.numpy()],
-                #                     axis=2)
-                #             ],
-                #             axis=1) / 255
-                #     tf.summary.image(name="train/collage",
-                #                      data=x_collage,
-                #                      max_outputs=visualization_number,
-                #                      step=ckpt.step)
-                #     del x_error
-                #     del x_collage
-                #
-                #     for i in range(len(prediction_denoiser)):
-                #         x_collage = \
-                #             np.concatenate(
-                #                 [scale_gt_image_batch[i].numpy(),
-                #                  prediction_denoiser[i].numpy()],
-                #                 axis=2) / 255
-                #         tf.summary.image(name=f"debug/scale_{i}",
-                #                          data=x_collage,
-                #                          max_outputs=visualization_number,
-                #                          step=ckpt.step)
-                #         del x_collage
-                #
-                #     # --- add gradient activity
-                #     gradient_activity = \
-                #         visualize_gradient_boxplot(
-                #             gradients=gradients_moving_average,
-                #             trainable_variables=trainable_variables) / 255
-                #     tf.summary.image(name="weights/gradients",
-                #                      data=gradient_activity,
-                #                      max_outputs=visualization_number,
-                #                      step=ckpt.step,
-                #                      description="gradient activity")
-                #     del gradient_activity
-                #
-                #     # --- add weights distribution
-                #     weights_boxplot = \
-                #         visualize_weights_boxplot(
-                #             trainable_variables=trainable_variables) / 255
-                #     tf.summary.image(name="weights/boxplot",
-                #                      data=weights_boxplot,
-                #                      max_outputs=visualization_number,
-                #                      step=ckpt.step,
-                #                      description="weights boxplot")
-                #     del weights_boxplot
-                #
-                #     weights_heatmap = \
-                #         visualize_weights_heatmap(
-                #             trainable_variables=trainable_variables) / 255
-                #     tf.summary.image(name="weights/heatmap",
-                #                      data=weights_heatmap,
-                #                      max_outputs=visualization_number,
-                #                      step=ckpt.step,
-                #                      description="weights heatmap")
-                #     del weights_heatmap
+                if (ckpt.step % visualization_every) == 0:
+                    # --- add weights distribution
+                    weights_boxplot = \
+                        visualize_weights_boxplot(
+                            trainable_variables=trainable_variables) / 255
+                    tf.summary.image(name="weights/boxplot",
+                                     data=weights_boxplot,
+                                     max_outputs=visualization_number,
+                                     step=ckpt.step,
+                                     description="weights boxplot")
+                    del weights_boxplot
+
+                    weights_heatmap = \
+                        visualize_weights_heatmap(
+                            trainable_variables=trainable_variables) / 255
+                    tf.summary.image(name="weights/heatmap",
+                                     data=weights_heatmap,
+                                     max_outputs=visualization_number,
+                                     step=ckpt.step,
+                                     description="weights heatmap")
+                    del weights_heatmap
 
                 # --- test
                 # test_done = False
