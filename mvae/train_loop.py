@@ -364,7 +364,7 @@ def train_loop(
                 start_time_forward_backward = time.time()
 
                 gradients = None
-                all_denoiser_loss = []
+                all_denoiser_loss = [None] * denoiser_levels
 
                 for b in range(gpu_batches_per_step):
                     try:
@@ -393,8 +393,7 @@ def train_loop(
                             total_denoiser_loss += \
                                 loss_train[TOTAL_LOSS_STR] * \
                                 depth_weight[i]
-                            if b == (gpu_batches_per_step - 1):
-                                all_denoiser_loss.append(loss_train)
+                            all_denoiser_loss[i] = loss_train
 
                         # combine losses
                         model_loss = \
@@ -421,9 +420,10 @@ def train_loop(
                     del gradient
                     del tape
 
-                    if b < (gpu_batches_per_step - 1):
+                    if b != (gpu_batches_per_step - 1):
                         del model_loss
                         del total_loss
+                        del predictions
                         del all_denoiser_loss
 
                 # apply gradient to change weights
