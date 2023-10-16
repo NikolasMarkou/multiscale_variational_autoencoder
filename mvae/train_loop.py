@@ -263,11 +263,17 @@ def train_loop(
             return results[denoiser_index[0]]
 
         @tf.function(reduce_retracing=True, jit_compile=False)
-        def downsample_step(n: tf.Tensor) -> List[tf.Tensor]:
-            scales = [None] * denoiser_levels
+        def downsample_step(n: tf.Tensor) -> tf.TensorArray:
+            scales = \
+                tf.TensorArray(
+                    dtype=tf.float32,
+                    size=denoiser_levels,
+                    dynamic_size=False,
+                    infer_shape=False)
+
             n_scale = n
-            for i in range(denoiser_levels):
-                scales[i] = n_scale
+            for i in tf.range(denoiser_levels):
+                scales.write(index=i, value=n_scale)
                 # downsample, clip and round
                 n_scale = \
                     tf.round(
@@ -333,17 +339,17 @@ def train_loop(
                 percentage_done = 0.0
 
             # adjust weights per depth
-            sum_depth_weight = \
-                tf.constant(0.0, dtype=tf.float32)
+            sum_depth_weight = 0.0
             for i in range(len(denoiser_index)):
                 depth_weight[i] = \
-                        tf.constant(
-                            float(output_discount_factor ** (float(i) * percentage_done)),
-                            dtype=tf.float32)
+                            float(output_discount_factor ** (float(i) * percentage_done))
                 sum_depth_weight += depth_weight[i]
 
             for i in range(len(denoiser_index)):
-                depth_weight[i] /= sum_depth_weight
+                depth_weight[i] = \
+                    tf.constant(
+                        depth_weight[i] / sum_depth_weight,
+                        dtype=tf.float32)
 
             depth_weight_str = [
                 "{0:.2f}".format(depth_weight[i])
