@@ -409,16 +409,15 @@ def train_loop(
                                 target=total_loss,
                                 sources=trainable_variables)
 
-                    # aggregate gradients
-                    if b == 0:
-                        for grad in gradient:
-                            gradients.append(grad / gpu_batches_per_step_float)
-                    else:
-                        for i, grad in enumerate(gradient):
-                            gradients[i] += (grad / gpu_batches_per_step_float)
+                        # aggregate gradients
+                        if b == 0:
+                            for grad in gradient:
+                                gradients.append(grad / gpu_batches_per_step_float)
+                        else:
+                            for i, grad in enumerate(gradient):
+                                gradients[i] += (grad / gpu_batches_per_step_float)
+                        del gradient
 
-                    del tape
-                    del gradient
                     del model_loss
                     del total_loss
                     del predictions
