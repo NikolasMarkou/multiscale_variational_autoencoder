@@ -369,7 +369,7 @@ def train_loop(
                 for i in range(len(gradients)):
                     gradients[i] *= 0.0
 
-                for _ in range(gpu_batches_per_step):
+                for b in range(gpu_batches_per_step):
                     try:
                         (input_image_batch, noisy_image_batch) = \
                             dataset_train.get_next()
@@ -396,10 +396,11 @@ def train_loop(
                             total_denoiser_loss += \
                                 loss_scale_i[TOTAL_LOSS_STR] * \
                                 depth_weight[i]
-                            all_denoiser_loss[i] = {
-                                v: k.numpy()
-                                for k, v in loss_scale_i.items()
-                            }
+                            if b == 0:
+                                all_denoiser_loss[i] = {
+                                    k: v.numpy()
+                                    for k, v in loss_scale_i.items()
+                                }
                             del loss_scale_i
 
                         # combine losses
