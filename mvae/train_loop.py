@@ -415,15 +415,15 @@ def train_loop(
                                 target=total_loss,
                                 sources=trainable_variables)
 
-                        if b == 0:
-                            for k, v in model_loss.items():
-                                model_loss_t[k] = v.numpy()
-                            total_loss_t = total_loss.numpy()
-
                     # aggregate gradients
                     for i, grad in enumerate(gradient):
                         gradients[i] += grad / gpu_batches_per_step_constant
                     del gradient
+
+                    if b == 0:
+                        for k, v in model_loss.items():
+                            model_loss_t[k] = v.numpy()
+                        total_loss_t = total_loss.numpy()
 
                 # apply gradient to change weights
                 optimizer.apply_gradients(
