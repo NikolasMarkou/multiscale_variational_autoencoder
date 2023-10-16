@@ -267,7 +267,7 @@ def train_loop(
             scales = []
 
             n_scale = n
-            for i in range(denoiser_levels):
+            for _ in range(denoiser_levels):
                 scales.append(n_scale)
                 # downsample, clip and round
                 n_scale = \
@@ -404,7 +404,7 @@ def train_loop(
                                 loss_train[TOTAL_LOSS_STR] * \
                                 depth_weight[i]
                             # update dictionaries
-                            #all_denoiser_loss[i] = loss_train
+                            all_denoiser_loss[i] = loss_train
 
                         # combine losses
                         model_loss = \
@@ -422,6 +422,7 @@ def train_loop(
                     for i, grad in enumerate(gradient):
                         gradients[i] += (grad / gpu_batches_per_step_constant)
 
+                    del scale_gt_image_batch
                     del gradient
                     del tape
 
