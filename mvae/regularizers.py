@@ -19,18 +19,10 @@ from .custom_logger import logger
 # ---------------------------------------------------------------------
 
 
-@tf.function(
-    input_signature=[
-        tf.TensorSpec(shape=(None, None),
-                      dtype=tf.float32)])
 def reshape_2d_to_2d(w: tf.Tensor):
     return tf.transpose(w, perm=(1, 0))
 
 
-@tf.function(
-    input_signature=[
-        tf.TensorSpec(shape=(None, None, None, None),
-                      dtype=tf.float32)])
 def reshape_4d_to_2d(w: tf.Tensor) -> tf.Tensor:
     w_t = \
         tf.transpose(
@@ -41,7 +33,6 @@ def reshape_4d_to_2d(w: tf.Tensor) -> tf.Tensor:
             shape=(tf.shape(w_t)[0], -1))
 
 
-@tf.function
 def reshape_to_2d(weights: tf.Tensor) -> tf.Tensor:
     rank = len(weights.shape)
     if rank == 2:
@@ -54,7 +45,6 @@ def reshape_to_2d(weights: tf.Tensor) -> tf.Tensor:
 # ---------------------------------------------------------------------
 
 
-@tf.function
 def wt_x_w(weights: tf.Tensor) -> tf.Tensor:
     # --- reshape
     wt = reshape_to_2d(weights)
