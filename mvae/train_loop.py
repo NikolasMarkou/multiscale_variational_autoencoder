@@ -120,7 +120,8 @@ def train_loop(
     gpu_batches_per_step = int(train_config.get("gpu_batches_per_step", 1))
     if gpu_batches_per_step <= 0:
         raise ValueError("gpu_batches_per_step must be > 0")
-    gpu_batches_per_step_constant = tf.constant(float(gpu_batches_per_step), dtype=tf.float32)
+    gpu_batches_per_step_constant = \
+        tf.constant(float(gpu_batches_per_step), dtype=tf.float32)
 
     # how many checkpoints to keep
     checkpoints_to_keep = \
@@ -230,13 +231,6 @@ def train_loop(
         model_no_outputs = model_output_indices(len(ckpt.hydra.outputs))
         denoiser_index = model_no_outputs[DENOISER_STR]
         denoiser_levels = len(denoiser_index)
-        gaussian_kernel = \
-            tf.constant(
-                depthwise_gaussian_kernel(
-                    channels=input_shape[-1],
-                    kernel_size=(5, 5),
-                    dtype=np.float32),
-                dtype=tf.float32)
 
         logger.info(f"model number of outputs: \n"
                     f"{pformat(model_no_outputs)}")
@@ -262,6 +256,16 @@ def train_loop(
 
         @tf.function(reduce_retracing=True, jit_compile=False)
         def downsample_step(n: tf.Tensor) -> List[tf.Tensor]:
+            # this is set only once in the first call
+            gaussian_kernel = \
+                tf.Variable(
+                    initial_value=depthwise_gaussian_kernel(
+                        channels=input_shape[-1],
+                        kernel_size=(5, 5),
+                        dtype=np.float32),
+                    trainable=False,
+                    dtype=tf.float32)
+
             scales = [n]
             for _ in range(1, denoiser_levels, 1):
                 # downsample, clip and round
@@ -304,10 +308,6 @@ def train_loop(
         ]
         finished_training = False
         trainable_variables = ckpt.hydra.trainable_variables
-        gradients = [
-            0.0
-            for _ in range(len(trainable_variables))
-        ]
         all_denoiser_loss = [
             dict()
             for _ in range(denoiser_levels)
@@ -367,8 +367,10 @@ def train_loop(
                 start_time_forward_backward = time.time()
 
                 # zero gradients to reuse it in the next iteration
-                for i in range(len(gradients)):
-                    gradients[i] = 0.0
+                gradients = [
+                    0.0
+                    for _ in range(len(trainable_variables))
+                ]
 
                 for b in range(gpu_batches_per_step):
                     try:
@@ -421,7 +423,7 @@ def train_loop(
 
                     # aggregate gradients
                     for i, grad in enumerate(gradient):
-                        gradients[i] = gradients[i] + (grad / gpu_batches_per_step_constant)
+                        gradients[i] += (grad / gpu_batches_per_step_constant)
 
                     del gradient
                     del total_loss
@@ -434,6 +436,8 @@ def train_loop(
                         gradients,
                         trainable_variables),
                     skip_gradients_aggregation=False)
+
+                del gradients
 
                 # # --- add loss summaries for tensorboard
                 # tf.summary.scalar(name=f"train/mae",
