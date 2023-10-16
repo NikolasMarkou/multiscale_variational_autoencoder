@@ -568,6 +568,14 @@ def train_loop(
                     stop_time_forward_backward - \
                     start_time_forward_backward
 
+                # Getting all memory using os.popen()
+                total_memory, used_memory, free_memory = map(
+                    int, os.popen('free -t -m').readlines()[-1].split()[1:])
+                ram_percentage = round((used_memory/total_memory) * 100, 2)
+
+                tf.summary.scalar(name="training/ram % used",
+                                  data=ram_percentage,
+                                  step=ckpt.step)
                 tf.summary.scalar(name="training/epoch",
                                   data=int(ckpt.epoch),
                                   step=ckpt.step)
