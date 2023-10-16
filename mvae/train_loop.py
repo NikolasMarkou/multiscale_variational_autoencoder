@@ -267,8 +267,8 @@ def train_loop(
         def downsample_step(n: tf.Tensor) -> List[tf.Tensor]:
             scales = [None] * denoiser_levels
             n_scale = n
-            for idx in range(denoiser_levels):
-                n_scale[idx] = n_scale
+            for i in range(denoiser_levels):
+                scales[i] = n_scale
                 # downsample, clip and round
                 n_scale = \
                     tf.round(
