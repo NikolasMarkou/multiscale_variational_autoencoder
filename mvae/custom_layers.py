@@ -57,7 +57,7 @@ class GaussianFilter(tf.keras.layers.Layer):
         self._kernel_size = kernel_size
         self._strides = strides
         self._sigma = ((kernel_size[0] - 1) / 2, (kernel_size[1] - 1) / 2)
-        self._kernel = self.add_weight(name="gaussian_kernel", dtype=tf.float32)
+        self._kernel = self.add_weight(name="gaussian_kernel", dtype=tf.float32, trainable=False)
 
     def build(self, input_shape):
         from .utilities import depthwise_gaussian_kernel
