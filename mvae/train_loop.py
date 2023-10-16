@@ -370,7 +370,7 @@ def train_loop(
 
                 for b in range(gpu_batches_per_step):
                     try:
-                        (input_image_batch, noisy_image_batch) = \
+                        input_image_batch, noisy_image_batch = \
                             dataset_train.get_next()
 
                         scale_gt_image_batch = \
