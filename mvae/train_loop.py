@@ -393,7 +393,8 @@ def train_loop(
                             total_denoiser_loss += \
                                 loss_train[TOTAL_LOSS_STR] * \
                                 depth_weight[i]
-                            all_denoiser_loss[i] = loss_train
+                            if b == (gpu_batches_per_step - 1):
+                                all_denoiser_loss[i] = loss_train
 
                         # combine losses
                         model_loss = \
@@ -424,7 +425,6 @@ def train_loop(
                         del model_loss
                         del total_loss
                         del predictions
-                        del all_denoiser_loss
 
                 # apply gradient to change weights
                 optimizer.apply_gradients(
