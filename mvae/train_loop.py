@@ -373,8 +373,8 @@ def train_loop(
                         input_image_batch, noisy_image_batch = \
                             dataset_train.get_next()
 
-                        scale_gt_image_batch = \
-                            downsample_step(input_image_batch)
+                        # scale_gt_image_batch = \
+                        #     downsample_step(input_image_batch)
 
                         # zero out loss
                         with tf.GradientTape(persistent=False,
