@@ -302,19 +302,19 @@ def train_loop(
             tf.summary.flush()
             tf.summary.trace_off()
 
+        finished_training = False
+        trainable_variables = ckpt.hydra.trainable_variables
+        all_denoiser_loss = [
+            None
+            for _ in range(denoiser_levels)
+        ]
         depth_weight = [
             0.0
             for _ in range(denoiser_levels)
         ]
         gradients = [
             0.0
-            for _ in range(denoiser_levels)
-        ]
-        finished_training = False
-        trainable_variables = ckpt.hydra.trainable_variables
-        all_denoiser_loss = [
-            None
-            for _ in range(denoiser_levels)
+            for _ in range(len(trainable_variables))
         ]
 
         while not finished_training and \
