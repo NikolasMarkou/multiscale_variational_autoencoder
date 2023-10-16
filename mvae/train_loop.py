@@ -381,11 +381,11 @@ def train_loop(
                             # compute the loss value for this mini-batch
                             total_denoiser_loss *= 0.0
                             all_denoiser_loss = []
-                            for i, s in enumerate(denoiser_index):
+                            for i in range(len(denoiser_index)):
                                 all_denoiser_loss.append(
                                     denoiser_loss_fn[i](
                                         input_batch=scale_gt_image_batch[i],
-                                        predicted_batch=predictions[s]))
+                                        predicted_batch=predictions[i]))
                                 total_denoiser_loss += \
                                     all_denoiser_loss[-1][TOTAL_LOSS_STR] * \
                                     depth_weight[i]
