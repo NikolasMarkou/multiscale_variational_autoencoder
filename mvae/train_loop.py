@@ -38,7 +38,6 @@ from .visualize import \
 
 CURRENT_DIRECTORY = os.path.realpath(os.path.dirname(__file__))
 
-
 # ---------------------------------------------------------------------
 
 
@@ -307,14 +306,16 @@ def train_loop(
             0.0
             for _ in range(denoiser_levels)
         ]
+        gradients = [
+            0.0
+            for _ in range(denoiser_levels)
+        ]
         finished_training = False
         trainable_variables = ckpt.hydra.trainable_variables
         all_denoiser_loss = [
-            dict()
+            None
             for _ in range(denoiser_levels)
         ]
-        model_loss_t = dict()
-        total_loss_t = None
 
         while not finished_training and \
                 (total_epochs == -1 or ckpt.epoch < total_epochs):
@@ -332,10 +333,13 @@ def train_loop(
                 percentage_done = 0.0
 
             # adjust weights per depth
-            sum_depth_weight = 0.0
+            sum_depth_weight = \
+                tf.constant(0.0, dtype=tf.float32)
             for i in range(len(denoiser_index)):
                 depth_weight[i] = \
-                        float(output_discount_factor ** (float(i) * percentage_done))
+                        tf.constant(
+                            float(output_discount_factor ** (float(i) * percentage_done)),
+                            dtype=tf.float32)
                 sum_depth_weight += depth_weight[i]
 
             for i in range(len(denoiser_index)):
@@ -368,10 +372,8 @@ def train_loop(
                 start_time_forward_backward = time.time()
 
                 # zero gradients to reuse it in the next iteration
-                gradients = [
-                    0.0
-                    for _ in range(len(trainable_variables))
-                ]
+                for i in range(len(trainable_variables)):
+                    gradients[i] *= 0.0
 
                 for b in range(gpu_batches_per_step):
                     try:
@@ -401,9 +403,7 @@ def train_loop(
                                 loss_train[TOTAL_LOSS_STR] * \
                                 depth_weight[i]
                             # update dictionaries
-                            if b == 0:
-                                for k, v in loss_train.items():
-                                    all_denoiser_loss[i][k] = v.numpy()
+                            #all_denoiser_loss[i] = loss_train
 
                         # combine losses
                         model_loss = \
@@ -417,19 +417,9 @@ def train_loop(
                                 target=total_loss,
                                 sources=trainable_variables)
 
-                        if b == 0:
-                            for k, v in model_loss.items():
-                                model_loss_t[k] = v.numpy()
-                            total_loss_t = total_loss.numpy()
-
                     # aggregate gradients
                     for i, grad in enumerate(gradient):
                         gradients[i] += (grad / gpu_batches_per_step_constant)
-
-                    del gradient
-                    del total_loss
-                    del model_loss
-                    del scale_gt_image_batch
 
                 # apply gradient to change weights
                 optimizer.apply_gradients(
@@ -437,8 +427,6 @@ def train_loop(
                         gradients,
                         trainable_variables),
                     skip_gradients_aggregation=False)
-
-                del gradients
 
                 # # --- add loss summaries for tensorboard
                 # tf.summary.scalar(name=f"train/mae",
