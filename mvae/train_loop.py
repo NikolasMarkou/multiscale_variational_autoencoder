@@ -314,7 +314,7 @@ def train_loop(
             for _ in range(len(trainable_variables))
         ]
         total_denoiser_loss = \
-            tf.constant(0.0, dtype=tf.float32)
+            tf.Variable(0.0, dtype=tf.float32)
 
         while not finished_training and \
                 (total_epochs == -1 or ckpt.epoch < total_epochs):
@@ -380,21 +380,23 @@ def train_loop(
                     scale_gt_image_batch = \
                         downsample_step(input_image_batch)
 
+                    # zero out loss
+                    total_denoiser_loss.assign(value=0.0)
+                    #total_denoiser_loss *= 0.0
+
                     with tf.GradientTape() as tape:
                         predictions = \
                             train_denoiser_step(noisy_image_batch)
 
                         # compute the loss value for this mini-batch
-                        total_denoiser_loss *= 0.0
-
                         for i, idx in enumerate(denoiser_index):
                             loss_scale_i = \
                                 denoiser_loss_fn(
                                     input_batch=scale_gt_image_batch[i],
                                     predicted_batch=predictions[idx])
-                            total_denoiser_loss += \
-                                loss_scale_i[TOTAL_LOSS_STR] * \
-                                depth_weight[i]
+                            total_denoiser_loss.assign_add(
+                                loss_scale_i[TOTAL_LOSS_STR] *
+                                depth_weight[i])
 
                         # combine losses
                         model_loss = \
@@ -419,12 +421,8 @@ def train_loop(
                     skip_gradients_aggregation=False)
 
                 # --- zero gradients to reuse it in the next iteration
-                # moved at the end, so we can use it for visualization
-                # for i in range(len(gradients)):
-                #     gradients_moving_average[i] = \
-                #         gradients_moving_average[i] * 0.99 + \
-                #         gradients[i] * 0.01
-                #     gradients[i] *= 0.0
+                for i in range(len(gradients)):
+                    gradients[i] *= 0.0
 
                 # --- add image prediction for tensorboard
                 # if (ckpt.step % visualization_every) == 0:
