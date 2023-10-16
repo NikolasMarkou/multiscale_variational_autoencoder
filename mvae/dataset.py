@@ -386,8 +386,7 @@ def dataset_builder(
          .shuffle(
             seed=0,
             buffer_size=2048,
-            reshuffle_each_iteration=False) \
-            .cache())
+            reshuffle_each_iteration=False))
 
     dataset_training = \
         dataset_full \
