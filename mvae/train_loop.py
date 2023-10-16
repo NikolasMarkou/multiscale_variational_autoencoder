@@ -368,7 +368,7 @@ def train_loop(
                 for i in range(len(gradients)):
                     gradients[i] *= 0.0
 
-                for b in range(gpu_batches_per_step):
+                for _ in range(gpu_batches_per_step):
                     try:
                         input_image_batch, noisy_image_batch = \
                             dataset_train.get_next()
@@ -414,11 +414,11 @@ def train_loop(
 
                         # del model_loss
                         # del total_loss
-                        # del predictions
-                        # del input_image_batch
-                        # del noisy_image_batch
+                        del predictions
+                        del input_image_batch
+                        del noisy_image_batch
                         # del total_denoiser_loss
-                        # del scale_gt_image_batch
+                        del scale_gt_image_batch
 
                     except tf.errors.OutOfRangeError:
                         epoch_finished_training = True
