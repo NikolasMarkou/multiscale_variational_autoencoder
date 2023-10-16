@@ -160,7 +160,7 @@ def model_builder(
             encoding_results +
             decoding_results +
             denoisers_mid +
-            [tf.zeros_like(denoisers_mid[0])]) # TODO replace this with autoencoder results
+            [denoisers_mid[0]]) # TODO replace this with autoencoder results
 
     # create model
     model_hydra = \
