@@ -262,7 +262,7 @@ def train_loop(
             results = ckpt.hydra(n, training=False)
             return results[denoiser_index[0]]
 
-        @tf.function(reduce_retracing=True, jit_compile=False)
+        @tf.function(reduce_retracing=True, jit_compile=False, autograph=False)
         def downsample_step(n: tf.Tensor) -> tf.TensorArray:
             scales = \
                 tf.TensorArray(
