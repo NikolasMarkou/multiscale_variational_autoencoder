@@ -74,7 +74,6 @@ class GaussianFilter(tf.keras.layers.Layer):
                 trainable=False)
         self._kernel.assign(kernel)
 
-
     def get_config(self):
         return {
             "kernel_size": self._kernel_size,

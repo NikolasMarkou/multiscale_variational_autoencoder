@@ -381,7 +381,7 @@ def train_loop(
                                 train_denoiser_step(noisy_image_batch)
 
                             # compute the loss value for this mini-batch
-                            total_denoiser_loss *= total_denoiser_loss
+                            total_denoiser_loss *= 0.0
 
                             for i in tf.range(denoiser_levels):
                                 loss_scale_i = \
@@ -408,6 +408,7 @@ def train_loop(
 
                         # clean out memory
                         del gradient
+                        del predictions
 
                     except tf.errors.OutOfRangeError:
                         epoch_finished_training = True
@@ -417,7 +418,8 @@ def train_loop(
                 optimizer.apply_gradients(
                     grads_and_vars=zip(
                         gradients,
-                        trainable_variables))
+                        trainable_variables),
+                    skip_gradients_aggregation=False)
 
                 # --- zero gradients to reuse it in the next iteration
                 # moved at the end, so we can use it for visualization
