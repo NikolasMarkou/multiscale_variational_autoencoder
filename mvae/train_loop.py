@@ -531,7 +531,7 @@ def train_loop(
                         input_image_batch_test, noisy_image_batch_test = \
                             dataset_test.get_next()
                         predictions = \
-                            test_denoiser_step(noisy_image_batch_test)[0]
+                            test_denoiser_step(noisy_image_batch_test)[denoiser_index[0]]
 
                         # compute the loss value for this mini-batch
                         loss_test = \
