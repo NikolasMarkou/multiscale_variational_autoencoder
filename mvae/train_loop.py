@@ -420,16 +420,16 @@ def train_loop(
                         del total_denoiser_loss
                         del scale_gt_image_batch
 
-                        # apply gradient to change weights
-                        optimizer.apply_gradients(
-                            grads_and_vars=zip(
-                                gradients,
-                                trainable_variables),
-                            skip_gradients_aggregation=False)
-
                     except tf.errors.OutOfRangeError:
                         epoch_finished_training = True
                         break
+
+                # apply gradient to change weights
+                optimizer.apply_gradients(
+                    grads_and_vars=zip(
+                        gradients,
+                        trainable_variables),
+                    skip_gradients_aggregation=False)
 
                 # # --- add loss summaries for tensorboard
                 # tf.summary.scalar(name=f"train/mae",
