@@ -235,6 +235,15 @@ def train_loop(
         logger.info(f"model number of outputs: \n"
                     f"{pformat(model_no_outputs)}")
 
+        # this is set only once in the first call
+        gaussian_kernel = \
+            tf.constant(
+                depthwise_gaussian_kernel(
+                    channels=input_shape[-1],
+                    kernel_size=(5, 5),
+                    dtype=np.float32),
+                dtype=tf.float32)
+
         denoiser_loss_fn = \
             tf.function(
                 func=copy.deepcopy(loss_fn_map[DENOISER_LOSS_FN_STR]),
@@ -256,16 +265,6 @@ def train_loop(
 
         @tf.function(reduce_retracing=True, jit_compile=False)
         def downsample_step(n: tf.Tensor) -> List[tf.Tensor]:
-            # this is set only once in the first call
-            gaussian_kernel = \
-                tf.Variable(
-                    initial_value=depthwise_gaussian_kernel(
-                        channels=input_shape[-1],
-                        kernel_size=(5, 5),
-                        dtype=np.float32),
-                    trainable=False,
-                    dtype=tf.float32)
-
             scales = [n]
             for _ in range(1, denoiser_levels, 1):
                 # downsample, clip and round
