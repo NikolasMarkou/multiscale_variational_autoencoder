@@ -390,7 +390,6 @@ def train_loop(
 
                         # compute the loss value for this mini-batch
                         for i, idx in enumerate(denoiser_index):
-                            tape.reset()
                             loss_train = \
                                 denoiser_loss_fn(
                                     input_batch=scale_gt_image_batch[i],
@@ -399,6 +398,7 @@ def train_loop(
                                 loss_train[TOTAL_LOSS_STR] * \
                                 depth_weight[i]
                             all_denoiser_loss[i] = loss_train
+                            tape.reset()
                             del loss_train
 
                         # combine losses
