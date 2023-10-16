@@ -305,7 +305,7 @@ def train_loop(
 
         depth_weight = [
             tf.constant(0.0, dtype=tf.float32)
-            for _ in denoiser_levels
+            for _ in range(denoiser_levels)
         ]
         finished_training = False
         trainable_variables = ckpt.hydra.trainable_variables
@@ -404,7 +404,7 @@ def train_loop(
                                     target=total_loss,
                                     sources=trainable_variables)
                         for i, grad in enumerate(gradient):
-                            gradients[i] += grad
+                            gradients[i] += grad / gpu_batches_per_step_constant
 
                         # clean out memory
                         del gradient
@@ -412,10 +412,6 @@ def train_loop(
                     except tf.errors.OutOfRangeError:
                         epoch_finished_training = True
                         break
-
-                # average out gradients
-                for i in range(len(gradients)):
-                    gradients[i] /= gpu_batches_per_step_constant
 
                 # apply gradient to change weights
                 optimizer.apply_gradients(
