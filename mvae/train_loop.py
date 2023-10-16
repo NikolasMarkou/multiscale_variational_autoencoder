@@ -1,6 +1,7 @@
 import os
 import time
 import json
+import psutil
 import numpy as np
 import tensorflow as tf
 from pathlib import Path
@@ -569,12 +570,14 @@ def train_loop(
                     start_time_forward_backward
 
                 # Getting all memory using os.popen()
-                total_memory, used_memory, free_memory = map(
-                    int, os.popen('free -t -m').readlines()[-1].split()[1:])
-                ram_percentage = round((used_memory/total_memory) * 100, 2)
+                ram_percentage = psutil.virtual_memory()[2]
+                ram_gb = psutil.virtual_memory()[3]/1000000000
 
                 tf.summary.scalar(name="training/ram % used",
                                   data=ram_percentage,
+                                  step=ckpt.step)
+                tf.summary.scalar(name="training/ram gb used",
+                                  data=ram_gb,
                                   step=ckpt.step)
                 tf.summary.scalar(name="training/epoch",
                                   data=int(ckpt.epoch),
