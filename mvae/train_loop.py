@@ -272,7 +272,7 @@ def train_loop(
                     infer_shape=False)
 
             n_scale = n
-            for i in tf.range(denoiser_levels):
+            for i in range(denoiser_levels):
                 scales.write(index=i, value=n_scale)
                 # downsample, clip and round
                 n_scale = \
