@@ -22,7 +22,7 @@
 				"multiple_scale_outputs": true,
 				"kernel_regularizer": "l2",
 				"kernel_initializer": "glorot_uniform",
-				"dropout_rate": -1.0,
+				"dropout_rate": 0.5,
 				"spatial_dropout_rate": -1.0
 			}
 		},
