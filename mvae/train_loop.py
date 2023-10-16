@@ -235,7 +235,6 @@ def train_loop(
                     dtype=np.float32),
                 dtype=tf.float32)
 
-        tf.TensorArray()
         logger.info(f"model number of outputs: \n"
                     f"{pformat(model_no_outputs)}")
 
@@ -253,12 +252,16 @@ def train_loop(
         ]
 
         @tf.function(reduce_retracing=True, jit_compile=True)
-        def train_denoiser_step(n: tf.Tensor) -> List[tf.Tensor]:
+        def train_denoiser_step(n: tf.Tensor) -> tf.TensorArray:
+            results = \
+                tf.TensorArray(
+                    dtype=tf.float32,
+                    size=denoiser_levels,
+                    dynamic_size=False)
             tmp_results = ckpt.hydra(n, training=True)
-            return [
-                tmp_results[idx]
-                for idx in denoiser_index
-            ]
+            for i, idx in enumerate(denoiser_index):
+                results.write(i, tmp_results[idx])
+            return results
 
         @tf.function(reduce_retracing=True, jit_compile=True)
         def test_denoiser_step(n: tf.Tensor) -> tf.Tensor:
