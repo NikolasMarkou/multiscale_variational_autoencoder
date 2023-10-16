@@ -382,8 +382,8 @@ def train_loop(
                     total_denoiser_loss = 0.0
 
                     with tf.GradientTape(persistent=False,
-                                         watch_accessed_variables=True) as tape:
-                        #tape.watch(trainable_variables)
+                                         watch_accessed_variables=False) as tape:
+                        tape.watch(trainable_variables)
 
                         predictions = \
                             train_denoiser_step(noisy_image_batch)
@@ -398,7 +398,6 @@ def train_loop(
                                 loss_train[TOTAL_LOSS_STR] * \
                                 depth_weight[i]
                             all_denoiser_loss[i] = loss_train
-                            tape.reset()
                             del loss_train
 
                         # combine losses
