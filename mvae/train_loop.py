@@ -303,7 +303,10 @@ def train_loop(
             tf.summary.flush()
             tf.summary.trace_off()
 
-        depth_weight = [0.0] * len(denoiser_index)
+        depth_weight = [
+            tf.constant(0.0, dtype=tf.float32)
+            for _ in denoiser_levels
+        ]
         finished_training = False
         trainable_variables = ckpt.hydra.trainable_variables
         gradients = [
@@ -331,7 +334,10 @@ def train_loop(
             # adjust weights per depth
             sum_depth_weight = 0.0
             for i in range(len(denoiser_index)):
-                depth_weight[i] = float(output_discount_factor ** (float(i) * percentage_done))
+                depth_weight[i] = \
+                    tf.constant(
+                        float(output_discount_factor ** (float(i) * percentage_done)),
+                        dtype=tf.float32)
                 sum_depth_weight += depth_weight[i]
 
             for i in range(len(denoiser_index)):
@@ -377,7 +383,7 @@ def train_loop(
                             # compute the loss value for this mini-batch
                             total_denoiser_loss *= total_denoiser_loss
 
-                            for i in range(denoiser_levels):
+                            for i in tf.range(denoiser_levels):
                                 loss_scale_i = \
                                     denoiser_loss_fn[i](
                                         input_batch=scale_gt_image_batch[i],
