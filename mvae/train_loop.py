@@ -251,18 +251,21 @@ def train_loop(
             for _ in denoiser_index
         ]
 
+        gaussian_kernel = \
+            tf.constant(
+                depthwise_gaussian_kernel(
+                    channels=input_shape[-1],
+                    kernel_size=(5, 5),
+                    dtype=np.float32),
+                dtype=tf.float32)
+
         @tf.function(reduce_retracing=True, jit_compile=True)
-        def train_denoiser_step(n: tf.Tensor) -> tf.TensorArray:
-            results = \
-                tf.TensorArray(
-                    dtype=tf.float32,
-                    size=denoiser_levels,
-                    infer_shape=False,
-                    dynamic_size=False)
+        def train_denoiser_step(n: tf.Tensor) -> List[tf.Tensor]:
             tmp_results = ckpt.hydra(n, training=True)
-            for i, idx in enumerate(denoiser_index):
-                results.write(i, tmp_results[idx])
-            return results
+            return [
+                tmp_results[idx]
+                for idx in denoiser_index
+            ]
 
         @tf.function(reduce_retracing=True, jit_compile=True)
         def test_denoiser_step(n: tf.Tensor) -> tf.Tensor:
@@ -270,31 +273,22 @@ def train_loop(
             return results[denoiser_index[0]]
 
         @tf.function(reduce_retracing=True, jit_compile=True)
-        def downsample_step(n: tf.Tensor) -> tf.TensorArray:
-            scales = \
-                tf.TensorArray(
-                    dtype=tf.float32,
-                    size=denoiser_levels,
-                    infer_shape=False,
-                    dynamic_size=False)
-            scale = n
-
-            for d in tf.range(1, denoiser_levels, 1):
+        def downsample_step(n: tf.Tensor) -> List[tf.Tensor]:
+            scales = [n]
+            for _ in range(1, denoiser_levels, 1):
                 # downsample, clip and round
-                scale = \
+                scales.append(
                     tf.round(
                         tf.clip_by_value(
                             tf.nn.depthwise_conv2d(
-                                input=scale,
+                                input=scales[-1],
                                 filter=gaussian_kernel,
                                 strides=(1, 2, 2, 1),
                                 data_format=None,
                                 dilations=None,
                                 padding="SAME"),
                             clip_value_min=0.0,
-                            clip_value_max=255.0))
-                scales.write(d, scale)
-
+                            clip_value_max=255.0)))
             return scales
 
         if ckpt.step == 0:
