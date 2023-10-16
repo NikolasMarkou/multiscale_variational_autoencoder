@@ -308,9 +308,11 @@ def train_loop(
         total_denoiser_loss = \
             tf.constant(0.0, dtype=tf.float32)
         all_denoiser_loss = [
-            None
+            dict()
             for _ in range(denoiser_levels)
         ]
+        model_loss_t = dict()
+        total_loss_t = None
 
         while not finished_training and \
                 (total_epochs == -1 or ckpt.epoch < total_epochs):
@@ -389,19 +391,17 @@ def train_loop(
 
                         # compute the loss value for this mini-batch
                         for i, idx in enumerate(denoiser_index):
-                            loss_scale_i = \
+                            loss_train = \
                                 denoiser_loss_fn(
                                     input_batch=scale_gt_image_batch[i],
                                     predicted_batch=predictions[idx])
                             total_denoiser_loss += \
-                                loss_scale_i[TOTAL_LOSS_STR] * \
+                                loss_train[TOTAL_LOSS_STR] * \
                                 depth_weight[i]
+                            # update dictionaries
                             if b == 0:
-                                all_denoiser_loss[i] = {
-                                    k: v.numpy()
-                                    for k, v in loss_scale_i.items()
-                                }
-                            del loss_scale_i
+                                for k, v in loss_train.items():
+                                    all_denoiser_loss[i][k] = v.numpy()
 
                         # combine losses
                         model_loss = \
@@ -415,10 +415,15 @@ def train_loop(
                                 target=total_loss,
                                 sources=trainable_variables)
 
-                        # aggregate gradients
-                        for i, grad in enumerate(gradient):
-                            gradients[i] += grad / gpu_batches_per_step_constant
-                        del gradient
+                        if b == 0:
+                            for k, v in model_loss.items():
+                                model_loss_t[k] = v.numpy()
+                            total_loss_t = total_loss.numpy()
+
+                    # aggregate gradients
+                    for i, grad in enumerate(gradient):
+                        gradients[i] += grad / gpu_batches_per_step_constant
+                    del gradient
 
                 # apply gradient to change weights
                 optimizer.apply_gradients(
@@ -441,23 +446,22 @@ def train_loop(
                     tf.summary.scalar(name=f"debug/scale_{i}/mae",
                                       data=loss_train[MAE_LOSS_STR],
                                       step=ckpt.step)
-                # model
                 tf.summary.scalar(name="loss/regularization",
-                                  data=model_loss[REGULARIZATION_LOSS_STR],
+                                  data=model_loss_t[REGULARIZATION_LOSS_STR],
                                   step=ckpt.step)
                 tf.summary.scalar(name="loss/total",
-                                  data=total_loss,
+                                  data=total_loss_t,
                                   step=ckpt.step)
 
                 # --- add image prediction for tensorboard
                 if (ckpt.step % visualization_every) == 0:
                     # add prediction of training image using the test (to stop dropout)
-                    prediction_denoiser = \
+                    predictions = \
                         test_denoiser_step(noisy_image_batch)
 
                     x_error = \
                         tf.clip_by_value(
-                            tf.abs(input_image_batch - prediction_denoiser),
+                            tf.abs(input_image_batch - predictions),
                             clip_value_min=0.0,
                             clip_value_max=255.0
                         )
@@ -468,7 +472,7 @@ def train_loop(
                                     [input_image_batch.numpy(), noisy_image_batch.numpy()],
                                     axis=2),
                                 np.concatenate(
-                                    [prediction_denoiser.numpy(), x_error.numpy()],
+                                    [predictions.numpy(), x_error.numpy()],
                                     axis=2)
                             ],
                             axis=1) / 255
@@ -480,7 +484,6 @@ def train_loop(
                     del x_collage
                     del input_image_batch
                     del noisy_image_batch
-                    del prediction_denoiser
 
                     # add weights heatmap and boxplot distribution
                     weights_boxplot = \
@@ -509,14 +512,14 @@ def train_loop(
                     try:
                         (input_image_batch_test, noisy_image_batch_test) = \
                             dataset_test.get_next()
-                        prediction_denoiser_test = \
+                        predictions = \
                             test_denoiser_step(noisy_image_batch_test)
 
                         # compute the loss value for this mini-batch
                         loss_test = \
                             denoiser_loss_fn(
                                 input_batch=input_image_batch_test,
-                                predicted_batch=prediction_denoiser_test)
+                                predicted_batch=predictions)
                         tf.summary.scalar(name=f"test/mae",
                                           data=loss_test[MAE_LOSS_STR],
                                           step=ckpt.step)
@@ -530,7 +533,7 @@ def train_loop(
                         if (ckpt.step % visualization_every) == 0:
                             x_error = \
                                 tf.clip_by_value(
-                                    tf.abs(input_image_batch_test - prediction_denoiser_test),
+                                    tf.abs(input_image_batch_test - predictions),
                                     clip_value_min=0.0,
                                     clip_value_max=255.0
                                 )
@@ -541,7 +544,7 @@ def train_loop(
                                             [input_image_batch_test.numpy(), noisy_image_batch_test.numpy()],
                                             axis=2),
                                         np.concatenate(
-                                            [prediction_denoiser_test.numpy(), x_error.numpy()],
+                                            [predictions.numpy(), x_error.numpy()],
                                             axis=2)
                                     ],
                                     axis=1) / 255
