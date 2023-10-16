@@ -364,7 +364,7 @@ def train_loop(
                 start_time_forward_backward = time.time()
 
                 gradients = None
-                all_denoiser_loss = [None] * denoiser_levels
+                all_denoiser_loss = []
 
                 for b in range(gpu_batches_per_step):
                     try:
@@ -394,7 +394,7 @@ def train_loop(
                                 loss_train[TOTAL_LOSS_STR] * \
                                 depth_weight[i]
                             if b == (gpu_batches_per_step - 1):
-                                all_denoiser_loss[i] = loss_train
+                                all_denoiser_loss.append(loss_train)
 
                         # combine losses
                         model_loss = \
@@ -425,6 +425,8 @@ def train_loop(
                         del model_loss
                         del total_loss
                         del predictions
+                        del input_image_batch
+                        del noisy_image_batch
 
                 # apply gradient to change weights
                 optimizer.apply_gradients(
@@ -487,8 +489,7 @@ def train_loop(
                                      step=ckpt.step)
                     del x_error
                     del x_collage
-                    del input_image_batch
-                    del noisy_image_batch
+                    del predictions
 
                     # add weights heatmap and boxplot distribution
                     weights_boxplot = \
@@ -510,6 +511,9 @@ def train_loop(
                                      step=ckpt.step,
                                      description="weights heatmap")
                     del weights_heatmap
+
+                del input_image_batch
+                del noisy_image_batch
 
                 # --- test
                 test_done = False
@@ -558,6 +562,8 @@ def train_loop(
                                              max_outputs=visualization_number,
                                              step=ckpt.step)
                             del x_collage
+                            del noisy_image_batch_test
+                            del input_image_batch_test
                         test_done = True
                     except tf.errors.OutOfRangeError:
                         dataset_test = iter(dataset.testing)
