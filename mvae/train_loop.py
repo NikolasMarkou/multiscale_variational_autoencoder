@@ -245,14 +245,14 @@ def train_loop(
         denoiser_loss_fn = \
             tf.function(
                 func=copy.deepcopy(loss_fn_map[DENOISER_LOSS_FN_STR]),
-                jit_compile=True,
+                jit_compile=False,
                 input_signature=[
                     tf.TensorSpec(shape=[batch_size, None, None, input_shape[-1]], dtype=tf.float32),
                     tf.TensorSpec(shape=[batch_size, None, None, input_shape[-1]], dtype=tf.float32),
                 ],
                 reduce_retracing=True)
 
-        @tf.function(reduce_retracing=True, jit_compile=True, autograph=True)
+        @tf.function(reduce_retracing=True, jit_compile=False, autograph=True)
         def train_denoiser_step(n: tf.Tensor) -> List[tf.Tensor]:
             return ckpt.hydra(n, training=True)
 
@@ -261,7 +261,7 @@ def train_loop(
             results = ckpt.hydra(n, training=False)
             return results[denoiser_index[0]]
 
-        @tf.function(reduce_retracing=True, jit_compile=True, autograph=False)
+        @tf.function(reduce_retracing=True, jit_compile=False, autograph=False)
         def downsample_step(n: tf.Tensor) -> List[tf.Tensor]:
             scales = []
 
@@ -384,24 +384,14 @@ def train_loop(
                             train_denoiser_step(noisy_image_batch)
 
                         # compute the loss value for this mini-batch
-                        # for i, idx in enumerate(denoiser_index):
-                        #     loss_train = \
-                        #         denoiser_loss_fn(
-                        #             input_batch=scale_gt_image_batch[i],
-                        #             predicted_batch=predictions[idx])
-                        #     total_denoiser_loss += \
-                        #         loss_train[TOTAL_LOSS_STR] * \
-                        #         depth_weight[i]
-                        #     del loss_train
-
-                        loss_train = \
-                            denoiser_loss_fn(
-                                input_batch=scale_gt_image_batch[0],
-                                predicted_batch=predictions[denoiser_index[0]])
-                        total_denoiser_loss += \
-                            loss_train[TOTAL_LOSS_STR] * \
-                            depth_weight[0]
-                        del loss_train
+                        for i, idx in enumerate(denoiser_index):
+                            loss_train = \
+                                denoiser_loss_fn(
+                                    input_batch=scale_gt_image_batch[i],
+                                    predicted_batch=predictions[idx])
+                            total_denoiser_loss += \
+                                loss_train[TOTAL_LOSS_STR] * \
+                                depth_weight[i]
 
                         # combine losses
                         model_loss = \
@@ -424,13 +414,12 @@ def train_loop(
                                 gradients[i] += (grad / gpu_batches_per_step_float)
                         del gradient
 
-                    del model_loss
-                    del total_loss
-                    del predictions
-                    del input_image_batch
-                    del noisy_image_batch
-                    del total_denoiser_loss
-                    del scale_gt_image_batch
+                    # del model_loss
+                    # del total_loss
+                    # del predictions
+                    # del input_image_batch
+                    # del noisy_image_batch
+                    # del total_denoiser_loss
 
                 # apply gradient to change weights
                 optimizer.apply_gradients(
