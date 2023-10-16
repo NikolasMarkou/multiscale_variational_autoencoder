@@ -412,10 +412,10 @@ def train_loop(
                     if gradients is None:
                         gradients = []
                         for grad in gradient:
-                            gradients.append(grad / gpu_batches_per_step_constant)
+                            gradients.append(grad / gpu_batches_per_step_float)
                     else:
                         for i, grad in enumerate(gradient):
-                            gradients[i] += (grad / gpu_batches_per_step_constant)
+                            gradients[i] += (grad / gpu_batches_per_step_float)
 
                     del scale_gt_image_batch
                     del gradient
