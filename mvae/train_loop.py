@@ -396,7 +396,11 @@ def train_loop(
                             total_denoiser_loss += \
                                 loss_scale_i[TOTAL_LOSS_STR] * \
                                 depth_weight[i]
-                            all_denoiser_loss[i] = loss_scale_i
+                            all_denoiser_loss[i] = {
+                                v: k.numpy()
+                                for k, v in loss_scale_i.items()
+                            }
+                            del loss_scale_i
 
                         # combine losses
                         model_loss = \
