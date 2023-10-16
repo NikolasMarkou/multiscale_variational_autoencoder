@@ -418,7 +418,7 @@ def train_loop(
                         del input_image_batch
                         del noisy_image_batch
                         # del total_denoiser_loss
-                        del scale_gt_image_batch
+                        # del scale_gt_image_batch
 
                     except tf.errors.OutOfRangeError:
                         epoch_finished_training = True
