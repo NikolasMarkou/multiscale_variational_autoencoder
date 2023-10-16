@@ -299,17 +299,15 @@ def train_loop(
             tf.summary.trace_off()
 
         depth_weight = [
-            tf.constant(0.0, dtype=tf.float32)
+            0.0
             for _ in range(denoiser_levels)
         ]
         finished_training = False
         trainable_variables = ckpt.hydra.trainable_variables
         gradients = [
-            tf.constant(0.0, dtype=tf.float32)
+            0.0
             for _ in range(len(trainable_variables))
         ]
-        total_denoiser_loss = \
-            tf.constant(0.0, dtype=tf.float32)
         all_denoiser_loss = [
             dict()
             for _ in range(denoiser_levels)
@@ -336,9 +334,7 @@ def train_loop(
             sum_depth_weight = 0.0
             for i in range(len(denoiser_index)):
                 depth_weight[i] = \
-                    tf.constant(
-                        float(output_discount_factor ** (float(i) * percentage_done)),
-                        dtype=tf.float32)
+                        float(output_discount_factor ** (float(i) * percentage_done))
                 sum_depth_weight += depth_weight[i]
 
             for i in range(len(denoiser_index)):
@@ -372,7 +368,7 @@ def train_loop(
 
                 # zero gradients to reuse it in the next iteration
                 for i in range(len(gradients)):
-                    gradients[i] *= 0.0
+                    gradients[i] = 0.0
 
                 for b in range(gpu_batches_per_step):
                     try:
@@ -386,7 +382,7 @@ def train_loop(
                         downsample_step(input_image_batch)
 
                     # zero out loss
-                    total_denoiser_loss *= 0.0
+                    total_denoiser_loss = 0.0
 
                     with tf.GradientTape() as tape:
                         predictions = \
@@ -425,7 +421,7 @@ def train_loop(
 
                     # aggregate gradients
                     for i, grad in enumerate(gradient):
-                        gradients[i] += grad / gpu_batches_per_step_constant
+                        gradients[i] = gradients[i] + (grad / gpu_batches_per_step_constant)
 
                     del gradient
                     del total_loss
