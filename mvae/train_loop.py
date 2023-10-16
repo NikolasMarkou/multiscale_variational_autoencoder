@@ -397,8 +397,8 @@ def train_loop(
                                 total_denoiser_loss += \
                                     loss_train[TOTAL_LOSS_STR] * \
                                     depth_weight[i]
-                                if batch == 0:
-                                    all_denoiser_loss[i] = loss_train
+                                all_denoiser_loss[i] = loss_train
+                                del loss_train
 
                             # combine losses
                             model_loss = \
@@ -450,7 +450,6 @@ def train_loop(
                                   step=ckpt.step)
                 del total_loss
                 del model_loss
-                del all_denoiser_loss
 
                 # --- add image prediction for tensorboard
                 if (ckpt.step % visualization_every) == 0:
