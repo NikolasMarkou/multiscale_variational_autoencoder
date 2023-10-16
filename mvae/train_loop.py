@@ -422,6 +422,9 @@ def train_loop(
                     for i, grad in enumerate(gradient):
                         gradients[i] += (grad / gpu_batches_per_step_constant)
 
+                    del gradient
+                    del tape
+
                 # apply gradient to change weights
                 optimizer.apply_gradients(
                     grads_and_vars=zip(
