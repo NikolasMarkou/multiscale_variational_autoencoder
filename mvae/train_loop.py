@@ -416,15 +416,18 @@ def train_loop(
                                 target=total_loss,
                                 sources=trainable_variables)
 
+                        if b == 0:
+                            for k, v in model_loss.items():
+                                model_loss_t[k] = v.numpy()
+                            total_loss_t = total_loss.numpy()
+
                     # aggregate gradients
                     for i, grad in enumerate(gradient):
                         gradients[i] += grad / gpu_batches_per_step_constant
-                    #del gradient
 
-                    if b == 0:
-                        for k, v in model_loss.items():
-                            model_loss_t[k] = v.numpy()
-                        total_loss_t = total_loss.numpy()
+                    del gradient
+                    del total_loss
+                    del model_loss
 
                 # apply gradient to change weights
                 optimizer.apply_gradients(
@@ -456,35 +459,35 @@ def train_loop(
 
                 # --- add image prediction for tensorboard
                 if (ckpt.step % visualization_every) == 0:
-                    # # add prediction of training image using the test (to stop dropout)
-                    # predictions = \
-                    #     test_denoiser_step(noisy_image_batch)
-                    #
-                    # x_error = \
-                    #     tf.clip_by_value(
-                    #         tf.abs(input_image_batch - predictions),
-                    #         clip_value_min=0.0,
-                    #         clip_value_max=255.0
-                    #     )
-                    # x_collage = \
-                    #     np.concatenate(
-                    #         [
-                    #             np.concatenate(
-                    #                 [input_image_batch.numpy(), noisy_image_batch.numpy()],
-                    #                 axis=2),
-                    #             np.concatenate(
-                    #                 [predictions.numpy(), x_error.numpy()],
-                    #                 axis=2)
-                    #         ],
-                    #         axis=1) / 255
-                    # tf.summary.image(name="train/collage",
-                    #                  data=x_collage,
-                    #                  max_outputs=visualization_number,
-                    #                  step=ckpt.step)
-                    # del x_error
-                    # del x_collage
-                    # del input_image_batch
-                    # del noisy_image_batch
+                    # add prediction of training image using the test (to stop dropout)
+                    predictions = \
+                        test_denoiser_step(noisy_image_batch)
+
+                    x_error = \
+                        tf.clip_by_value(
+                            tf.abs(input_image_batch - predictions),
+                            clip_value_min=0.0,
+                            clip_value_max=255.0
+                        )
+                    x_collage = \
+                        np.concatenate(
+                            [
+                                np.concatenate(
+                                    [input_image_batch.numpy(), noisy_image_batch.numpy()],
+                                    axis=2),
+                                np.concatenate(
+                                    [predictions.numpy(), x_error.numpy()],
+                                    axis=2)
+                            ],
+                            axis=1) / 255
+                    tf.summary.image(name="train/collage",
+                                     data=x_collage,
+                                     max_outputs=visualization_number,
+                                     step=ckpt.step)
+                    del x_error
+                    del x_collage
+                    del input_image_batch
+                    del noisy_image_batch
 
                     # add weights heatmap and boxplot distribution
                     weights_boxplot = \
