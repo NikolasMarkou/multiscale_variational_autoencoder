@@ -257,6 +257,7 @@ def train_loop(
                 tf.TensorArray(
                     dtype=tf.float32,
                     size=denoiser_levels,
+                    infer_shape=False,
                     dynamic_size=False)
             tmp_results = ckpt.hydra(n, training=True)
             for i, idx in enumerate(denoiser_index):
@@ -274,6 +275,7 @@ def train_loop(
                 tf.TensorArray(
                     dtype=tf.float32,
                     size=denoiser_levels,
+                    infer_shape=False,
                     dynamic_size=False)
             scale = n
 
