@@ -337,6 +337,12 @@ def dataset_builder(
         raise ValueError("don't know how to handle non directory datasets")
 
     # --- save the augmentation functions
+    @tf.function(
+        input_signature=[
+            tf.TensorSpec(shape=(), dtype=tf.string),
+            tf.TensorSpec(shape=(), dtype=tf.string)
+        ],
+        reduce_retracing=True)
     def load_image_fn(path: tf.Tensor) -> tf.Tensor:
         img = \
             load_image(
@@ -362,20 +368,25 @@ def dataset_builder(
             generator=dataset_generator,
             output_signature=(
                 tf.TensorSpec(shape=(), dtype=tf.string)
-            ))
+            ))\
+        .shuffle(
+            seed=0,
+            buffer_size=1024,
+            reshuffle_each_iteration=False) \
+        .cache()
 
     dataset_training = \
         dataset_full \
             .take(
                 count=dataset_size_training) \
-            .map(
-                map_func=load_image_fn,
-                num_parallel_calls=4,
-                deterministic=False) \
             .shuffle(
                 seed=0,
                 buffer_size=1024,
                 reshuffle_each_iteration=True) \
+            .map(
+                map_func=load_image_fn,
+                num_parallel_calls=4,
+                deterministic=False) \
             .map(map_func=prepare_data_fn,
                  num_parallel_calls=4,
                  deterministic=False) \
@@ -388,6 +399,10 @@ def dataset_builder(
         dataset_full \
             .skip(
                 count=dataset_size_training) \
+            .shuffle(
+                seed=0,
+                buffer_size=1024,
+                reshuffle_each_iteration=True) \
             .map(
                 map_func=load_image_fn,
                 num_parallel_calls=4,
