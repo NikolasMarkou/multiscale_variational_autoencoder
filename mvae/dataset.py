@@ -358,44 +358,36 @@ def dataset_builder(
 
     # --- create the dataset
     dataset_full = \
-        (tf.data.Dataset.from_generator(
-            generator=dataset_generator,
-            output_signature=(
-                tf.TensorSpec(shape=(), dtype=tf.string)
-            ))
-         .shuffle(
-            seed=0,
-            buffer_size=2048,
-            reshuffle_each_iteration=False))
-
-    dataset_training = \
         tf.data.Dataset.from_generator(
             generator=dataset_generator,
             output_signature=(
                 tf.TensorSpec(shape=(), dtype=tf.string)
-            )) \
+            ))
+
+    dataset_training = \
+        dataset_full \
+            .take(
+                count=dataset_size_training) \
             .map(
                 map_func=load_image_fn,
                 num_parallel_calls=4,
                 deterministic=False) \
-            .map(map_func=prepare_data_fn,
-                 num_parallel_calls=4,
-                 deterministic=False) \
             .shuffle(
                 seed=0,
                 buffer_size=1024,
                 reshuffle_each_iteration=True) \
+            .map(map_func=prepare_data_fn,
+                 num_parallel_calls=4,
+                 deterministic=False) \
             .rebatch(
                 batch_size=batch_size,
                 drop_remainder=True) \
             .prefetch(buffer_size=1)
 
     dataset_testing = \
-        tf.data.Dataset.from_generator(
-            generator=dataset_generator,
-            output_signature=(
-                tf.TensorSpec(shape=(), dtype=tf.string)
-            )) \
+        dataset_full \
+            .skip(
+                count=dataset_size_training) \
             .map(
                 map_func=load_image_fn,
                 num_parallel_calls=4,
@@ -403,10 +395,6 @@ def dataset_builder(
             .map(map_func=prepare_data_fn,
                  num_parallel_calls=4,
                  deterministic=False) \
-            .shuffle(
-                seed=0,
-                buffer_size=1024,
-                reshuffle_each_iteration=True) \
             .rebatch(
                 batch_size=batch_size,
                 drop_remainder=True) \
