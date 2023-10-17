@@ -421,9 +421,12 @@ def train_loop(
                         # aggregate gradients
                         for i, grad in enumerate(gradient):
                             gradients[i] += grad
+
                         del gradient
+                        del total_denoiser_loss
 
                         if batch < gpu_batches_per_step - 1:
+                            del predictions
                             del model_loss, total_loss
                             del input_image_batch, noisy_image_batch, scale_gt_image_batch
 
