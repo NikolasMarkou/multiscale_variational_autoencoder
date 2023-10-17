@@ -257,7 +257,7 @@ def train_loop(
             scales = []
             n_scale = n
 
-            for _ in range(denoiser_levels):
+            for _ in range(len(denoiser_index)):
                 scales.append(n_scale)
                 # downsample, clip and round
                 n_scale = \
@@ -273,7 +273,6 @@ def train_loop(
                             clip_value_min=0.0,
                             clip_value_max=255.0))
             return scales
-
 
         if ckpt.step == 0:
             # trace train network
