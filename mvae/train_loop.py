@@ -398,7 +398,7 @@ def train_loop(
                             total_denoiser_loss += \
                                 loss_train[TOTAL_LOSS_STR] * \
                                 depth_weight[i]
-                            all_denoiser_loss[i] = loss_train
+                            #all_denoiser_loss[i] = loss_train
                             del loss_train
 
                         # combine losses
@@ -416,14 +416,13 @@ def train_loop(
                         # aggregate gradients
                         for i, grad in enumerate(gradient):
                             gradients[i] += grad
+                        tape.reset()
 
                         del gradient
                         del total_denoiser_loss
-
-                        if batch < gpu_batches_per_step - 1:
-                            del predictions
-                            del model_loss, total_loss
-                            del input_image_batch, noisy_image_batch, scale_gt_image_batch
+                        del predictions
+                        del model_loss, total_loss
+                        del input_image_batch, noisy_image_batch, scale_gt_image_batch
 
                     for i in range(len(gradients)):
                         gradients[i] /= gpu_batches_per_step_float
@@ -435,7 +434,6 @@ def train_loop(
                             trainable_variables),
                         skip_gradients_aggregation=False)
                     del gradients
-                    tape.reset()
 
                     # # --- add loss summaries for tensorboard
                     # tf.summary.scalar(name=f"train/mae",
