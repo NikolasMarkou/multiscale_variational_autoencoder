@@ -390,8 +390,10 @@ def train_loop(
                                     clip_value_max=255.0))
                         scale_gt_image_batch.append(tmp_gt_image)
 
-                    with tf.GradientTape(persistent=False, watch_accessed_variables=False) as tape:
+                    with tf.GradientTape(persistent=False,
+                                         watch_accessed_variables=False) as tape:
                         tape.watch(trainable_variables)
+
                         predictions = \
                             train_denoiser_step(y)
 
@@ -420,13 +422,14 @@ def train_loop(
                             tape.gradient(
                                 target=total_loss,
                                 sources=trainable_variables)
-
+                        tape.reset()
                         del predictions
                     for i, grad in enumerate(gradient):
                         gradients[i] += grad
 
                     del x
                     del y
+                    del tape
                     del gradient
 
                 # average out gradients
