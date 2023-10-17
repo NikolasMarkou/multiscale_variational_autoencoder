@@ -252,6 +252,29 @@ def train_loop(
             results = ckpt.hydra(n, training=False)
             return results[denoiser_index[0]]
 
+        @tf.function(autograph=True)
+        def downsample_step(n: tf.Tensor) -> List[tf.Tensor]:
+            scales = []
+            n_scale = n
+
+            for _ in range(denoiser_levels):
+                scales.append(n_scale)
+                # downsample, clip and round
+                n_scale = \
+                    tf.round(
+                        tf.clip_by_value(
+                            tf.nn.depthwise_conv2d(
+                                input=n_scale,
+                                filter=gaussian_kernel,
+                                strides=(1, 2, 2, 1),
+                                data_format=None,
+                                dilations=None,
+                                padding="SAME"),
+                            clip_value_min=0.0,
+                            clip_value_max=255.0))
+            return scales
+
+
         if ckpt.step == 0:
             # trace train network
             tf.summary.trace_on(graph=True, profiler=False)
@@ -271,12 +294,12 @@ def train_loop(
             tf.summary.flush()
             tf.summary.trace_off()
 
-        gaussian_kernel = \
+        gaussian_kernel = tf.constant(
             depthwise_gaussian_kernel(
                 channels=input_shape[-1],
                 kernel_size=(5, 5),
-                dtype=np.float32)
-        gaussian_kernel = tf.constant(gaussian_kernel, dtype=tf.float32)
+                dtype=np.float32), dtype=tf.float32)
+
         depth_weight = [
             tf.constant(1.0, dtype=tf.float32)
             for _ in range(len(denoiser_index))
@@ -371,24 +394,7 @@ def train_loop(
                     x = input_image_batch
                     # target
                     y = noisy_image_batch
-                    scale_gt_image_batch = [x]
-                    tmp_gt_image = x
-
-                    for i in range(1, len(denoiser_index), 1):
-                        # downsample, clip and round
-                        tmp_gt_image = \
-                            tf.round(
-                                tf.clip_by_value(
-                                    tf.nn.depthwise_conv2d(
-                                        input=tmp_gt_image,
-                                        filter=gaussian_kernel,
-                                        strides=(1, 2, 2, 1),
-                                        data_format=None,
-                                        dilations=None,
-                                        padding="SAME"),
-                                    clip_value_min=0.0,
-                                    clip_value_max=255.0))
-                        scale_gt_image_batch.append(tmp_gt_image)
+                    scale_gt_image_batch = downsample_step(x)
 
                     with tf.GradientTape(persistent=False,
                                          watch_accessed_variables=False) as tape:
@@ -424,6 +430,7 @@ def train_loop(
                                 sources=trainable_variables)
                         tape.reset()
                         del predictions
+
                     for i, grad in enumerate(gradient):
                         gradients[i] += grad
 
@@ -431,6 +438,7 @@ def train_loop(
                     del y
                     del tape
                     del gradient
+                    del scale_gt_image_batch
 
                 # average out gradients
                 for i in range(len(gradients)):
