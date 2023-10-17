@@ -322,7 +322,6 @@ def train_loop(
         ]
 
         with tf.GradientTape(watch_accessed_variables=False, persistent=True) as tape:
-            tape.watch(trainable_variables)
 
             while not finished_training and \
                     (total_epochs == -1 or ckpt.epoch < total_epochs):
@@ -390,6 +389,7 @@ def train_loop(
 
                     # zero out loss
                     tape.reset()
+                    tape.watch(trainable_variables)
                     total_denoiser_loss = 0.0
                     predictions = train_denoiser_step(noisy_image_batch)
 
