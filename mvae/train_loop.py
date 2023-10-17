@@ -386,18 +386,17 @@ def train_loop(
                         total_denoiser_loss = 0.0
                         predictions = train_denoiser_step(noisy_image_batch)
 
-                        # # compute the loss value for this mini-batch
-                        # for i, idx in enumerate(denoiser_index):
-                        #     loss_train = \
-                        #         denoiser_loss_fn(
-                        #             input_batch=scale_gt_image_batch[i],
-                        #             predicted_batch=predictions[idx])
-                        #     total_denoiser_loss += \
-                        #         loss_train[TOTAL_LOSS_STR] * \
-                        #         depth_weight[i]
-                        #     #all_denoiser_loss[i] = loss_train
-                        #     del loss_train
-                        #
+                        # compute the loss value for this mini-batch
+                        for i, idx in enumerate(denoiser_index):
+                            loss_train = \
+                                denoiser_loss_fn(
+                                    input_batch=scale_gt_image_batch[i],
+                                    predicted_batch=predictions[idx])
+                            total_denoiser_loss += \
+                                loss_train[TOTAL_LOSS_STR] * \
+                                depth_weight[i]
+                            all_denoiser_loss[i] = loss_train
+
                         # # combine losses
                         # model_loss = \
                         #     model_loss_fn(model=ckpt.hydra)
@@ -420,7 +419,7 @@ def train_loop(
                         # del predictions
                         # del model_loss, total_loss
                         # del input_image_batch, noisy_image_batch, scale_gt_image_batch
-
+                del tape
                 #     for i in range(len(gradients)):
                 #         gradients[i] /= gpu_batches_per_step_float
                 #
