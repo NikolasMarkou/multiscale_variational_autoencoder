@@ -253,15 +253,15 @@ def train_loop(
                 ],
                 reduce_retracing=True)
 
-        @tf.function(reduce_retracing=True, jit_compile=True, autograph=False)
+        @tf.function(reduce_retracing=True)
         def train_denoiser_step(n: tf.Tensor) -> List[tf.Tensor]:
             return ckpt.hydra(n, training=True)
 
-        @tf.function(reduce_retracing=True, jit_compile=True, autograph=False)
+        @tf.function(reduce_retracing=True)
         def test_denoiser_step(n: tf.Tensor) -> List[tf.Tensor]:
             return ckpt.hydra(n, training=False)
 
-        @tf.function(reduce_retracing=True, jit_compile=False, autograph=True)
+        @tf.function(reduce_retracing=True)
         def downsample_step(n: tf.Tensor) -> List[tf.Tensor]:
             scales = []
             n_scale = n
@@ -380,52 +380,52 @@ def train_loop(
                             downsample_step(input_image_batch)
 
                         # zero out loss
-                        with tf.GradientTape() as tape:
-                            tape.watch(trainable_variables)
-
-                            total_denoiser_loss = 0.0
-                            predictions = \
-                                train_denoiser_step(noisy_image_batch)
-
-                            # compute the loss value for this mini-batch
-                            for i, idx in enumerate(denoiser_index):
-                                loss_train = \
-                                    denoiser_loss_fn(
-                                        input_batch=scale_gt_image_batch[i],
-                                        predicted_batch=predictions[idx])
-                                total_denoiser_loss += \
-                                    loss_train[TOTAL_LOSS_STR] * \
-                                    depth_weight[i]
-                                all_denoiser_loss[i] = loss_train
-                                del loss_train
-
-                            # combine losses
-                            model_loss = \
-                                model_loss_fn(model=ckpt.hydra)
-                            total_loss = \
-                                total_denoiser_loss + \
-                                model_loss[TOTAL_LOSS_STR]
-
-                            gradient = \
-                                tape.gradient(
-                                    target=total_loss,
-                                    sources=trainable_variables)
-
-                            # aggregate gradients
-                            for i, grad in enumerate(gradient):
-                                gradients[i] += (grad / gpu_batches_per_step_float)
-                            del gradient
+                        # with tf.GradientTape() as tape:
+                        #     tape.watch(trainable_variables)
+                        #
+                        #     total_denoiser_loss = 0.0
+                        #     predictions = \
+                        #         train_denoiser_step(noisy_image_batch)
+                        #
+                        #     # compute the loss value for this mini-batch
+                        #     for i, idx in enumerate(denoiser_index):
+                        #         loss_train = \
+                        #             denoiser_loss_fn(
+                        #                 input_batch=scale_gt_image_batch[i],
+                        #                 predicted_batch=predictions[idx])
+                        #         total_denoiser_loss += \
+                        #             loss_train[TOTAL_LOSS_STR] * \
+                        #             depth_weight[i]
+                        #         all_denoiser_loss[i] = loss_train
+                        #         del loss_train
+                        #
+                        #     # combine losses
+                        #     model_loss = \
+                        #         model_loss_fn(model=ckpt.hydra)
+                        #     total_loss = \
+                        #         total_denoiser_loss + \
+                        #         model_loss[TOTAL_LOSS_STR]
+                        #
+                        #     gradient = \
+                        #         tape.gradient(
+                        #             target=total_loss,
+                        #             sources=trainable_variables)
+                        #
+                        #     # aggregate gradients
+                        #     for i, grad in enumerate(gradient):
+                        #         gradients[i] += (grad / gpu_batches_per_step_float)
+                        #     del gradient
 
                     except tf.errors.OutOfRangeError:
                         epoch_finished_training = True
                         break
 
-                # apply gradient to change weights
-                optimizer.apply_gradients(
-                    grads_and_vars=zip(
-                        gradients,
-                        trainable_variables),
-                    skip_gradients_aggregation=False)
+                # # apply gradient to change weights
+                # optimizer.apply_gradients(
+                #     grads_and_vars=zip(
+                #         gradients,
+                #         trainable_variables),
+                #     skip_gradients_aggregation=False)
 
                 # # --- add loss summaries for tensorboard
                 # tf.summary.scalar(name=f"train/mae",
