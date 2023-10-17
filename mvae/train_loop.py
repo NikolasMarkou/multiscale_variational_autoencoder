@@ -427,7 +427,6 @@ def train_loop(
                             tape.gradient(
                                 target=total_loss,
                                 sources=trainable_variables)
-                        tape.reset()
                         del predictions
 
                     for i, grad in enumerate(gradient):
