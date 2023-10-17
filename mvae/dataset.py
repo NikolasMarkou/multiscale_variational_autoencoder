@@ -118,12 +118,11 @@ def dataset_builder(
     additional_noise = tf.constant(additional_noise, dtype=tf.float32)
     multiplicative_noise = tf.constant(multiplicative_noise, dtype=tf.float32)
     gaussian_kernel = \
-        depthwise_gaussian_kernel(
+        tf.constant(depthwise_gaussian_kernel(
             channels=input_shape[-1],
             kernel_size=(5, 5),
             nsig=(2.0, 2.0),
-            dtype=np.float32).astype('float32')
-    gaussian_kernel = tf.constant(gaussian_kernel, dtype=tf.float32)
+            dtype=np.float32), dtype=tf.float32)
     # --- set random seed to get the same result
     tf.random.set_seed(0)
 
@@ -134,10 +133,8 @@ def dataset_builder(
         """
 
         # --- get shape and options
-        input_shape_inference = tf.shape(input_batch)
         random_option_flip_left_right = tf.greater(tf.random.uniform((), seed=0), tf.constant(0.5))
         random_option_flip_up_down = tf.greater(tf.random.uniform((), seed=0), tf.constant(0.5))
-        random_option_rotate = tf.greater(tf.random.uniform((), seed=0), tf.constant(0.5))
 
         # --- flip left right
         if use_left_right:
@@ -154,24 +151,6 @@ def dataset_builder(
                     pred=random_option_flip_up_down,
                     true_fn=lambda: tf.image.flip_up_down(input_batch),
                     false_fn=lambda: input_batch)
-
-        # # --- randomly rotate input
-        # if use_rotate:
-        #     input_batch = \
-        #         tf.cond(
-        #             pred=random_option_rotate,
-        #             true_fn=lambda:
-        #             tfa.image.rotate(
-        #                 angles=tf.random.uniform(
-        #                     dtype=tf.float32,
-        #                     seed=0,
-        #                     minval=-random_rotate,
-        #                     maxval=random_rotate,
-        #                     shape=(input_shape_inference[0],)),
-        #                 images=input_batch,
-        #                 fill_mode="reflect",
-        #                 interpolation="bilinear"),
-        #             false_fn=lambda: input_batch)
 
         return input_batch
 
