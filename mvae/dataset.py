@@ -339,7 +339,6 @@ def dataset_builder(
     # --- save the augmentation functions
     @tf.function(
         input_signature=[
-            tf.TensorSpec(shape=(), dtype=tf.string),
             tf.TensorSpec(shape=(), dtype=tf.string)
         ],
         reduce_retracing=True)
@@ -373,7 +372,7 @@ def dataset_builder(
             seed=0,
             buffer_size=1024,
             reshuffle_each_iteration=False) \
-        .cache()
+        .cache("./tf_cache")
 
     dataset_training = \
         dataset_full \
