@@ -375,29 +375,28 @@ def train_loop(
                 for i in range(len(gradients)):
                     gradients[i] *= 0.0
 
-                for batch in range(gpu_batches_per_step):
-                    try:
-                        input_image_batch, noisy_image_batch = \
-                            dataset_train.get_next()
-                    except tf.errors.OutOfRangeError:
-                        epoch_finished_training = True
-                        break
+                with tf.GradientTape(watch_accessed_variables=False, persistent=False) as tape:
+                    tape.watch(trainable_variables)
 
-                    scale_gt_image_batch = \
-                        downsample_step(input_image_batch)
+                    for batch in range(gpu_batches_per_step):
+                        try:
+                            input_image_batch, noisy_image_batch = \
+                                dataset_train.get_next()
+                        except tf.errors.OutOfRangeError:
+                            epoch_finished_training = True
+                            break
 
-                    with tf.GradientTape(watch_accessed_variables=False, persistent=False) as tape:
-                        tape.watch(trainable_variables)
+                        scale_gt_image_batch = \
+                            downsample_step(input_image_batch)
 
                         # zero out loss
                         total_denoiser_loss = 0.0
                         predictions = train_denoiser_step(noisy_image_batch)
 
-                    del input_image_batch, \
-                        noisy_image_batch, \
-                        scale_gt_image_batch
-                    del predictions
-                    del tape
+                        del input_image_batch, \
+                            noisy_image_batch, \
+                            scale_gt_image_batch
+                        del predictions
 
                     #
                     #     # compute the loss value for this mini-batch
