@@ -377,7 +377,7 @@ def train_loop(
                     for i in range(len(gradients)):
                         gradients[i] *= 0.0
 
-                    for batch in gpu_batches_per_step:
+                    for batch in range(gpu_batches_per_step):
                         try:
                             input_image_batch, noisy_image_batch = \
                                 dataset_train.get_next()
