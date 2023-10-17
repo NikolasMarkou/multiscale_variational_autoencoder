@@ -436,7 +436,6 @@ def train_loop(
                     del y
                     del tape
                     del gradient
-                    del scale_gt_image_batch
 
                 # average out gradients
                 for i in range(len(gradients)):
