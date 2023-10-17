@@ -386,51 +386,51 @@ def train_loop(
                         total_denoiser_loss = 0.0
                         predictions = train_denoiser_step(noisy_image_batch)
 
-                        # compute the loss value for this mini-batch
-                        for i, idx in enumerate(denoiser_index):
-                            loss_train = \
-                                denoiser_loss_fn(
-                                    input_batch=scale_gt_image_batch[i],
-                                    predicted_batch=predictions[idx])
-                            total_denoiser_loss += \
-                                loss_train[TOTAL_LOSS_STR] * \
-                                depth_weight[i]
-                            #all_denoiser_loss[i] = loss_train
-                            del loss_train
+                        # # compute the loss value for this mini-batch
+                        # for i, idx in enumerate(denoiser_index):
+                        #     loss_train = \
+                        #         denoiser_loss_fn(
+                        #             input_batch=scale_gt_image_batch[i],
+                        #             predicted_batch=predictions[idx])
+                        #     total_denoiser_loss += \
+                        #         loss_train[TOTAL_LOSS_STR] * \
+                        #         depth_weight[i]
+                        #     #all_denoiser_loss[i] = loss_train
+                        #     del loss_train
+                        #
+                        # # combine losses
+                        # model_loss = \
+                        #     model_loss_fn(model=ckpt.hydra)
+                        # total_loss = \
+                        #     total_denoiser_loss + \
+                        #     model_loss[TOTAL_LOSS_STR]
+                        #
+                        # gradient = \
+                        #     tape.gradient(
+                        #         target=total_loss,
+                        #         sources=trainable_variables)
+                        #
+                        # # aggregate gradients
+                        # for i, grad in enumerate(gradient):
+                        #     gradients[i] += grad
+                        # tape.reset()
+                        #
+                        # del gradient
+                        # del total_denoiser_loss
+                        # del predictions
+                        # del model_loss, total_loss
+                        # del input_image_batch, noisy_image_batch, scale_gt_image_batch
 
-                        # combine losses
-                        model_loss = \
-                            model_loss_fn(model=ckpt.hydra)
-                        total_loss = \
-                            total_denoiser_loss + \
-                            model_loss[TOTAL_LOSS_STR]
-
-                        gradient = \
-                            tape.gradient(
-                                target=total_loss,
-                                sources=trainable_variables)
-
-                        # aggregate gradients
-                        for i, grad in enumerate(gradient):
-                            gradients[i] += grad
-                        tape.reset()
-
-                        del gradient
-                        del total_denoiser_loss
-                        del predictions
-                        del model_loss, total_loss
-                        del input_image_batch, noisy_image_batch, scale_gt_image_batch
-
-                    for i in range(len(gradients)):
-                        gradients[i] /= gpu_batches_per_step_float
-
-                # apply gradient to change weights
-                optimizer.apply_gradients(
-                    grads_and_vars=zip(
-                        gradients,
-                        trainable_variables),
-                    skip_gradients_aggregation=False)
-                del gradients
+                #     for i in range(len(gradients)):
+                #         gradients[i] /= gpu_batches_per_step_float
+                #
+                # # apply gradient to change weights
+                # optimizer.apply_gradients(
+                #     grads_and_vars=zip(
+                #         gradients,
+                #         trainable_variables),
+                #     skip_gradients_aggregation=False)
+                # del gradients
 
                 # # --- add loss summaries for tensorboard
                 # tf.summary.scalar(name=f"train/mae",
