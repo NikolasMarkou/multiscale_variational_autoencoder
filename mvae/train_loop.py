@@ -449,134 +449,136 @@ def train_loop(
                     tf.summary.scalar(name="loss/total",
                                       data=total_loss,
                                       step=ckpt.step)
-                    # del total_loss
-                    # del model_loss
-                    #
-                    # # --- add image prediction for tensorboard
-                    # if (ckpt.step % visualization_every) == 0:
-                    #     # add prediction of training image using the test (to stop dropout)
-                    #     predictions = \
-                    #         test_denoiser_step(noisy_image_batch)
-                    #
-                    #     prediction_denoiser = [
-                    #         predictions[idx]
-                    #         for idx in denoiser_index
-                    #     ]
-                    #
-                    #     x_error = \
-                    #         tf.clip_by_value(
-                    #             tf.abs(input_image_batch - prediction_denoiser[0]),
-                    #             clip_value_min=0.0,
-                    #             clip_value_max=255.0
-                    #         )
-                    #     x_collage = \
-                    #         tf.concat(
-                    #             values=[
-                    #                 tf.concat(
-                    #                     values=[input_image_batch, noisy_image_batch],
-                    #                     axis=2),
-                    #                 tf.concat(
-                    #                     values=[prediction_denoiser[0], x_error],
-                    #                     axis=2)
-                    #             ],
-                    #             axis=1) / 255
-                    #     tf.summary.image(name="train/collage",
-                    #                      data=x_collage,
-                    #                      max_outputs=visualization_number,
-                    #                      step=ckpt.step)
-                    #     del x_error
-                    #     del x_collage
-                    #
-                    #     for i in range(len(prediction_denoiser)):
-                    #         x_collage = tf.concat(
-                    #             values=[scale_gt_image_batch[i], prediction_denoiser[i]],
-                    #             axis=2) / 255
-                    #         tf.summary.image(name=f"debug/scale_{i}",
-                    #                          data=x_collage,
-                    #                          max_outputs=visualization_number,
-                    #                          step=ckpt.step)
-                    #         del x_collage
-                    #
-                    #     del predictions
-                    #     del prediction_denoiser
-                    #
-                    #     # add weights heatmap and boxplot distribution
-                    #     weights_boxplot = \
-                    #         visualize_weights_boxplot(
-                    #             trainable_variables=trainable_variables) / 255
-                    #     tf.summary.image(name="weights/boxplot",
-                    #                      data=weights_boxplot,
-                    #                      max_outputs=visualization_number,
-                    #                      step=ckpt.step,
-                    #                      description="weights boxplot")
-                    #     del weights_boxplot
-                    #
-                    #     weights_heatmap = \
-                    #         visualize_weights_heatmap(
-                    #             trainable_variables=trainable_variables) / 255
-                    #     tf.summary.image(name="weights/heatmap",
-                    #                      data=weights_heatmap,
-                    #                      max_outputs=visualization_number,
-                    #                      step=ckpt.step,
-                    #                      description="weights heatmap")
-                    #     del weights_heatmap
-                    #
-                    # del input_image_batch
-                    # del noisy_image_batch
+                    del total_loss
+                    del model_loss
+                    del predictions
+
+                    # --- add image prediction for tensorboard
+                    if (ckpt.step % visualization_every) == 0:
+                        # add prediction of training image using the test (to stop dropout)
+                        predictions = \
+                            test_denoiser_step(noisy_image_batch)
+
+                        prediction_denoiser = [
+                            predictions[idx]
+                            for idx in denoiser_index
+                        ]
+
+                        x_error = \
+                            tf.clip_by_value(
+                                tf.abs(input_image_batch - prediction_denoiser[0]),
+                                clip_value_min=0.0,
+                                clip_value_max=255.0
+                            )
+                        x_collage = \
+                            tf.concat(
+                                values=[
+                                    tf.concat(
+                                        values=[input_image_batch, noisy_image_batch],
+                                        axis=2),
+                                    tf.concat(
+                                        values=[prediction_denoiser[0], x_error],
+                                        axis=2)
+                                ],
+                                axis=1) / 255
+                        tf.summary.image(name="train/collage",
+                                         data=x_collage,
+                                         max_outputs=visualization_number,
+                                         step=ckpt.step)
+                        del x_error
+                        del x_collage
+
+                        for i in range(len(prediction_denoiser)):
+                            x_collage = tf.concat(
+                                values=[scale_gt_image_batch[i], prediction_denoiser[i]],
+                                axis=2) / 255
+                            tf.summary.image(name=f"debug/scale_{i}",
+                                             data=x_collage,
+                                             max_outputs=visualization_number,
+                                             step=ckpt.step)
+                            del x_collage
+
+                        del predictions
+                        del prediction_denoiser
+
+                        # add weights heatmap and boxplot distribution
+                        weights_boxplot = \
+                            visualize_weights_boxplot(
+                                trainable_variables=trainable_variables) / 255
+                        tf.summary.image(name="weights/boxplot",
+                                         data=weights_boxplot,
+                                         max_outputs=visualization_number,
+                                         step=ckpt.step,
+                                         description="weights boxplot")
+                        del weights_boxplot
+
+                        weights_heatmap = \
+                            visualize_weights_heatmap(
+                                trainable_variables=trainable_variables) / 255
+                        tf.summary.image(name="weights/heatmap",
+                                         data=weights_heatmap,
+                                         max_outputs=visualization_number,
+                                         step=ckpt.step,
+                                         description="weights heatmap")
+                        del weights_heatmap
+
+                    del input_image_batch
+                    del noisy_image_batch
+                    del scale_gt_image_batch
 
                     # --- test
-                    # test_done = False
-                    # while not test_done:
-                    #     try:
-                    #         input_image_batch_test, noisy_image_batch_test = \
-                    #             dataset_test.get_next()
-                    #         predictions = \
-                    #             test_denoiser_step(noisy_image_batch_test)[denoiser_index[0]]
-                    #
-                    #         # compute the loss value for this mini-batch
-                    #         loss_test = \
-                    #             denoiser_loss_fn(
-                    #                 input_batch=input_image_batch_test,
-                    #                 predicted_batch=predictions)
-                    #         tf.summary.scalar(name=f"test/mae",
-                    #                           data=loss_test[MAE_LOSS_STR],
-                    #                           step=ckpt.step)
-                    #         tf.summary.scalar(name=f"test/ssim",
-                    #                           data=loss_test[SSIM_LOSS_STR],
-                    #                           step=ckpt.step)
-                    #         tf.summary.scalar(name=f"test/total",
-                    #                           data=loss_test[TOTAL_LOSS_STR],
-                    #                           step=ckpt.step)
-                    #
-                    #         if (ckpt.step % visualization_every) == 0:
-                    #             x_error = \
-                    #                 tf.clip_by_value(
-                    #                     tf.abs(input_image_batch_test - predictions),
-                    #                     clip_value_min=0.0,
-                    #                     clip_value_max=255.0
-                    #                 )
-                    #             x_collage = \
-                    #                 tf.concat(
-                    #                     values=[
-                    #                         tf.concat(
-                    #                             values=[input_image_batch_test, noisy_image_batch_test],
-                    #                             axis=2),
-                    #                         tf.concat(
-                    #                             values=[predictions, x_error],
-                    #                             axis=2)
-                    #                     ],
-                    #                     axis=1) / 255
-                    #             tf.summary.image(name="test/collage",
-                    #                              data=x_collage,
-                    #                              max_outputs=visualization_number,
-                    #                              step=ckpt.step)
-                    #             del x_error
-                    #             del x_collage
-                    #         del noisy_image_batch_test
-                    #         del input_image_batch_test
-                    #         test_done = True
-                    #     except tf.errors.OutOfRangeError:
-                    #         dataset_test = iter(dataset.testing)
+                    test_done = False
+                    while not test_done:
+                        try:
+                            input_image_batch_test, noisy_image_batch_test = \
+                                dataset_test.get_next()
+                            predictions = \
+                                test_denoiser_step(noisy_image_batch_test)[denoiser_index[0]]
+
+                            # compute the loss value for this mini-batch
+                            loss_test = \
+                                denoiser_loss_fn(
+                                    input_batch=input_image_batch_test,
+                                    predicted_batch=predictions)
+                            tf.summary.scalar(name=f"test/mae",
+                                              data=loss_test[MAE_LOSS_STR],
+                                              step=ckpt.step)
+                            tf.summary.scalar(name=f"test/ssim",
+                                              data=loss_test[SSIM_LOSS_STR],
+                                              step=ckpt.step)
+                            tf.summary.scalar(name=f"test/total",
+                                              data=loss_test[TOTAL_LOSS_STR],
+                                              step=ckpt.step)
+
+                            if (ckpt.step % visualization_every) == 0:
+                                x_error = \
+                                    tf.clip_by_value(
+                                        tf.abs(input_image_batch_test - predictions),
+                                        clip_value_min=0.0,
+                                        clip_value_max=255.0
+                                    )
+                                x_collage = \
+                                    tf.concat(
+                                        values=[
+                                            tf.concat(
+                                                values=[input_image_batch_test, noisy_image_batch_test],
+                                                axis=2),
+                                            tf.concat(
+                                                values=[predictions, x_error],
+                                                axis=2)
+                                        ],
+                                        axis=1) / 255
+                                tf.summary.image(name="test/collage",
+                                                 data=x_collage,
+                                                 max_outputs=visualization_number,
+                                                 step=ckpt.step)
+                                del x_error
+                                del x_collage
+                            del noisy_image_batch_test
+                            del input_image_batch_test
+                            test_done = True
+                        except tf.errors.OutOfRangeError:
+                            dataset_test = iter(dataset.testing)
 
                     # --- check if it is time to save a checkpoint
                     if checkpoint_every > 0 and ckpt.step > 0 and \
