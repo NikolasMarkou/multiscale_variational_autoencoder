@@ -253,15 +253,19 @@ def train_loop(
                 ],
                 reduce_retracing=True)
 
-        @tf.function(reduce_retracing=True)
+        @tf.function(input_signature=[
+                         tf.TensorSpec(shape=[batch_size, None, None, input_shape[-1]], dtype=tf.float32)
+                     ])
         def train_denoiser_step(n: tf.Tensor) -> List[tf.Tensor]:
             return ckpt.hydra(n, training=True)
 
-        @tf.function(reduce_retracing=True)
+        @tf.function(input_signature=[
+                         tf.TensorSpec(shape=[batch_size, None, None, input_shape[-1]], dtype=tf.float32)
+                     ])
         def test_denoiser_step(n: tf.Tensor) -> List[tf.Tensor]:
             return ckpt.hydra(n, training=False)
 
-        @tf.function(reduce_retracing=True)
+        @tf.function(autograph=True)
         def downsample_step(n: tf.Tensor) -> List[tf.Tensor]:
             scales = []
             n_scale = n
