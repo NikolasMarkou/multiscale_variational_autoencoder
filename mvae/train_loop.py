@@ -419,6 +419,7 @@ def train_loop(
                         # del predictions
                         # del model_loss, total_loss
                         # del input_image_batch, noisy_image_batch, scale_gt_image_batch
+                        tape.reset()
                 del tape
                 #     for i in range(len(gradients)):
                 #         gradients[i] /= gpu_batches_per_step_float
