@@ -379,13 +379,13 @@ def train_loop(
                         scale_gt_image_batch = \
                             downsample_step(input_image_batch)
 
-                        # zero out loss
-                        # with tf.GradientTape() as tape:
-                        #     tape.watch(trainable_variables)
-                        #
-                        #     total_denoiser_loss = 0.0
-                        #     predictions = \
-                        #         train_denoiser_step(noisy_image_batch)
+                        with tf.GradientTape() as tape:
+                            tape.watch(trainable_variables)
+
+                            # zero out loss
+                            total_denoiser_loss = 0.0
+                            predictions = \
+                                train_denoiser_step(noisy_image_batch)
                         #
                         #     # compute the loss value for this mini-batch
                         #     for i, idx in enumerate(denoiser_index):
@@ -415,7 +415,10 @@ def train_loop(
                         #     for i, grad in enumerate(gradient):
                         #         gradients[i] += (grad / gpu_batches_per_step_float)
                         #     del gradient
-
+                        del predictions
+                        del input_image_batch, \
+                            noisy_image_batch, \
+                            scale_gt_image_batch
                     except tf.errors.OutOfRangeError:
                         epoch_finished_training = True
                         break
