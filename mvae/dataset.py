@@ -371,8 +371,7 @@ def dataset_builder(
         .shuffle(
             seed=0,
             buffer_size=1024,
-            reshuffle_each_iteration=False) \
-        .cache("./tf_cache")
+            reshuffle_each_iteration=False)
 
     dataset_training = \
         dataset_full \
