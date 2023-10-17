@@ -87,10 +87,7 @@ def train_loop(
 
     # --- build loss function
     loss_fn_map = loss_function_builder(config=config["loss"])
-    model_loss_fn = \
-        tf.function(
-            func=loss_fn_map[MODEL_LOSS_FN_STR],
-            reduce_retracing=True)
+    model_loss_fn = loss_fn_map[MODEL_LOSS_FN_STR]
 
     # --- build optimizer
     optimizer, lr_schedule = \
