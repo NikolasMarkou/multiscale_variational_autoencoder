@@ -312,10 +312,6 @@ def train_loop(
             0.0
             for _ in range(denoiser_levels)
         ]
-        gradients = [
-            0.0
-            for _ in range(len(trainable_variables))
-        ]
         all_denoiser_loss = [
             dict()
             for _ in range(denoiser_levels)
@@ -374,8 +370,7 @@ def train_loop(
 
                     start_time_forward_backward = time.time()
 
-                    for i in range(len(gradients)):
-                        gradients[i] *= 0.0
+                    gradients = [0.0] * len(trainable_variables)
 
                     for batch in range(gpu_batches_per_step):
                         try:
@@ -439,6 +434,7 @@ def train_loop(
                             gradients,
                             trainable_variables),
                         skip_gradients_aggregation=False)
+                    del gradients
 
                     # --- add loss summaries for tensorboard
                     tf.summary.scalar(name=f"train/mae",
