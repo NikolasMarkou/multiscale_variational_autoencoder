@@ -391,13 +391,11 @@ def dataset_builder(
             .prefetch(buffer_size=1)
 
     dataset_testing = \
-        dataset_full \
-            .skip(
-                count=dataset_size_training) \
-            .shuffle(
-                seed=0,
-                buffer_size=1024,
-                reshuffle_each_iteration=True) \
+        tf.data.Dataset.from_generator(
+            generator=dataset_generator,
+            output_signature=(
+                tf.TensorSpec(shape=(), dtype=tf.string)
+            )) \
             .map(
                 map_func=load_image_fn,
                 num_parallel_calls=4,
@@ -405,6 +403,10 @@ def dataset_builder(
             .map(map_func=prepare_data_fn,
                  num_parallel_calls=4,
                  deterministic=False) \
+            .shuffle(
+                seed=0,
+                buffer_size=1024,
+                reshuffle_each_iteration=True) \
             .rebatch(
                 batch_size=batch_size,
                 drop_remainder=True) \
