@@ -140,7 +140,7 @@ def train_loop(
     visualization_number = train_config.get("visualization_number", 5)
 
     # --- train the model
-    with ((tf.summary.create_file_writer(model_dir).as_default())):
+    with (((tf.summary.create_file_writer(model_dir).as_default()))):
         # --- write configuration in tensorboard
         tf.summary.text("config", pformat(config), step=0)
 
@@ -377,50 +377,58 @@ def train_loop(
                     for i in range(len(gradients)):
                         gradients[i] *= 0.0
 
-                    try:
-                        input_image_batch, noisy_image_batch = \
-                            dataset_train.get_next()
-                    except tf.errors.OutOfRangeError:
-                        epoch_finished_training = True
-                        break
+                    for batch in gpu_batches_per_step:
+                        try:
+                            input_image_batch, noisy_image_batch = \
+                                dataset_train.get_next()
+                        except tf.errors.OutOfRangeError:
+                            epoch_finished_training = True
+                            break
 
-                    scale_gt_image_batch = \
-                        downsample_step(input_image_batch)
+                        scale_gt_image_batch = \
+                            downsample_step(input_image_batch)
 
-                    # zero out loss
-                    tape.reset()
-                    tape.watch(trainable_variables)
-                    total_denoiser_loss = 0.0
-                    predictions = train_denoiser_step(noisy_image_batch)
+                        # zero out loss
+                        tape.reset()
+                        tape.watch(trainable_variables)
+                        total_denoiser_loss = 0.0
+                        predictions = train_denoiser_step(noisy_image_batch)
 
-                    # compute the loss value for this mini-batch
-                    for i, idx in enumerate(denoiser_index):
-                        loss_train = \
-                            denoiser_loss_fn(
-                                input_batch=scale_gt_image_batch[i],
-                                predicted_batch=predictions[idx])
-                        total_denoiser_loss += \
-                            loss_train[TOTAL_LOSS_STR] * \
-                            depth_weight[i]
-                        all_denoiser_loss[i] = loss_train
-                        del loss_train
+                        # compute the loss value for this mini-batch
+                        for i, idx in enumerate(denoiser_index):
+                            loss_train = \
+                                denoiser_loss_fn(
+                                    input_batch=scale_gt_image_batch[i],
+                                    predicted_batch=predictions[idx])
+                            total_denoiser_loss += \
+                                loss_train[TOTAL_LOSS_STR] * \
+                                depth_weight[i]
+                            all_denoiser_loss[i] = loss_train
+                            del loss_train
 
-                    # combine losses
-                    model_loss = \
-                        model_loss_fn(model=ckpt.hydra)
-                    total_loss = \
-                        total_denoiser_loss + \
-                        model_loss[TOTAL_LOSS_STR]
+                        # combine losses
+                        model_loss = \
+                            model_loss_fn(model=ckpt.hydra)
+                        total_loss = \
+                            total_denoiser_loss + \
+                            model_loss[TOTAL_LOSS_STR]
 
-                    gradient = \
-                        tape.gradient(
-                            target=total_loss,
-                            sources=trainable_variables)
+                        gradient = \
+                            tape.gradient(
+                                target=total_loss,
+                                sources=trainable_variables)
 
-                    # aggregate gradients
-                    for i, grad in enumerate(gradient):
-                        gradients[i] += grad
-                    del gradient
+                        # aggregate gradients
+                        for i, grad in enumerate(gradient):
+                            gradients[i] += grad
+                        del gradient
+
+                        if batch < gpu_batches_per_step - 1:
+                            del model_loss, total_loss
+                            del input_image_batch, noisy_image_batch, scale_gt_image_batch
+
+                    for i in range(len(gradients)):
+                        gradients[i] /= gpu_batches_per_step_float
 
                     # apply gradient to change weights
                     optimizer.apply_gradients(
@@ -574,6 +582,7 @@ def train_loop(
                                                  step=ckpt.step)
                                 del x_error
                                 del x_collage
+                                del predictions
                             del noisy_image_batch_test
                             del input_image_batch_test
                             test_done = True
