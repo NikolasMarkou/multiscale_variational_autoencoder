@@ -1,5 +1,4 @@
 import copy
-
 import numpy as np
 import tensorflow as tf
 from typing import Dict, Tuple, Union, List
@@ -39,39 +38,58 @@ class Mish(tf.keras.layers.Layer):
 
 # ---------------------------------------------------------------------
 
-class GaussianFilter(tf.keras.layers.Layer):
+class GaussianFilter2d(tf.keras.layers.Layer):
     def __init__(
             self,
             kernel_size: Tuple[int, int] = (5, 5),
             strides: Tuple[int, int] = [1, 1],
+            sigma: Tuple[float, float] = None,
+            trainable: bool = False,
             name: str = None,
             **kwargs):
-        super(GaussianFilter, self).__init__(
-            trainable=False,
+        super(GaussianFilter2d, self).__init__(
+            trainable=trainable,
             name=name,
             **kwargs)
+        # check kernel size
         if len(kernel_size) != 2:
             raise ValueError("kernel size must be length 2")
+        self._kernel_size = kernel_size
+
+        # check strides
+        if strides is None:
+            strides = [1, 1]
         if len(strides) == 2:
             strides = [1] + list(strides) + [1]
-        self._kernel_size = kernel_size
         self._strides = strides
-        self._sigma = ((kernel_size[0] - 1) / 2, (kernel_size[1] - 1) / 2)
-        self._kernel = None
+
+        # check sigma
+        if sigma is None:
+            # adjust sigma (it's always 1 per pixel)
+            sigma = ((kernel_size[0] - 1) / 2, (kernel_size[1] - 1) / 2)
+        self._sigma = sigma
+
+        # add placeholder for kernel
+        self._kernel = \
+            self.add_weight(
+                name="gaussian_kernel",
+                shape=(None, None, None, None),
+                dtype=tf.float32,
+                trainable=trainable)
 
     def build(self, input_shape):
         from .utilities import depthwise_gaussian_kernel
+
+        if len(input_shape) != 4:
+            raise ValueError(f"GaussianFilter2d expects 4 dimensional input shape, "
+                             f"got [{input_shape}] instead")
+
         kernel = \
             depthwise_gaussian_kernel(
                 channels=input_shape[-1],
                 kernel_size=self._kernel_size,
                 nsig=self._sigma).astype("float32")
-        self._kernel = \
-            self.add_weight(
-                name="gaussian_kernel",
-                shape=kernel.shape,
-                dtype=tf.float32,
-                trainable=False)
+
         self._kernel.assign(kernel)
 
     def get_config(self):
