@@ -14,7 +14,7 @@ from typing import List, Dict, Union, Tuple
 from .constants import *
 from .custom_logger import logger
 from .custom_layers import \
-    GaussianFilter, \
+    GaussianFilter2d, \
     RandomOnOffGradient, \
     RandomOnOff
 from .utilities import conv2d_wrapper, ConvType
@@ -254,7 +254,7 @@ def builder(
                     node_level = (i-1, 0)
                     # gaussian blur
                     x_blurred = \
-                        GaussianFilter(
+                        GaussianFilter2d(
                             kernel_size=(5, 5),
                             strides=(1, 1))(x)
                     # laplacian
