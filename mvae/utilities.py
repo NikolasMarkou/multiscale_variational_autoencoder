@@ -6,7 +6,7 @@ import numpy as np
 from enum import Enum
 import tensorflow as tf
 from pathlib import Path
-from typing import Tuple, Union, Dict, Iterable
+from typing import Tuple, Union, Dict, Iterable, List
 
 # ---------------------------------------------------------------------
 # local imports
@@ -224,8 +224,6 @@ def conv2d_wrapper(
 
     :return: transformed input
     """
-    from .backbone_blocks import squeeze_and_excite_block
-
     # --- argument checking
     if input_layer is None:
         raise ValueError("input_layer cannot be None")

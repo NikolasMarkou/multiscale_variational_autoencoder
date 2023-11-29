@@ -276,12 +276,12 @@ def builder_unet_p(
     nodes_visited = set([(depth - 1, 0), (depth - 1, 1)])
 
     # --- build model
-    # set input
-    input_layer = \
+    # set input layer
+    encoder_input_layer = \
         keras.Input(
-            name="input_tensor",
+            name=INPUT_TENSOR_STR,
             shape=input_dims)
-    x = input_layer
+    x = encoder_input_layer
 
     # build backbone
     for d in range(depth):
@@ -376,6 +376,23 @@ def builder_unet_p(
     # --- VERY IMPORTANT
     # add this, so it works correctly
     nodes_output[(depth-1, 1)] = nodes_output[(depth-1, 0)]
+
+    # --- create encoder
+    model_encoder = tf.keras.Model(
+        name=f"{name}_encoder",
+        trainable=True,
+        inputs=encoder_input_layer,
+        outputs=[
+            nodes_output[(d, 0)]
+            for d in range(depth)
+        ])
+
+    decoder_inputs = [
+        tf.keras.Input(
+            name=f"input_tensor_{d}",
+            shape=(None, None, conv_params_res_3[d]["filters"]))
+        for d in range(depth)
+    ]
 
     # --- build the encoder side based on dependencies
     while len(nodes_to_visit) > 0:
@@ -503,7 +520,8 @@ def builder_unet_p(
             w = 1
 
             if d < 0 or w < 0:
-                logger.error(f"there is no node[{d},{w}] please check your assumptions")
+                logger.error(f"there is no node[{d},{w}] "
+                             f"please check your assumptions")
                 continue
             x = nodes_output[(d, w)]
             tmp_output_layers.append(x)
@@ -537,11 +555,13 @@ def builder_unet_p(
             tf.keras.layers.Layer(
                 name=f"{output_layer_name}_{d}")(output_layers[d]))
 
-    return \
-        tf.keras.Model(
-            name=name,
-            trainable=True,
-            inputs=input_layer,
-            outputs=output_layers)
+    # --- create decoder
+    model_decoder = tf.keras.Model(
+        name=f"{name}_decoder",
+        trainable=True,
+        inputs=decoder_inputs,
+        outputs=output_layers)
+
+    return model_encoder, model_decoder
 
 # ---------------------------------------------------------------------
