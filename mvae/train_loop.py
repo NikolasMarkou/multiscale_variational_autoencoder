@@ -22,9 +22,7 @@ from .loss import loss_function_builder
 from .utilities_checkpoints import \
     create_checkpoint, \
     model_weights_from_checkpoint
-from .models import \
-    model_builder, \
-    model_output_indices
+from .models import model_builder, model_output_indices
 from .utilities import \
     load_config, \
     save_config, \
@@ -37,6 +35,7 @@ from .visualize import \
 # ---------------------------------------------------------------------
 
 CURRENT_DIRECTORY = os.path.realpath(os.path.dirname(__file__))
+
 
 # ---------------------------------------------------------------------
 
@@ -119,7 +118,6 @@ def train_loop(
     gpu_batches_per_step = int(train_config.get("gpu_batches_per_step", 1))
     if gpu_batches_per_step <= 0:
         raise ValueError("gpu_batches_per_step must be > 0")
-    gpu_batches_per_step_float = float(gpu_batches_per_step)
 
     # how many checkpoints to keep
     checkpoints_to_keep = \
@@ -140,7 +138,7 @@ def train_loop(
     visualization_number = train_config.get("visualization_number", 5)
 
     # --- train the model
-    with ((tf.summary.create_file_writer(model_dir).as_default())):
+    with tf.summary.create_file_writer(model_dir).as_default():
         # --- write configuration in tensorboard
         tf.summary.text("config", pformat(config), step=0)
 
@@ -228,49 +226,38 @@ def train_loop(
         # find indices of denoiser,
         model_no_outputs = model_output_indices(len(ckpt.hydra.outputs))
         denoiser_index = model_no_outputs[DENOISER_STR]
-        denoiser_levels = len(denoiser_index)
 
         logger.info(f"model number of outputs: \n"
                     f"{pformat(model_no_outputs)}")
 
-        # this is set only once in the first call
-        gaussian_kernel = \
-            tf.constant(
-                depthwise_gaussian_kernel(
-                    channels=input_shape[-1],
-                    kernel_size=(5, 5),
-                    dtype=np.float32),
-                dtype=tf.float32)
-
-        denoiser_loss_fn = \
+        denoiser_loss_fn = [
             tf.function(
                 func=copy.deepcopy(loss_fn_map[DENOISER_LOSS_FN_STR]),
-                autograph=True,
-                jit_compile=False,
+                jit_compile=True,
                 input_signature=[
                     tf.TensorSpec(shape=[batch_size, None, None, input_shape[-1]], dtype=tf.float32),
                     tf.TensorSpec(shape=[batch_size, None, None, input_shape[-1]], dtype=tf.float32),
                 ],
                 reduce_retracing=True)
 
-        @tf.function(input_signature=[
-                         tf.TensorSpec(shape=[batch_size, None, None, input_shape[-1]], dtype=tf.float32)
-                     ])
+            for _ in denoiser_index
+        ]
+
+        @tf.function(reduce_retracing=True, jit_compile=False)
         def train_denoiser_step(n: tf.Tensor) -> List[tf.Tensor]:
             return ckpt.hydra(n, training=True)
 
-        @tf.function(input_signature=[
-                         tf.TensorSpec(shape=[batch_size, None, None, input_shape[-1]], dtype=tf.float32)
-                     ])
-        def test_denoiser_step(n: tf.Tensor) -> List[tf.Tensor]:
-            return ckpt.hydra(n, training=False)
+        @tf.function(reduce_retracing=True, jit_compile=False)
+        def test_denoiser_step(n: tf.Tensor) -> tf.Tensor:
+            results = ckpt.hydra(n, training=False)
+            return results[denoiser_index[0]]
 
         @tf.function(autograph=True)
         def downsample_step(n: tf.Tensor) -> List[tf.Tensor]:
             scales = []
             n_scale = n
 
-            for _ in range(denoiser_levels):
+            for _ in range(len(denoiser_index)):
                 scales.append(n_scale)
                 # downsample, clip and round
                 n_scale = \
@@ -306,20 +293,20 @@ def train_loop(
             tf.summary.flush()
             tf.summary.trace_off()
 
+        gaussian_kernel = tf.constant(
+            depthwise_gaussian_kernel(
+                channels=input_shape[-1],
+                kernel_size=(5, 5),
+                dtype=np.float32), dtype=tf.float32)
+
+        depth_weight = [
+            tf.constant(1.0, dtype=tf.float32)
+            for _ in range(len(denoiser_index))
+        ]
+
+        # ---
         finished_training = False
         trainable_variables = ckpt.hydra.trainable_variables
-        depth_weight = [
-            0.0
-            for _ in range(denoiser_levels)
-        ]
-        gradients = [
-            0.0
-            for _ in range(len(trainable_variables))
-        ]
-        all_denoiser_loss = [
-            dict()
-            for _ in range(denoiser_levels)
-        ]
 
         while not finished_training and \
                 (total_epochs == -1 or ckpt.epoch < total_epochs):
@@ -337,14 +324,18 @@ def train_loop(
                 percentage_done = 0.0
 
             # adjust weights per depth
-            sum_depth_weight = 0.0
+            sum_depth_weight = tf.constant(0.0, dtype=tf.float32)
+            depth_weight = [
+                tf.constant(float(output_discount_factor ** (float(i) * percentage_done)),
+                            dtype=tf.float32)
+                for i in range(len(denoiser_index))
+            ]
+
             for i in range(len(denoiser_index)):
-                depth_weight[i] = \
-                            float(output_discount_factor ** (float(i) * percentage_done))
                 sum_depth_weight += depth_weight[i]
 
             for i in range(len(denoiser_index)):
-                depth_weight[i] = depth_weight[i] / sum_depth_weight
+                depth_weight[i] /= sum_depth_weight
 
             depth_weight_str = [
                 "{0:.2f}".format(depth_weight[i])
@@ -358,6 +349,23 @@ def train_loop(
             epoch_finished_training = False
             dataset_train = iter(dataset.training)
             dataset_test = iter(dataset.testing)
+            total_loss = tf.constant(0.0, dtype=tf.float32)
+            gradients = [
+                tf.constant(0.0, dtype=tf.float32)
+                for _ in range(len(trainable_variables))
+            ]
+            gradients_moving_average = [
+                tf.constant(0.0, dtype=tf.float32)
+                for _ in range(len(trainable_variables))
+            ]
+            prediction_denoiser = [
+                tf.constant(0.0, dtype=tf.float32)
+                for _ in denoiser_index
+            ]
+            all_denoiser_loss = [
+                None
+                for _ in denoiser_index
+            ]
 
             # --- check if total steps reached
             if total_steps != -1:
@@ -366,225 +374,240 @@ def train_loop(
                         int(total_steps)))
                     finished_training = True
 
+            total_denoiser_loss = tf.constant(0.0, dtype=tf.float32)
+
             # --- iterate over the batches of the dataset
             while not finished_training and \
                     not epoch_finished_training:
 
                 start_time_forward_backward = time.time()
 
-                for i in range(len(gradients)):
-                    gradients[i] *= 0.0
+                for _ in range(gpu_batches_per_step):
+                    try:
+                        (input_image_batch, noisy_image_batch) = dataset_train.get_next()
+                    except tf.errors.OutOfRangeError:
+                        epoch_finished_training = True
+                        break
 
-                with tf.GradientTape(watch_accessed_variables=False, persistent=False) as tape:
-                    tape.watch(trainable_variables)
+                    # input
+                    x = input_image_batch
+                    # target
+                    y = noisy_image_batch
+                    scale_gt_image_batch = downsample_step(x)
 
-                    for batch in range(gpu_batches_per_step):
-                        try:
-                            input_image_batch, noisy_image_batch = \
-                                dataset_train.get_next()
-                        except tf.errors.OutOfRangeError:
-                            epoch_finished_training = True
-                            break
+                    with tf.GradientTape(persistent=False,
+                                         watch_accessed_variables=False) as tape:
+                        tape.watch(trainable_variables)
 
-                        scale_gt_image_batch = \
-                            downsample_step(input_image_batch)
+                        predictions = \
+                            train_denoiser_step(y)
 
-                        # zero out loss
-                        total_denoiser_loss = 0.0
-                        predictions = train_denoiser_step(noisy_image_batch)
+                        # compute the loss value for this mini-batch
+                        total_denoiser_loss *= 0.0
+                        for i, s in enumerate(denoiser_index):
+                            tmp_prediction = predictions[s]
+                            tmp_loss = \
+                                denoiser_loss_fn[i](
+                                    input_batch=scale_gt_image_batch[i],
+                                    predicted_batch=tmp_prediction)
+                            total_denoiser_loss += \
+                                tmp_loss[TOTAL_LOSS_STR] * \
+                                depth_weight[i]
+                            all_denoiser_loss[i] = tmp_loss
+                            prediction_denoiser[i] = tmp_prediction
 
-                        del input_image_batch, \
-                            noisy_image_batch, \
-                            scale_gt_image_batch
+                        # combine losses
+                        model_loss = \
+                            model_loss_fn(model=ckpt.hydra)
+                        total_loss = \
+                            total_denoiser_loss + \
+                            model_loss[TOTAL_LOSS_STR]
+
+                        gradient = \
+                            tape.gradient(
+                                target=total_loss,
+                                sources=trainable_variables)
                         del predictions
 
-                    #
-                    #     # compute the loss value for this mini-batch
-                    #     for i, idx in enumerate(denoiser_index):
-                    #         loss_train = \
-                    #             denoiser_loss_fn(
-                    #                 input_batch=scale_gt_image_batch[i],
-                    #                 predicted_batch=predictions[idx])
-                    #         total_denoiser_loss += \
-                    #             loss_train[TOTAL_LOSS_STR] * \
-                    #             depth_weight[i]
-                    #         all_denoiser_loss[i] = loss_train
-                    #         del loss_train
-                    #
-                    #     # combine losses
-                    #     model_loss = \
-                    #         model_loss_fn(model=ckpt.hydra)
-                    #     total_loss = \
-                    #         total_denoiser_loss + \
-                    #         model_loss[TOTAL_LOSS_STR]
-                    #
-                    #     gradient = \
-                    #         tape.gradient(
-                    #             target=total_loss,
-                    #             sources=trainable_variables)
-                    #
-                    #     # aggregate gradients
-                    #     for i, grad in enumerate(gradient):
-                    #         gradients[i] += (grad / gpu_batches_per_step_float)
-                    #     del gradient
+                    for i, grad in enumerate(gradient):
+                        gradients[i] += grad
 
+                    del x
+                    del y
+                    del tape
+                    del gradient
 
+                # average out gradients
+                for i in range(len(gradients)):
+                    gradients[i] /= float(gpu_batches_per_step)
 
-                # # apply gradient to change weights
-                # optimizer.apply_gradients(
-                #     grads_and_vars=zip(
-                #         gradients,
-                #         trainable_variables),
-                #     skip_gradients_aggregation=False)
+                # apply gradient to change weights
+                optimizer.apply_gradients(
+                    grads_and_vars=zip(
+                        gradients,
+                        trainable_variables))
 
-                # # --- add loss summaries for tensorboard
-                # tf.summary.scalar(name=f"train/mae",
-                #                   data=all_denoiser_loss[0][MAE_LOSS_STR],
-                #                   step=ckpt.step)
-                # tf.summary.scalar(name=f"train/ssim",
-                #                   data=all_denoiser_loss[0][SSIM_LOSS_STR],
-                #                   step=ckpt.step)
-                # tf.summary.scalar(name=f"train/total",
-                #                   data=all_denoiser_loss[0][TOTAL_LOSS_STR],
-                #                   step=ckpt.step)
-                # for i, loss_train in enumerate(all_denoiser_loss):
-                #     tf.summary.scalar(name=f"debug/scale_{i}/mae",
-                #                       data=loss_train[MAE_LOSS_STR],
-                #                       step=ckpt.step)
-                # tf.summary.scalar(name="loss/regularization",
-                #                   data=model_loss[REGULARIZATION_LOSS_STR],
-                #                   step=ckpt.step)
-                # tf.summary.scalar(name="loss/total",
-                #                   data=total_loss,
-                #                   step=ckpt.step)
-                # del total_loss
-                # del model_loss
-                #
-                # # --- add image prediction for tensorboard
-                # if (ckpt.step % visualization_every) == 0:
-                #     # add prediction of training image using the test (to stop dropout)
-                #     predictions = \
-                #         test_denoiser_step(noisy_image_batch)
-                #
-                #     prediction_denoiser = [
-                #         predictions[idx]
-                #         for idx in denoiser_index
-                #     ]
-                #
-                #     x_error = \
-                #         tf.clip_by_value(
-                #             tf.abs(input_image_batch - prediction_denoiser[0]),
-                #             clip_value_min=0.0,
-                #             clip_value_max=255.0
-                #         )
-                #     x_collage = \
-                #         tf.concat(
-                #             values=[
-                #                 tf.concat(
-                #                     values=[input_image_batch, noisy_image_batch],
-                #                     axis=2),
-                #                 tf.concat(
-                #                     values=[prediction_denoiser[0], x_error],
-                #                     axis=2)
-                #             ],
-                #             axis=1) / 255
-                #     tf.summary.image(name="train/collage",
-                #                      data=x_collage,
-                #                      max_outputs=visualization_number,
-                #                      step=ckpt.step)
-                #     del x_error
-                #     del x_collage
-                #
-                #     for i in range(len(prediction_denoiser)):
-                #         x_collage = tf.concat(
-                #             values=[scale_gt_image_batch[i], prediction_denoiser[i]],
-                #             axis=2) / 255
-                #         tf.summary.image(name=f"debug/scale_{i}",
-                #                          data=x_collage,
-                #                          max_outputs=visualization_number,
-                #                          step=ckpt.step)
-                #         del x_collage
-                #
-                #     del predictions
-                #     del prediction_denoiser
-                #
-                #     # add weights heatmap and boxplot distribution
-                #     weights_boxplot = \
-                #         visualize_weights_boxplot(
-                #             trainable_variables=trainable_variables) / 255
-                #     tf.summary.image(name="weights/boxplot",
-                #                      data=weights_boxplot,
-                #                      max_outputs=visualization_number,
-                #                      step=ckpt.step,
-                #                      description="weights boxplot")
-                #     del weights_boxplot
-                #
-                #     weights_heatmap = \
-                #         visualize_weights_heatmap(
-                #             trainable_variables=trainable_variables) / 255
-                #     tf.summary.image(name="weights/heatmap",
-                #                      data=weights_heatmap,
-                #                      max_outputs=visualization_number,
-                #                      step=ckpt.step,
-                #                      description="weights heatmap")
-                #     del weights_heatmap
-                #
-                # del input_image_batch
-                # del noisy_image_batch
+                # --- zero gradients to reuse it in the next iteration
+                # moved at the end, so we can use it for visualization
+                for i in range(len(gradients)):
+                    gradients_moving_average[i] = \
+                        gradients_moving_average[i] * 0.99 + \
+                        gradients[i] * 0.01
+                    gradients[i] *= 0.0
+
+                # --- add loss summaries for tensorboard
+                tf.summary.scalar(name=f"train/mae",
+                                  data=all_denoiser_loss[0][MAE_LOSS_STR],
+                                  step=ckpt.step)
+                tf.summary.scalar(name=f"train/ssim",
+                                  data=all_denoiser_loss[0][SSIM_LOSS_STR],
+                                  step=ckpt.step)
+                tf.summary.scalar(name=f"train/total",
+                                  data=all_denoiser_loss[0][TOTAL_LOSS_STR],
+                                  step=ckpt.step)
+                for i, loss_train in enumerate(all_denoiser_loss):
+                    tf.summary.scalar(name=f"debug/scale_{i}/mae",
+                                      data=loss_train[MAE_LOSS_STR],
+                                      step=ckpt.step)
+                    tf.summary.scalar(name=f"debug/scale_{i}/ssim",
+                                      data=loss_train[SSIM_LOSS_STR],
+                                      step=ckpt.step)
+                # model
+                tf.summary.scalar(name="loss/regularization",
+                                  data=model_loss[REGULARIZATION_LOSS_STR],
+                                  step=ckpt.step)
+                tf.summary.scalar(name="loss/total",
+                                  data=total_loss,
+                                  step=ckpt.step)
+
+                # --- add image prediction for tensorboard
+                if (ckpt.step % visualization_every) == 0:
+                    x_error = \
+                        tf.clip_by_value(
+                            tf.abs(input_image_batch - prediction_denoiser[0]),
+                            clip_value_min=0.0,
+                            clip_value_max=255.0
+                        )
+                    x_collage = \
+                        tf.concat(
+                            values=[
+                                tf.concat(
+                                    values=[input_image_batch, noisy_image_batch],
+                                    axis=2),
+                                tf.concat(
+                                    values=[prediction_denoiser[0], x_error],
+                                    axis=2)
+                            ],
+                            axis=1) / 255
+                    tf.summary.image(name="train/collage",
+                                     data=x_collage,
+                                     max_outputs=visualization_number,
+                                     step=ckpt.step)
+                    del x_error
+                    del x_collage
+
+                    for i in range(len(prediction_denoiser)):
+                        x_collage = tf.concat(
+                            values=[scale_gt_image_batch[i], prediction_denoiser[i]],
+                            axis=2) / 255
+                        tf.summary.image(name=f"debug/scale_{i}",
+                                         data=x_collage,
+                                         max_outputs=visualization_number,
+                                         step=ckpt.step)
+                        del x_collage
+
+                    # --- add gradient activity
+                    gradient_activity = \
+                        visualize_gradient_boxplot(
+                            gradients=gradients_moving_average,
+                            trainable_variables=trainable_variables) / 255
+                    tf.summary.image(name="weights/gradients",
+                                     data=gradient_activity,
+                                     max_outputs=visualization_number,
+                                     step=ckpt.step,
+                                     description="gradient activity")
+                    del gradient_activity
+
+                    # --- add weights distribution
+                    weights_boxplot = \
+                        visualize_weights_boxplot(
+                            trainable_variables=trainable_variables) / 255
+                    tf.summary.image(name="weights/boxplot",
+                                     data=weights_boxplot,
+                                     max_outputs=visualization_number,
+                                     step=ckpt.step,
+                                     description="weights boxplot")
+                    del weights_boxplot
+
+                    weights_heatmap = \
+                        visualize_weights_heatmap(
+                            trainable_variables=trainable_variables) / 255
+                    tf.summary.image(name="weights/heatmap",
+                                     data=weights_heatmap,
+                                     max_outputs=visualization_number,
+                                     step=ckpt.step,
+                                     description="weights heatmap")
+                    del weights_heatmap
+
+                # ---
+                del input_image_batch
+                del noisy_image_batch
 
                 # --- test
-                # test_done = False
-                # while not test_done:
-                #     try:
-                #         input_image_batch_test, noisy_image_batch_test = \
-                #             dataset_test.get_next()
-                #         predictions = \
-                #             test_denoiser_step(noisy_image_batch_test)[denoiser_index[0]]
-                #
-                #         # compute the loss value for this mini-batch
-                #         loss_test = \
-                #             denoiser_loss_fn(
-                #                 input_batch=input_image_batch_test,
-                #                 predicted_batch=predictions)
-                #         tf.summary.scalar(name=f"test/mae",
-                #                           data=loss_test[MAE_LOSS_STR],
-                #                           step=ckpt.step)
-                #         tf.summary.scalar(name=f"test/ssim",
-                #                           data=loss_test[SSIM_LOSS_STR],
-                #                           step=ckpt.step)
-                #         tf.summary.scalar(name=f"test/total",
-                #                           data=loss_test[TOTAL_LOSS_STR],
-                #                           step=ckpt.step)
-                #
-                #         if (ckpt.step % visualization_every) == 0:
-                #             x_error = \
-                #                 tf.clip_by_value(
-                #                     tf.abs(input_image_batch_test - predictions),
-                #                     clip_value_min=0.0,
-                #                     clip_value_max=255.0
-                #                 )
-                #             x_collage = \
-                #                 tf.concat(
-                #                     values=[
-                #                         tf.concat(
-                #                             values=[input_image_batch_test, noisy_image_batch_test],
-                #                             axis=2),
-                #                         tf.concat(
-                #                             values=[predictions, x_error],
-                #                             axis=2)
-                #                     ],
-                #                     axis=1) / 255
-                #             tf.summary.image(name="test/collage",
-                #                              data=x_collage,
-                #                              max_outputs=visualization_number,
-                #                              step=ckpt.step)
-                #             del x_error
-                #             del x_collage
-                #         del noisy_image_batch_test
-                #         del input_image_batch_test
-                #         test_done = True
-                #     except tf.errors.OutOfRangeError:
-                #         dataset_test = iter(dataset.testing)
+                test_done = False
+                while not test_done:
+                    try:
+                        (input_image_batch_test, noisy_image_batch_test) = \
+                            dataset_test.get_next()
+                        prediction_denoiser_test = \
+                            test_denoiser_step(noisy_image_batch_test)
+
+                        # compute the loss value for this mini-batch
+                        loss_test = \
+                            denoiser_loss_fn[0](
+                                input_batch=input_image_batch_test,
+                                predicted_batch=prediction_denoiser_test)
+                        tf.summary.scalar(name=f"test/mae",
+                                          data=loss_test[MAE_LOSS_STR],
+                                          step=ckpt.step)
+                        tf.summary.scalar(name=f"test/ssim",
+                                          data=loss_test[SSIM_LOSS_STR],
+                                          step=ckpt.step)
+                        tf.summary.scalar(name=f"test/total",
+                                          data=loss_test[TOTAL_LOSS_STR],
+                                          step=ckpt.step)
+
+                        if (ckpt.step % visualization_every) == 0:
+                            x_error = \
+                                tf.clip_by_value(
+                                    tf.abs(input_image_batch_test - prediction_denoiser_test),
+                                    clip_value_min=0.0,
+                                    clip_value_max=255.0
+                                )
+                            x_collage = \
+                                tf.concat(
+                                    values=[
+                                        tf.concat(
+                                            values=[input_image_batch_test, noisy_image_batch_test],
+                                            axis=2),
+                                        tf.concat(
+                                            values=[prediction_denoiser_test, x_error],
+                                            axis=2)
+                                    ],
+                                    axis=1) / 255
+                            tf.summary.image(name="test/collage",
+                                             data=x_collage,
+                                             max_outputs=visualization_number,
+                                             step=ckpt.step)
+                            del x_error
+                            del x_collage
+                        test_done = True
+                        del loss_test
+                        del input_image_batch_test
+                        del noisy_image_batch_test
+                        del prediction_denoiser_test
+                    except tf.errors.OutOfRangeError:
+                        dataset_test = iter(dataset.testing)
 
                 # --- check if it is time to save a checkpoint
                 if checkpoint_every > 0 and ckpt.step > 0 and \
@@ -597,7 +620,7 @@ def train_loop(
                     stop_time_forward_backward - \
                     start_time_forward_backward
 
-                # Getting all memory using os.popen()
+                # Getting all memory using
                 ram_percentage = psutil.virtual_memory()[2]
                 ram_gb = psutil.virtual_memory()[3]/1000000000
 
@@ -607,6 +630,7 @@ def train_loop(
                 tf.summary.scalar(name="training/ram gb used",
                                   data=ram_gb,
                                   step=ckpt.step)
+
                 tf.summary.scalar(name="training/epoch",
                                   data=int(ckpt.epoch),
                                   step=ckpt.step)
@@ -621,10 +645,11 @@ def train_loop(
                 ckpt.step.assign_add(1)
 
                 # --- check if total steps reached
-                if 0 < total_steps <= ckpt.step:
-                    logger.info("total_steps reached [{0}]".format(
+                if total_steps > 0:
+                    if total_steps <= ckpt.step:
+                        logger.info("total_steps reached [{0}]".format(
                             int(total_steps)))
-                    finished_training = True
+                        finished_training = True
 
             end_time_epoch = time.time()
             epoch_time = end_time_epoch - start_time_epoch

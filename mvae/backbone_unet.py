@@ -162,7 +162,7 @@ def builder(
             keras.layers.MaxPooling2D(
                 **pool_params)(x_level)
 
-    # --- add optional dropout in the middle of the unet
+    # --- add optional dropout between encoders and decoders
     if dropout_rate > 0 or spatial_dropout_rate > 0:
         for i in range(len(x_down)):
             if dropout_rate > 0:

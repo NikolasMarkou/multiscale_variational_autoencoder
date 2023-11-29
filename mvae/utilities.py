@@ -192,6 +192,7 @@ class ConvType(Enum):
 def conv2d_wrapper(
         input_layer,
         conv_params: Dict,
+        conv_constant: float = 0.0,
         bn_params: Dict = None,
         ln_params: Dict = None,
         pre_activation: str = None,
@@ -199,7 +200,8 @@ def conv2d_wrapper(
         ln_post_params: Dict = None,
         dropout_params: Dict = None,
         dropout_2d_params: Dict = None,
-        bias_epsilon: float = None,
+        transforms: List = None,
+        use_spectral_normalization: bool = False,
         conv_type: Union[ConvType, str] = ConvType.CONV2D):
     """
     wraps a conv2d with a preceding normalizer
@@ -208,6 +210,7 @@ def conv2d_wrapper(
 
     :param input_layer: the layer to operate on
     :param conv_params: conv2d parameters
+    :param conv_constant: constant value to add to the result
     :param bn_params: batchnorm parameters before the conv, None to disable bn
     :param ln_params: layer normalization parameters before the conv, None to disable ln
     :param pre_activation: activation after the batchnorm, None to disable
@@ -215,11 +218,14 @@ def conv2d_wrapper(
     :param ln_post_params: layer normalization parameters after the conv, None to disable ln
     :param dropout_params: dropout parameters after the conv, None to disable it
     :param dropout_2d_params: dropout parameters after the conv, None to disable it
-    :param bias_epsilon: small bias to ground the weights (experimental)
+    :param transforms: list of transforms that will be run for each iteration of the convolution
+    :param use_spectral_normalization: if true add spectral weight normalization
     :param conv_type: if true use depthwise convolution,
 
     :return: transformed input
     """
+    from .backbone_blocks import squeeze_and_excite_block
+
     # --- argument checking
     if input_layer is None:
         raise ValueError("input_layer cannot be None")
@@ -271,26 +277,40 @@ def conv2d_wrapper(
 
     # --- convolution
     if conv_type == ConvType.CONV2D:
-        x = tf.keras.layers.Conv2D(**conv_params)(x)
+        conv = tf.keras.layers.Conv2D(**conv_params)
     elif conv_type == ConvType.CONV2D_DEPTHWISE:
-        x = tf.keras.layers.DepthwiseConv2D(**conv_params)(x)
+        conv = tf.keras.layers.DepthwiseConv2D(**conv_params)
     elif conv_type == ConvType.CONV2D_TRANSPOSE:
-        x = tf.keras.layers.Conv2DTranspose(**conv_params)(x)
+        conv = tf.keras.layers.Conv2DTranspose(**conv_params)
     elif conv_type == ConvType.CONV2D_SEPARABLE:
-        x = tf.keras.layers.SeparableConv2D(**conv_params)(x)
+        conv = tf.keras.layers.SeparableConv2D(**conv_params)
     else:
         raise ValueError(f"don't know how to handle this [{conv_type}]")
 
-    # --- add a small value to ground the weights
-    if bias_epsilon is not None:
-        x = x + bias_epsilon
+    # --- add spectral weight normalization
+    if use_spectral_normalization:
+        # IMPORTANT
+        # requires tf >= 2.14.0
+        conv = (
+            tf.keras.layers.SpectralNormalization(
+                layer=conv,
+                power_iterations=1))
 
-    # --- dropout
-    if use_dropout:
-        x = tf.keras.layers.Dropout(**dropout_params)(x)
+    # --- apply transforms and give out maximum output
+    if transforms is not None and len(transforms) > 0:
+        logger.info("adding [{0}]".format(len(transforms)))
 
-    if use_dropout_2d:
-        x = tf.keras.layers.SpatialDropout2D(**dropout_2d_params)(x)
+        transform_results = [
+            transform(conv(transform(x)))
+            for transform in transforms
+        ]
+
+        x = tf.keras.layers.Maximum()(transform_results)
+    else:
+        x = conv(x)
+
+    if conv_constant is not None and conv_constant != 0.0:
+        x = x + conv_constant
 
     # --- perform post convolution normalizations and activation
     if use_bn_post:
@@ -325,6 +345,13 @@ def conv2d_wrapper(
         pass
     else:
         x = tf.keras.layers.Activation(conv_activation)(x)
+
+    # --- dropout
+    if use_dropout:
+        x = tf.keras.layers.Dropout(**dropout_params)(x)
+
+    if use_dropout_2d:
+        x = tf.keras.layers.SpatialDropout2D(**dropout_2d_params)(x)
 
     return x
 

@@ -123,6 +123,7 @@ def dataset_builder(
             kernel_size=(5, 5),
             nsig=(2.0, 2.0),
             dtype=np.float32), dtype=tf.float32)
+
     # --- set random seed to get the same result
     tf.random.set_seed(0)
 
@@ -336,6 +337,11 @@ def dataset_builder(
         raise ValueError("don't know how to handle non directory datasets")
 
     # --- save the augmentation functions
+    @tf.function(
+        input_signature=[
+            tf.TensorSpec(shape=(), dtype=tf.string)
+        ],
+        reduce_retracing=True)
     def load_image_fn(path: tf.Tensor) -> tf.Tensor:
         img = \
             load_image(
@@ -357,15 +363,15 @@ def dataset_builder(
 
     # --- create the dataset
     dataset_full = \
-        (tf.data.Dataset.from_generator(
+        tf.data.Dataset.from_generator(
             generator=dataset_generator,
             output_signature=(
                 tf.TensorSpec(shape=(), dtype=tf.string)
-            ))
-         .shuffle(
+            ))\
+        .shuffle(
             seed=0,
-            buffer_size=2048,
-            reshuffle_each_iteration=False))
+            buffer_size=1024,
+            reshuffle_each_iteration=False)
 
     dataset_training = \
         dataset_full \
@@ -377,10 +383,10 @@ def dataset_builder(
                 reshuffle_each_iteration=True) \
             .map(
                 map_func=load_image_fn,
-                num_parallel_calls=tf.data.AUTOTUNE,
+                num_parallel_calls=4,
                 deterministic=False) \
             .map(map_func=prepare_data_fn,
-                 num_parallel_calls=tf.data.AUTOTUNE,
+                 num_parallel_calls=4,
                  deterministic=False) \
             .rebatch(
                 batch_size=batch_size,
@@ -397,10 +403,10 @@ def dataset_builder(
                 reshuffle_each_iteration=True) \
             .map(
                 map_func=load_image_fn,
-                num_parallel_calls=tf.data.AUTOTUNE,
+                num_parallel_calls=4,
                 deterministic=False) \
             .map(map_func=prepare_data_fn,
-                 num_parallel_calls=tf.data.AUTOTUNE,
+                 num_parallel_calls=4,
                  deterministic=False) \
             .rebatch(
                 batch_size=batch_size,
