@@ -33,7 +33,7 @@ from .custom_layers import (
 # ---------------------------------------------------------------------
 
 
-def builder_unet_p(
+def builder(
         input_dims,
         depth: int = 5,
         width: int = 1,
@@ -68,7 +68,7 @@ def builder_unet_p(
         conv_constant: float = 0.0,
         output_layer_name: str = "intermediate_output",
         name="unet_p",
-        **kwargs) -> keras.Model:
+        **kwargs) -> Tuple[tf.keras.Model, tf.keras.Model]:
     """
     builds a modified unet model that uses convnext blocks
 

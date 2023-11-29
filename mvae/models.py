@@ -19,6 +19,22 @@ from .backbone_unet_p import builder as builder_unet_p
 
 # ---------------------------------------------------------------------
 
+BackboneBuilderResults = namedtuple(
+    "BackboneBuilderResults",
+    {
+        # converts input values to correct range
+        NORMALIZER_STR,
+        # converts output values to correct range
+        DENORMALIZER_STR,
+        # encoder part of the backbone
+        ENCODER_STR,
+        # decoder part of the backbone
+        DECODER_STR
+    }
+)
+
+# ---------------------------------------------------------------------
+
 
 BuilderResults = namedtuple(
     "BuilderResults",
@@ -41,20 +57,6 @@ BuilderResults = namedtuple(
         # # (clips between encoder and decoder)
         # VARIATIONAL_AUTOENCODER_STR,
     })
-
-BackboneBuilderResults = namedtuple(
-    "BackboneBuilderResults",
-    {
-        # converts input values to correct range
-        NORMALIZER_STR,
-        # converts output values to correct range
-        DENORMALIZER_STR,
-        # encoder part of the backbone
-        ENCODER_STR,
-        # decoder part of the backbone
-        DECODER_STR
-    }
-)
 
 # ---------------------------------------------------------------------
 
