@@ -138,7 +138,7 @@ def train_loop(
     visualization_number = train_config.get("visualization_number", 5)
 
     # --- train the model
-    with (((tf.summary.create_file_writer(model_dir).as_default()))):
+    with tf.summary.create_file_writer(model_dir).as_default():
         # --- write configuration in tensorboard
         tf.summary.text("config", pformat(config), step=0)
 
