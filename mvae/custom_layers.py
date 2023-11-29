@@ -189,7 +189,6 @@ class RandomOnOffGradient(tf.keras.layers.Layer):
 
 # ---------------------------------------------------------------------
 
-# ---------------------------------------------------------------------
 
 class StochasticDepth(tf.keras.layers.Layer):
     """Stochastic Depth module.
